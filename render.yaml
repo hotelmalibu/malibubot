@@ -1,0 +1,31 @@
+# ============================================================
+#  render.yaml — Blueprint opcional de Render.
+#  Puedes crear el servicio a mano en el panel o usar este archivo
+#  (New -> Blueprint -> apuntar al repo).
+# ============================================================
+services:
+  - type: web
+    name: malibubot
+    runtime: node
+    # Para PROBAR usa 'free'. Para PRODUCCION cambia a 'starter'
+    # (always-on: evita que el servicio se duerma a los 15 min).
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: GRAPH_API_VERSION
+        value: v21.0
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: HOTEL_NOMBRE
+        value: Hotel y Centro de Eventos Malibu

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MALIBUBOT — Consola</title>
+<style>
+  :root {
+    --tinta: #14343b;
+    --tinta-2: #33474d;
+    --marea: #12726b;
+    --marea-suave: #e3efed;
+    --arena: #f4f0e8;
+    --espuma: #ffffff;
+    --coral: #d8452f;
+    --coral-suave: #fbe7e1;
+    --linea: #e6e0d4;
+    --gris: #647579;
+    --sombra: 0 1px 2px rgba(20, 52, 59, .06), 0 8px 24px rgba(20, 52, 59, .05);
+    --radio: 12px;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--arena);
+    color: var(--tinta);
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Encabezado ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 22px;
+    background: var(--tinta);
+    color: #fff;
+  }
+  .marca { display: flex; align-items: baseline; gap: 10px; }
+  .marca .nombre {
+    font-size: 18px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  }
+  .marca .sub {
+    font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: #9fc4c0;
+  }
+  .estado { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #9fc4c0; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; background: #57c98a; }
+
+  /* ---------- Cuerpo de dos paneles ---------- */
+  .cuerpo { flex: 1; display: flex; min-height: 0; }
+
+  /* Lista */
+  .lista {
+    width: 340px; flex: 0 0 340px; border-right: 1px solid var(--linea);
+    background: var(--espuma); display: flex; flex-direction: column; min-height: 0;
+  }
+  .lista .filtro { padding: 12px; border-bottom: 1px solid var(--linea); }
+  .lista .filtro input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--linea); border-radius: 8px;
+    font-size: 14px; color: var(--tinta); background: var(--arena);
+  }
+  .lista .filtro input:focus { outline: 2px solid var(--marea); border-color: transparent; }
+
+  .grupo-titulo {
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gris);
+    padding: 12px 16px 6px;
+  }
+  .grupo-titulo.atencion { color: var(--coral); }
+
+  .scroll { overflow-y: auto; flex: 1; min-height: 0; }
+
+  .item {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+    padding: 12px 16px; border-bottom: 1px solid var(--linea);
+    cursor: pointer; border-left: 3px solid transparent;
+  }
+  .item:hover { background: #faf8f3; }
+  .item.activa { background: var(--marea-suave); border-left-color: var(--marea); }
+  .item.alerta { border-left-color: var(--coral); }
+  .item .nom { font-weight: 600; font-size: 14.5px; color: var(--tinta); }
+  .item .prev { grid-column: 1 / 2; font-size: 13px; color: var(--gris);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
+  .item .hora { font-size: 11.5px; color: var(--gris); text-align: right; }
+  .item .marcas { grid-column: 2; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+
+  .pill { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; }
+  .pill.bot { background: var(--marea-suave); color: var(--marea); }
+  .pill.humano { background: var(--coral-suave); color: var(--coral); }
+  .badge {
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+    background: var(--coral); color: #fff; font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .dot-alerta { width: 8px; height: 8px; border-radius: 50%; background: var(--coral); }
+  @media (prefers-reduced-motion: no-preference) {
+    .item.alerta .dot-alerta { animation: latido 1.6s ease-in-out infinite; }
+  }
+  @keyframes latido { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  /* Panel de conversacion */
+  .chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; border-bottom: 1px solid var(--linea); background: var(--espuma);
+  }
+  .chat-top .quien .n { font-weight: 700; font-size: 15px; }
+  .chat-top .quien .num { font-size: 12.5px; color: var(--gris); }
+
+  .btn {
+    border: 1px solid var(--linea); background: var(--espuma); color: var(--tinta);
+    padding: 8px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { background: #faf8f3; }
+  .btn.primario { background: var(--marea); color: #fff; border-color: var(--marea); }
+  .btn.primario:hover { background: #0f635d; }
+  .btn.peligro { background: var(--coral); color: #fff; border-color: var(--coral); }
+  .btn.peligro:hover { background: #bd3a26; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  .mensajes { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .burbuja { max-width: 68%; padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.4; }
+  .burbuja .autor { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; margin-bottom: 3px; opacity: .8; }
+  .burbuja .t { white-space: pre-wrap; word-wrap: break-word; }
+  .burbuja .ts { font-size: 10.5px; color: var(--gris); margin-top: 4px; }
+  .fila { display: flex; }
+  .fila.cliente { justify-content: flex-start; }
+  .fila.salida { justify-content: flex-end; }
+  .cliente .burbuja { background: var(--espuma); border: 1px solid var(--linea); }
+  .bot .burbuja { background: var(--marea-suave); }
+  .bot .burbuja .autor { color: var(--marea); }
+  .humano .burbuja { background: var(--coral-suave); }
+  .humano .burbuja .autor { color: var(--coral); }
+
+  /* Barra de composicion / handoff */
+  .barra { border-top: 1px solid var(--linea); background: var(--espuma); padding: 14px 20px; }
+  .aviso-bot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    font-size: 13.5px; color: var(--tinta-2);
+  }
+  .componer { display: flex; gap: 10px; align-items: flex-end; }
+  .componer textarea {
+    flex: 1; resize: none; min-height: 44px; max-height: 140px; padding: 11px 13px;
+    border: 1px solid var(--linea); border-radius: 10px; font: inherit; font-size: 14px; color: var(--tinta);
+  }
+  .componer textarea:focus { outline: 2px solid var(--marea); border-color: transparent; }
+  .componer .acciones { display: flex; flex-direction: column; gap: 6px; }
+  .nota-error { color: var(--coral); font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+
+  .vacio { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--gris);
+    font-size: 14.5px; text-align: center; padding: 30px; }
+
+  @media (max-width: 760px) {
+    .lista { width: 100%; flex-basis: auto; }
+    .cuerpo.viendo .lista { display: none; }
+    .cuerpo:not(.viendo) .chat { display: none; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="marca">
+      <span class="nombre">Malibú</span>
+      <span class="sub">Consola MALIBUBOT</span>
+    </div>
+    <div class="estado"><span class="punto"></span> En vivo · actualiza solo</div>
+  </header>
+
+  <div class="cuerpo" id="cuerpo">
+    <aside class="lista">
+      <div class="filtro"><input id="filtro" type="text" placeholder="Buscar por nombre o número" /></div>
+      <div class="scroll" id="listaScroll"></div>
+    </aside>
+
+    <section class="chat">
+      <div id="chatVacio" class="vacio">Selecciona una conversación para verla aquí.</div>
+      <div id="chatContenido" style="display:none; flex:1; flex-direction:column; min-height:0;">
+        <div class="chat-top">
+          <div class="quien"><div class="n" id="chatNombre"></div><div class="num" id="chatNumero"></div></div>
+          <button class="btn" id="btnModo"></button>
+        </div>
+        <div class="mensajes" id="mensajes"></div>
+        <div class="barra" id="barra"></div>
+      </div>
+    </section>
+  </div>
+
+<script>
+  const API = '/admin/api/conversaciones';
+  let seleccion = null;      // waId abierto
+  let listaCache = [];
+  let convCache = null;
+
+  const fmtHora = (ts) => {
+    const d = new Date(ts);
+    const hoy = new Date();
+    const mismoDia = d.toDateString() === hoy.toDateString();
+    return mismoDia
+      ? d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' });
+  };
+  const esc = (s) => (s || '').replace(/[&<>"]/g, (c) =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+  // ---------- Lista ----------
+  async function cargarLista() {
+    try {
+      const r = await fetch(API);
+      const { conversaciones } = await r.json();
+      listaCache = conversaciones;
+      pintarLista();
+    } catch (_) { /* reintenta en el siguiente ciclo */ }
+  }
+
+  function pintarLista() {
+    const q = document.getElementById('filtro').value.trim().toLowerCase();
+    const filtradas = listaCache.filter((c) =>
+      !q || (c.nombre || '').toLowerCase().includes(q) || c.waId.includes(q));
+
+    const atencion = filtradas.filter((c) => c.necesitaAtencion);
+    const resto = filtradas.filter((c) => !c.necesitaAtencion);
+    const cont = document.getElementById('listaScroll');
+    cont.innerHTML = '';
+
+    if (atencion.length) {
+      cont.insertAdjacentHTML('beforeend',
+        `<div class="grupo-titulo atencion">Necesitan atención</div>`);
+      atencion.forEach((c) => cont.insertAdjacentHTML('beforeend', itemHTML(c, true)));
+    }
+    cont.insertAdjacentHTML('beforeend',
+      `<div class="grupo-titulo">Todas las conversaciones</div>`);
+    if (!resto.length && !atencion.length) {
+      cont.insertAdjacentHTML('beforeend',
+        `<div class="grupo-titulo" style="color:var(--gris)">Aún no hay mensajes.</div>`);
+    }
+    resto.forEach((c) => cont.insertAdjacentHTML('beforeend', itemHTML(c, false)));
+
+    cont.querySelectorAll('.item').forEach((el) =>
+      el.addEventListener('click', () => abrir(el.dataset.wa)));
+  }
+
+  function itemHTML(c, alerta) {
+    const nombre = c.nombre || c.waId;
+    const pill = c.modo === 'humano'
+      ? `<span class="pill humano">HUMANO</span>`
+      : `<span class="pill bot">BOT</span>`;
+    const badge = c.noLeidos ? `<span class="badge">${c.noLeidos}</span>` : '';
+    const dot = alerta ? `<span class="dot-alerta"></span>` : '';
+    const activa = c.waId === seleccion ? ' activa' : '';
+    return `
+      <div class="item${alerta ? ' alerta' : ''}${activa}" data-wa="${esc(c.waId)}">
+        <div class="nom">${esc(nombre)}</div>
+        <div class="hora">${fmtHora(c.ultimaActividad)}</div>
+        <div class="prev">${esc(c.ultimoTexto)}</div>
+        <div class="marcas">${dot}${badge}${pill}</div>
+      </div>`;
+  }
+
+  // ---------- Conversacion ----------
+  async function abrir(waId) {
+    seleccion = waId;
+    document.getElementById('cuerpo').classList.add('viendo');
+    await cargarConv();
+    pintarLista();
+  }
+
+  async function cargarConv() {
+    if (!seleccion) return;
+    try {
+      const r = await fetch(`${API}/${encodeURIComponent(seleccion)}`);
+      if (!r.ok) return;
+      const { conversacion } = await r.json();
+      convCache = conversacion;
+      pintarConv();
+    } catch (_) {}
+  }
+
+  function pintarConv() {
+    const c = convCache;
+    if (!c) return;
+    document.getElementById('chatVacio').style.display = 'none';
+    document.getElementById('chatContenido').style.display = 'flex';
+    document.getElementById('chatNombre').textContent = c.nombre || 'Sin nombre';
+    document.getElementById('chatNumero').textContent = '+' + c.waId;
+
+    const btn = document.getElementById('btnModo');
+    if (c.modo === 'humano') {
+      btn.textContent = 'Devolver al bot';
+      btn.className = 'btn';
+      btn.onclick = () => cambiarModo('bot');
+    } else {
+      btn.textContent = 'Tomar control';
+      btn.className = 'btn peligro';
+      btn.onclick = () => cambiarModo('humano');
+    }
+
+    // Mensajes
+    const cont = document.getElementById('mensajes');
+    const pegadoAbajo = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 60;
+    cont.innerHTML = c.mensajes.map(burbujaHTML).join('');
+    if (pegadoAbajo) cont.scrollTop = cont.scrollHeight;
+
+    pintarBarra();
+  }
+
+  function burbujaHTML(m) {
+    const claseFila = m.autor === 'cliente' ? 'cliente' : 'salida ' + m.autor;
+    const etiqueta = m.autor === 'bot' ? 'MALIBUBOT'
+      : m.autor === 'humano' ? 'Tú (recepción)' : '';
+    const autor = etiqueta ? `<div class="autor">${etiqueta}</div>` : '';
+    return `
+      <div class="fila ${claseFila}">
+        <div class="burbuja">
+          ${autor}
+          <div class="t">${esc(m.texto)}</div>
+          <div class="ts">${fmtHora(m.ts)}</div>
+        </div>
+      </div>`;
+  }
+
+  function pintarBarra() {
+    const c = convCache;
+    const barra = document.getElementById('barra');
+    if (c.modo === 'bot') {
+      barra.innerHTML = `
+        <div class="aviso-bot">
+          <span>El bot está atendiendo esta conversación.</span>
+          <button class="btn peligro" onclick="cambiarModo('humano')">Tomar control</button>
+        </div>`;
+    } else {
+      barra.innerHTML = `
+        <div class="componer">
+          <textarea id="txt" placeholder="Escribe una respuesta…"></textarea>
+          <div class="acciones">
+            <button class="btn primario" id="btnEnviar">Enviar</button>
+          </div>
+        </div>
+        <div class="nota-error" id="notaError"></div>`;
+      const txt = document.getElementById('txt');
+      document.getElementById('btnEnviar').onclick = enviar;
+      txt.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); }
+      });
+      txt.focus();
+    }
+  }
+
+  async function cambiarModo(modo) {
+    try {
+      await fetch(`${API}/${encodeURIComponent(seleccion)}/modo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo }),
+      });
+      await cargarConv();
+      await cargarLista();
+    } catch (_) {}
+  }
+
+  async function enviar() {
+    const txt = document.getElementById('txt');
+    const nota = document.getElementById('notaError');
+    const texto = txt.value.trim();
+    if (!texto) return;
+    const btn = document.getElementById('btnEnviar');
+    btn.disabled = true; nota.textContent = '';
+    try {
+      const r = await fetch(`${API}/${encodeURIComponent(seleccion)}/responder`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      });
+      const data = await r.json();
+      if (!data.ok) { nota.textContent = data.error || 'No se pudo enviar.'; }
+      else { txt.value = ''; await cargarConv(); await cargarLista(); }
+    } catch (_) {
+      nota.textContent = 'Error de red al enviar.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById('filtro').addEventListener('input', pintarLista);
+
+  // Ciclo de actualizacion (sondeo cada 3 s)
+  cargarLista();
+  setInterval(() => { cargarLista(); if (seleccion) cargarConv(); }, 3000);
+</script>
+</body>
+</html>
