@@ -131,4 +131,35 @@ export const store = {
   obtener(waId) {
     return conversaciones.get(waId) || null;
   },
+
+  /**
+   * Estadisticas de conversaciones para el dashboard.
+   * "activa" = con actividad en las ultimas 24 h o atendida por un humano.
+   * Filtro opcional por fechas (segun ultima actividad).
+   * @param {string} [desde] YYYY-MM-DD
+   * @param {string} [hasta] YYYY-MM-DD
+   */
+  estadisticas(desde, hasta) {
+    const limiteActiva = ahora() - 24 * 60 * 60 * 1000;
+    let total = 0;
+    let activas = 0;
+    let enHumano = 0;
+
+    for (const c of conversaciones.values()) {
+      const dia = new Date(c.ultimaActividad).toISOString().slice(0, 10);
+      if (desde && dia < desde) continue;
+      if (hasta && dia > hasta) continue;
+      total += 1;
+      const activa = c.ultimaActividad >= limiteActiva || c.modo === 'humano';
+      if (activa) activas += 1;
+      if (c.modo === 'humano') enHumano += 1;
+    }
+
+    return {
+      total,
+      activas,
+      inactivas: total - activas,
+      enHumano,
+    };
+  },
 };

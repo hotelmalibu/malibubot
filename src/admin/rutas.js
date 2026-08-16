@@ -1,41 +1,182 @@
 // ============================================================
-//  rutas.js — Rutas del panel (montadas en /admin, tras auth).
+//  rutas.js — Rutas del panel.
+//
+//  Publicas (sin sesion), montadas con loginRouter:
+//   GET  /admin/login                     -> pagina de ingreso
+//   POST /admin/login                     -> valida y abre sesion (cookie)
+//   GET  /admin/logout                    -> cierra sesion
+//
+//  Protegidas (requieren sesion), montadas con adminRouter:
 //   GET  /admin/                          -> consola (HTML)
 //   GET  /admin/api/conversaciones        -> lista
 //   GET  /admin/api/conversaciones/:waId  -> transcript (marca leido)
 //   POST /admin/api/conversaciones/:waId/responder  { texto }
-//   POST /admin/api/conversaciones/:waId/modo       { modo: 'bot'|'humano' }
+//   POST /admin/api/conversaciones/:waId/modo       { modo }
+//   GET  /admin/api/estadisticas?desde&hasta        -> dashboard
+//   GET  /admin/api/reservas                        -> lista de reservas
+//   POST /admin/api/reservas                        -> crea reserva
+//   POST /admin/api/reservas/:id/estado             -> cambia estado
+//   GET  /admin/api/waba/reparar?waba=ID            -> diagnostico WABA
 // ============================================================
 import { Router } from 'express';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
+import { reservasStore } from '../almacen/reservas.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { config } from '../config.js';
+import {
+  validarCredenciales,
+  crearToken,
+  ponerCookieSesion,
+  borrarCookieSesion,
+  haySesion,
+} from './sesion.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML = readFileSync(join(__dirname, 'panel.html'), 'utf8');
 
-export const adminRouter = Router();
+// Reutiliza el logo (data URI) ya incrustado en panel.html para la pagina de login.
+const logoMatch = HTML.match(/src="(data:image\/png;base64,[^"]+)"/);
+const LOGO = logoMatch ? logoMatch[1] : '';
+const LOGIN_HTML = readFileSync(join(__dirname, 'login.html'), 'utf8').replace(
+  '__LOGO_DATA_URI__',
+  LOGO
+);
 
 // ============================================================
-//  Diagnostico y reparacion de la suscripcion de la WABA.
-//  Es el paso que hace que Meta ENTREGUE los mensajes entrantes al webhook:
-//  la app debe estar suscrita a la cuenta de WhatsApp Business (WABA).
-//  Abrir en el navegador (pide la clave del panel):
-//    /admin/api/waba/reparar?waba=EL_ID_DE_TU_WABA
-//  Muestra el token? No. Solo devuelve el estado de la suscripcion.
+//  Router PUBLICO (login / logout)
 // ============================================================
+export const loginRouter = Router();
+
+loginRouter.get('/login', (req, res) => {
+  if (haySesion(req)) return res.redirect('/admin');
+  res.type('html').send(LOGIN_HTML);
+});
+
+loginRouter.post('/login', (req, res) => {
+  if (!config.admin.password) {
+    return res.status(503).json({ ok: false, error: 'Panel deshabilitado (falta ADMIN_PASSWORD).' });
+  }
+  const usuario = (req.body?.usuario || '').trim();
+  const clave = req.body?.clave || '';
+  if (!validarCredenciales(usuario, clave)) {
+    return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos.' });
+  }
+  ponerCookieSesion(req, res, crearToken(usuario));
+  res.json({ ok: true });
+});
+
+loginRouter.get('/logout', (_req, res) => {
+  borrarCookieSesion(res);
+  res.redirect('/admin/login');
+});
+
+// ============================================================
+//  Router PROTEGIDO (requiere sesion, aplicada en index.js)
+// ============================================================
+export const adminRouter = Router();
+
+// Consola
+adminRouter.get('/', (_req, res) => {
+  res.type('html').send(HTML);
+});
+
+// -------- Estadisticas del dashboard --------
+adminRouter.get('/api/estadisticas', (req, res) => {
+  const desde = (req.query.desde || '').trim() || null;
+  const hasta = (req.query.hasta || '').trim() || null;
+  res.json({
+    ok: true,
+    rango: { desde, hasta },
+    conversaciones: store.estadisticas(desde, hasta),
+    habitaciones: reservasStore.estadisticas(desde, hasta),
+    hotel: { nombre: config.hotel.nombre, habitaciones: config.hotel.habitaciones },
+  });
+});
+
+// -------- Reservas de habitaciones --------
+adminRouter.get('/api/reservas', (_req, res) => {
+  res.json({ ok: true, reservas: reservasStore.listar() });
+});
+
+adminRouter.post('/api/reservas', (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre && !b.waId) {
+    return res.status(400).json({ ok: false, error: 'Indica al menos el nombre del huésped.' });
+  }
+  const reserva = reservasStore.crear({
+    waId: b.waId,
+    nombre: b.nombre,
+    habitacion: b.habitacion,
+    personas: b.personas,
+    checkIn: b.checkIn,
+    checkOut: b.checkOut,
+    estado: b.estado,
+    fuente: 'manual',
+  });
+  res.json({ ok: true, reserva });
+});
+
+adminRouter.post('/api/reservas/:id/estado', (req, res) => {
+  const estado = req.body?.estado;
+  if (!['confirmada', 'pendiente', 'cancelada'].includes(estado)) {
+    return res.status(400).json({ ok: false, error: 'Estado inválido.' });
+  }
+  const r = reservasStore.actualizarEstado(req.params.id, estado);
+  if (!r) return res.status(404).json({ ok: false, error: 'Reserva no encontrada.' });
+  res.json({ ok: true, reserva: r });
+});
+
+// -------- Conversaciones --------
+adminRouter.get('/api/conversaciones', (_req, res) => {
+  res.json({ conversaciones: store.listar() });
+});
+
+adminRouter.get('/api/conversaciones/:waId', (req, res) => {
+  const conv = store.obtener(req.params.waId);
+  if (!conv) return res.status(404).json({ error: 'No existe esa conversacion.' });
+  store.marcarConversacionLeida(conv.waId);
+  res.json({ conversacion: conv });
+});
+
+adminRouter.post('/api/conversaciones/:waId/responder', async (req, res) => {
+  const waId = req.params.waId;
+  const texto = (req.body?.texto || '').trim();
+  if (!texto) return res.status(400).json({ ok: false, error: 'Escribe un mensaje.' });
+
+  try {
+    await enviarTexto(waId, texto);
+    store.registrarSaliente({ waId, autor: 'humano', texto });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin] Error enviando respuesta humana:', err.message);
+    res.status(502).json({
+      ok: false,
+      error:
+        'No se pudo enviar. Puede que la ventana de 24 h este cerrada ' +
+        '(el cliente no escribe hace mas de un dia).',
+    });
+  }
+});
+
+adminRouter.post('/api/conversaciones/:waId/modo', (req, res) => {
+  const modo = req.body?.modo;
+  if (modo !== 'bot' && modo !== 'humano') {
+    return res.status(400).json({ ok: false, error: 'Modo invalido.' });
+  }
+  const conv = store.establecerModo(req.params.waId, modo);
+  res.json({ ok: true, modo: conv.modo });
+});
+
+// -------- Diagnostico/reparacion de la suscripcion de la WABA --------
 adminRouter.get('/api/waba/reparar', async (req, res) => {
   const { token, graphBase, graphVersion } = config.whatsapp;
   const wabaId = (req.query.waba || config.whatsapp.wabaId || '').trim();
 
   if (!token) {
-    return res.status(400).json({
-      ok: false,
-      error: 'Falta WHATSAPP_TOKEN en el entorno (Render).',
-    });
+    return res.status(400).json({ ok: false, error: 'Falta WHATSAPP_TOKEN en el entorno (Render).' });
   }
   if (!wabaId) {
     return res.status(400).json({
@@ -50,11 +191,9 @@ adminRouter.get('/api/waba/reparar', async (req, res) => {
   const headers = { Authorization: `Bearer ${token}` };
 
   try {
-    // 1) Estado actual
     const antesResp = await fetch(url, { headers });
     const antes = await antesResp.json();
 
-    // Si el token esta vencido/invalido, Graph responde con error de OAuth.
     if (!antesResp.ok) {
       return res.status(502).json({
         ok: false,
@@ -65,11 +204,6 @@ adminRouter.get('/api/waba/reparar', async (req, res) => {
       });
     }
 
-    // 2) SIEMPRE suscribe la app dueña del token (MALIBUBOT). Es idempotente:
-    //    si ya estaba, no pasa nada; si estaba otra app (p. ej. la de prueba de
-    //    Meta), esto agrega la nuestra para que los webhooks lleguen a Render.
-    //    Con ?limpiar=1 primero quita la suscripcion de la app del token y la
-    //    vuelve a crear (util para forzar un reenganche limpio).
     let limpiar = null;
     if (req.query.limpiar === '1') {
       const delResp = await fetch(url, { method: 'DELETE', headers });
@@ -80,7 +214,6 @@ adminRouter.get('/api/waba/reparar', async (req, res) => {
     const suscripcion = await subResp.json();
     const accion = subResp.ok ? 'SUSCRIPCION-FORZADA-OK' : 'error-al-suscribir';
 
-    // 3) Estado final
     const despuesResp = await fetch(url, { headers });
     const despues = await despuesResp.json();
 
@@ -100,55 +233,4 @@ adminRouter.get('/api/waba/reparar', async (req, res) => {
   } catch (err) {
     res.status(502).json({ ok: false, error: err.message });
   }
-});
-
-// Consola
-adminRouter.get('/', (_req, res) => {
-  res.type('html').send(HTML);
-});
-
-// Lista de conversaciones
-adminRouter.get('/api/conversaciones', (_req, res) => {
-  res.json({ conversaciones: store.listar() });
-});
-
-// Transcript de una conversacion (al abrirla, se marca como leida)
-adminRouter.get('/api/conversaciones/:waId', (req, res) => {
-  const conv = store.obtener(req.params.waId);
-  if (!conv) return res.status(404).json({ error: 'No existe esa conversacion.' });
-  store.marcarConversacionLeida(conv.waId);
-  res.json({ conversacion: conv });
-});
-
-// Responder como humano
-adminRouter.post('/api/conversaciones/:waId/responder', async (req, res) => {
-  const waId = req.params.waId;
-  const texto = (req.body?.texto || '').trim();
-  if (!texto) return res.status(400).json({ ok: false, error: 'Escribe un mensaje.' });
-
-  try {
-    await enviarTexto(waId, texto);
-    store.registrarSaliente({ waId, autor: 'humano', texto });
-    res.json({ ok: true });
-  } catch (err) {
-    // Causa tipica: la ventana de 24 h esta cerrada (el cliente no
-    // escribe hace mas de un dia). WhatsApp no permite texto libre ahi.
-    console.error('[admin] Error enviando respuesta humana:', err.message);
-    res.status(502).json({
-      ok: false,
-      error:
-        'No se pudo enviar. Puede que la ventana de 24 h este cerrada ' +
-        '(el cliente no escribe hace mas de un dia).',
-    });
-  }
-});
-
-// Cambiar de modo (tomar control / devolver al bot)
-adminRouter.post('/api/conversaciones/:waId/modo', (req, res) => {
-  const modo = req.body?.modo;
-  if (modo !== 'bot' && modo !== 'humano') {
-    return res.status(400).json({ ok: false, error: 'Modo invalido.' });
-  }
-  const conv = store.establecerModo(req.params.waId, modo);
-  res.json({ ok: true, modo: conv.modo });
 });

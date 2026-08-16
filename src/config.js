@@ -24,10 +24,18 @@ export const config = {
 
   hotel: {
     nombre: process.env.HOTEL_NOMBRE || 'Hotel y Centro de Eventos Malibu',
+    // Total de habitaciones del hotel (para el calculo de ocupadas/disponibles).
+    habitaciones: parseInt(process.env.HOTEL_HABITACIONES || '20', 10),
   },
 
   admin: {
+    // Usuario del panel. Si se deja vacio, se acepta cualquier usuario y solo
+    // se valida la contrasena (compatibilidad con el comportamiento anterior).
+    usuario: process.env.ADMIN_USUARIO || '',
     password: process.env.ADMIN_PASSWORD,
+    // Secreto para firmar la cookie de sesion. Si no se define, se deriva de
+    // la contrasena (suficiente para este panel interno).
+    secretoSesion: process.env.ADMIN_SESSION_SECRET || '',
   },
 };
 

@@ -18,8 +18,8 @@ import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store } from './almacen/conversaciones.js';
-import { auth } from './admin/auth.js';
-import { adminRouter } from './admin/rutas.js';
+import { requiereSesion } from './admin/sesion.js';
+import { loginRouter, adminRouter } from './admin/rutas.js';
 
 const app = express();
 
@@ -48,8 +48,10 @@ app.get(['/privacidad', '/politica-de-privacidad', '/privacy'], (_req, res) => {
   res.type('html').send(PRIVACIDAD_HTML);
 });
 
-// ---------- Consola de monitoreo (protegida) ----------
-app.use('/admin', auth, adminRouter);
+// ---------- Consola de monitoreo ----------
+// Login/logout son publicos; el resto de /admin exige sesion.
+app.use('/admin', loginRouter);
+app.use('/admin', requiereSesion, adminRouter);
 
 // ---------- Verificacion del webhook (Meta hace un GET) ----------
 app.get('/webhook/whatsapp', (req, res) => {

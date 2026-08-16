@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MALIBUBOT — Ingreso</title>
+<style>
+  :root {
+    --tinta: #2c2f34; --oro: #b8873a; --oro-claro: #d9b978; --oro-profundo: #9c6f2b;
+    --arena: #faf7f0; --espuma: #ffffff; --linea: #ece6d8; --gris: #6b6f77; --alerta: #c05a3a;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 50% -10%, #fff 0%, var(--arena) 60%),
+      var(--arena);
+    color: var(--tinta);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; -webkit-font-smoothing: antialiased;
+  }
+  .tarjeta {
+    width: 100%; max-width: 400px; background: var(--espuma);
+    border: 1px solid var(--linea); border-radius: 18px;
+    box-shadow: 0 1px 2px rgba(44,47,52,.05), 0 24px 60px rgba(44,47,52,.10);
+    padding: 34px 32px 30px; text-align: center;
+  }
+  .logo { width: 108px; height: auto; margin: 0 auto 6px; display: block; }
+  .titulo { font-size: 13px; letter-spacing: .22em; text-transform: uppercase; color: var(--oro-profundo); font-weight: 700; }
+  .sub { font-size: 13px; color: var(--gris); margin: 6px 0 22px; }
+  form { text-align: left; }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--tinta); margin: 14px 0 6px; letter-spacing: .02em; }
+  input {
+    width: 100%; padding: 12px 13px; border: 1px solid var(--linea); border-radius: 10px;
+    font-size: 15px; color: var(--tinta); background: #fcfaf5;
+  }
+  input:focus { outline: 2px solid var(--oro); border-color: transparent; background: #fff; }
+  .btn {
+    width: 100%; margin-top: 22px; padding: 13px; border: none; border-radius: 11px;
+    background: linear-gradient(135deg, var(--oro-claro), var(--oro) 55%, var(--oro-profundo));
+    color: #fff; font-size: 15px; font-weight: 700; letter-spacing: .03em; cursor: pointer;
+  }
+  .btn:hover { filter: brightness(.96); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .error {
+    margin-top: 16px; min-height: 18px; color: var(--alerta); font-size: 13px; font-weight: 600; text-align: center;
+  }
+  .pie { margin-top: 20px; font-size: 11px; color: var(--gris); letter-spacing: .04em; }
+</style>
+</head>
+<body>
+  <div class="tarjeta">
+    <img class="logo" src="__LOGO_DATA_URI__" alt="Hotel Malibú" />
+    <div class="titulo">Consola MALIBUBOT</div>
+    <div class="sub">Ingresa para administrar la atención por WhatsApp</div>
+
+    <form id="form">
+      <label for="usuario">Usuario</label>
+      <input id="usuario" name="usuario" type="text" autocomplete="username" placeholder="recepción" required />
+
+      <label for="clave">Contraseña</label>
+      <input id="clave" name="clave" type="password" autocomplete="current-password" placeholder="••••••••" required />
+
+      <button class="btn" id="btn" type="submit">Ingresar</button>
+      <div class="error" id="error"></div>
+    </form>
+
+    <div class="pie">Hotel y Centro de Eventos Malibú</div>
+  </div>
+
+<script>
+  const form = document.getElementById('form');
+  const err = document.getElementById('error');
+  const btn = document.getElementById('btn');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    btn.disabled = true;
+    try {
+      const r = await fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario: document.getElementById('usuario').value.trim(),
+          clave: document.getElementById('clave').value,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (data.ok) {
+        window.location.href = '/admin';
+      } else {
+        err.textContent = data.error || 'Usuario o contraseña incorrectos.';
+      }
+    } catch (_) {
+      err.textContent = 'Error de red. Intenta de nuevo.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
