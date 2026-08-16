@@ -10,6 +10,9 @@
 //   GET  /admin                 -> consola web (protegida con ADMIN_PASSWORD)
 // ============================================================
 import express from 'express';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes } from './whatsapp/recibir.js';
@@ -36,6 +39,13 @@ app.get('/', (_req, res) => {
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, servicio: 'malibubot', fase: 1 });
+});
+
+// ---------- Politica de privacidad (requerida por Meta para publicar la app) ----------
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PRIVACIDAD_HTML = readFileSync(join(__dirname, 'legal', 'privacidad.html'), 'utf8');
+app.get(['/privacidad', '/politica-de-privacidad', '/privacy'], (_req, res) => {
+  res.type('html').send(PRIVACIDAD_HTML);
 });
 
 // ---------- Consola de monitoreo (protegida) ----------
