@@ -1,0 +1,92 @@
+// ============================================================
+//  enviar.js — Envio de correos con Resend.
+//  Se usa para confirmar la reserva al cliente y a recepcion cuando
+//  RAPYD confirma el pago.
+// ============================================================
+import { config } from '../config.js';
+import { precioCOP } from '../datos/habitaciones.js';
+
+function activo() {
+  return !!config.correo.resendApiKey;
+}
+
+async function enviarCorreo({ to, subject, html }) {
+  if (!activo()) {
+    console.warn('[correo] Sin RESEND_API_KEY; no se envia:', subject, '->', to);
+    return false;
+  }
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.correo.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: config.correo.remitente, to, subject, html }),
+    });
+    if (!resp.ok) {
+      const d = await resp.text().catch(() => '');
+      console.error('[correo] Error Resend:', resp.status, d.slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[correo] Error enviando:', err.message);
+    return false;
+  }
+}
+
+function plantilla(reserva, paraRecepcion) {
+  const total = reserva.monto ? precioCOP(reserva.monto) : '';
+  const titulo = paraRecepcion ? 'Nueva reserva PAGADA' : '¡Reserva confirmada!';
+  const intro = paraRecepcion
+    ? 'Se confirmó el pago de una nueva reserva desde MALIBUBOT:'
+    : `Hola ${reserva.nombre || ''}, tu reserva en el Hotel Malibú quedó confirmada. ¡Te esperamos!`;
+  const fila = (k, v) =>
+    v ? `<tr><td style="padding:6px 10px;color:#6b6f77">${k}</td><td style="padding:6px 10px;font-weight:600;color:#2c2f34">${v}</td></tr>` : '';
+  return `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2c2f34">
+    <div style="border-bottom:2px solid #b8873a;padding-bottom:10px;margin-bottom:14px">
+      <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#9c6f2b;font-weight:700">Hotel y Centro de Eventos Malibú</div>
+      <h2 style="margin:6px 0 0">${titulo}</h2>
+    </div>
+    <p style="font-size:15px;line-height:1.5">${intro}</p>
+    <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
+      ${fila('Huésped', reserva.nombre)}
+      ${fila('Celular', reserva.celular)}
+      ${fila('Correo', reserva.email)}
+      ${fila('Habitación', reserva.habitacion)}
+      ${fila('Personas', reserva.personas)}
+      ${fila('Check-in', reserva.checkIn)}
+      ${fila('Check-out', reserva.checkOut)}
+      ${fila('Total pagado', total)}
+      ${fila('Referencia de pago', reserva.referenciaPago)}
+    </table>
+    <p style="font-size:12px;color:#9aa0a8;margin-top:16px">Hotel y Centro de Eventos Malibú · Sincelejo, Sucre, Colombia</p>
+  </div>`;
+}
+
+/** Envia la confirmacion de reserva al cliente y a recepcion. */
+export async function confirmarReservaPorCorreo(reserva) {
+  const tareas = [];
+  if (reserva.email) {
+    tareas.push(
+      enviarCorreo({
+        to: reserva.email,
+        subject: 'Reserva confirmada — Hotel Malibú',
+        html: plantilla(reserva, false),
+      })
+    );
+  }
+  if (config.correo.recepcion) {
+    tareas.push(
+      enviarCorreo({
+        to: config.correo.recepcion,
+        subject: `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`,
+        html: plantilla(reserva, true),
+      })
+    );
+  }
+  const res = await Promise.allSettled(tareas);
+  return res.some((r) => r.status === 'fulfilled' && r.value);
+}

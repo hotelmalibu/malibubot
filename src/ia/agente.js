@@ -18,6 +18,24 @@ import { TIPOS_HABITACION, precioCOP } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
+import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
+
+function noches(checkIn, checkOut) {
+  if (!checkIn || !checkOut) return 1;
+  const a = new Date(checkIn + 'T12:00:00');
+  const b = new Date(checkOut + 'T12:00:00');
+  const dias = Math.round((b - a) / (24 * 60 * 60 * 1000));
+  return dias > 0 ? dias : 1;
+}
+
+function buscarTipo(nombre) {
+  const n = (nombre || '').toLowerCase();
+  return (
+    TIPOS_HABITACION.find((t) => t.nombre.toLowerCase() === n) ||
+    TIPOS_HABITACION.find((t) => n.includes(t.nombre.toLowerCase()) || t.nombre.toLowerCase().includes(n)) ||
+    null
+  );
+}
 
 const cliente = config.ia.apiKey ? new Anthropic({ apiKey: config.ia.apiKey }) : null;
 const MAX_MENSAJES = 24; // historial que enviamos (acota costo)
@@ -44,8 +62,15 @@ function sistema() {
     `CÓMO ATIENDES UNA RESERVA DE HABITACIÓN:`,
     `- Pregunta lo necesario: fechas (entrada y salida), número de personas y tipo de habitación.`,
     `- Antes de afirmar que hay cupo, usa la herramienta consultar_disponibilidad para ese día; NUNCA prometas más habitaciones de las disponibles.`,
+    `- Recomienda el tipo de habitación más adecuado según las personas y lo que pida el cliente.`,
     `- Si no hay disponibilidad, dilo con amabilidad y ofrece otra fecha o tipo.`,
-    `- Toma los datos del huésped (nombre y celular) y explícale que recepción confirma la reserva; el pago en línea llegará en una etapa próxima.`,
+    ``,
+    `CÓMO CIERRAS LA VENTA (PAGO):`,
+    `- Cuando el cliente quiera reservar, confírmale el tipo, las fechas y el valor total (precio de la habitación por el número de noches).`,
+    `- Pídele su NOMBRE completo y su CORREO ELECTRÓNICO (obligatorio para enviarle la confirmación).`,
+    `- Pregúntale si desea el link de pago para confirmar. Si dice que sí, usa la herramienta generar_link_pago y compártele el enlace que devuelve.`,
+    `- Explícale que al pagar, le llegará la confirmación de la reserva a su correo (y también a recepción del hotel).`,
+    `- No confirmes la reserva como pagada tú mismo; eso ocurre automáticamente cuando el pago se aprueba.`,
     ``,
     `REGLAS:`,
     `- No inventes precios, servicios ni disponibilidad. Si no sabes algo, ofrécete a que recepción lo confirme.`,
@@ -67,6 +92,23 @@ const HERRAMIENTAS = [
           description: 'Fecha a consultar en formato AAAA-MM-DD. Si se omite, usa el día de hoy.',
         },
       },
+    },
+  },
+  {
+    name: 'generar_link_pago',
+    description:
+      'Crea un link de pago para confirmar la reserva de una habitación. Úsalo solo cuando el cliente aceptó reservar y ya diste nombre, correo, tipo, fechas y personas. Devuelve el enlace de pago.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipoHabitacion: { type: 'string', description: 'Nombre del tipo de habitación (uno del catálogo).' },
+        checkIn: { type: 'string', description: 'Fecha de entrada AAAA-MM-DD.' },
+        checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
+        personas: { type: 'integer', description: 'Número de personas.' },
+        nombre: { type: 'string', description: 'Nombre completo del huésped.' },
+        email: { type: 'string', description: 'Correo electrónico del huésped.' },
+      },
+      required: ['tipoHabitacion', 'checkIn', 'checkOut', 'nombre', 'email'],
     },
   },
   {
@@ -104,6 +146,47 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
       tipos,
       nota: 'Disponibilidad estimada (el libro no está conectado).',
     };
+  }
+
+  if (nombre === 'generar_link_pago') {
+    if (!rapydActivo()) {
+      return { ok: false, error: 'La pasarela de pago aún no está configurada. Ofrece tomar los datos para que recepción confirme.' };
+    }
+    const tipo = buscarTipo(entrada?.tipoHabitacion);
+    if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
+    if (!entrada?.email) return { ok: false, error: 'Falta el correo del cliente.' };
+
+    const n = noches(entrada.checkIn, entrada.checkOut);
+    const monto = tipo.precioDesde * n;
+
+    // Crea la reserva en estado "en_proceso" (se marca pagada al confirmar el pago).
+    const reserva = reservasStore.crear({
+      waId,
+      nombre: entrada.nombre,
+      email: entrada.email,
+      habitacion: tipo.nombre,
+      personas: entrada.personas,
+      checkIn: entrada.checkIn,
+      checkOut: entrada.checkOut,
+      monto,
+      estado: 'en_proceso',
+      fuente: 'bot',
+    });
+
+    try {
+      const checkout = await crearCheckout({
+        monto,
+        referencia: reserva.id,
+        descripcion: `Reserva ${tipo.nombre} · ${n} noche(s) · Hotel Malibú`,
+        metadata: { reserva_id: String(reserva.id), waId },
+      });
+      reserva.referenciaPago = String(reserva.id);
+      reserva.checkoutId = checkout.checkoutId;
+      return { ok: true, linkPago: checkout.redirectUrl, noches: n, monto, tipo: tipo.nombre };
+    } catch (err) {
+      reservasStore.actualizarEstado(reserva.id, 'rechazado');
+      return { ok: false, error: 'No se pudo generar el link de pago. Ofrece que recepción lo gestione.' };
+    }
   }
 
   if (nombre === 'escalar_a_humano') {

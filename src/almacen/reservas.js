@@ -46,13 +46,16 @@ export const reservasStore = {
       waId: datos.waId || '',
       celular: datos.celular || datos.waId || '',
       nombre: datos.nombre || '',
+      email: datos.email || '',
       habitacion: datos.habitacion || '',
       personas: Number(datos.personas) || null,
       checkIn: datos.checkIn || '',
       checkOut: datos.checkOut || '',
+      monto: Number(datos.monto) || null,       // valor a cobrar (COP)
       estado,                                   // pagado | en_proceso | rechazado
       fuente: datos.fuente || 'manual',         // manual | bot | rapyd
       referenciaPago: datos.referenciaPago || '',
+      checkoutId: datos.checkoutId || '',
       creado: Date.now(),
     };
     reservas.push(r);
@@ -61,6 +64,10 @@ export const reservasStore = {
 
   listar() {
     return [...reservas].sort((a, b) => b.creado - a.creado);
+  },
+
+  obtenerPorId(id) {
+    return reservas.find((x) => x.id === Number(id)) || null;
   },
 
   actualizarEstado(id, estado) {

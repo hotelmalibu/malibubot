@@ -44,6 +44,26 @@ export const config = {
     linkConsulta: process.env.LINK_CONSULTA || 'https://hotelmalibu.co',
   },
 
+  // URL publica del servicio (para los retornos y el webhook de RAPYD).
+  publicUrl: process.env.PUBLIC_URL || 'https://malibubot.onrender.com',
+
+  // Pasarela de pagos RAPYD.
+  rapyd: {
+    accessKey: process.env.RAPYD_ACCESS_KEY || '',
+    secretKey: process.env.RAPYD_SECRET_KEY || '',
+    // Sandbox por defecto (pruebas). Produccion: https://api.rapyd.net
+    baseUrl: process.env.RAPYD_BASE_URL || 'https://sandboxapi.rapyd.net',
+    pais: process.env.RAPYD_PAIS || 'CO',
+    moneda: process.env.RAPYD_MONEDA || 'COP',
+  },
+
+  // Envio de correos (Resend).
+  correo: {
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    remitente: process.env.CORREO_REMITENTE || 'Hotel Malibú <reservas@hotelmalibu.co>',
+    recepcion: process.env.CORREO_RECEPCION || 'reservas@hotelmalibu.co',
+  },
+
   admin: {
     // Usuario del panel. Si se deja vacio, se acepta cualquier usuario y solo
     // se valida la contrasena (compatibilidad con el comportamiento anterior).

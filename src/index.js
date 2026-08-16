@@ -18,7 +18,10 @@ import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store } from './almacen/conversaciones.js';
+import { reservasStore } from './almacen/reservas.js';
 import { responderIA } from './ia/agente.js';
+import { verificarWebhook as verificarWebhookRapyd } from './pagos/rapyd.js';
+import { confirmarReservaPorCorreo } from './correo/enviar.js';
 import { requiereSesion } from './admin/sesion.js';
 import { loginRouter, adminRouter } from './admin/rutas.js';
 
@@ -121,6 +124,66 @@ app.post('/webhook/whatsapp', async (req, res) => {
   } catch (err) {
     console.error('[webhook] Error procesando el mensaje:', err);
   }
+});
+
+// ---------- Webhook de RAPYD (confirmacion de pago) ----------
+app.post('/webhook/rapyd', async (req, res) => {
+  if (!verificarWebhookRapyd(req)) {
+    console.warn('[rapyd] Webhook con firma invalida. Rechazado.');
+    return res.sendStatus(403);
+  }
+  res.sendStatus(200); // responder rapido
+
+  try {
+    const evento = req.body || {};
+    const tipo = String(evento.type || '');
+    const data = evento.data || {};
+    const refId = data.merchant_reference_id;
+    if (!refId) return;
+
+    const reserva = reservasStore.obtenerPorId(refId);
+    if (!reserva) {
+      console.warn('[rapyd] No encontre la reserva', refId, 'para el evento', tipo);
+      return;
+    }
+
+    if (tipo.includes('PAYMENT_COMPLETED') || data.paid === true || data.status === 'CLO') {
+      reservasStore.actualizarEstado(reserva.id, 'pagado');
+      console.log(`[rapyd] Pago confirmado. Reserva ${reserva.id} -> pagado.`);
+      confirmarReservaPorCorreo(reserva).catch(() => {});
+      if (reserva.waId) {
+        enviarTexto(
+          reserva.waId,
+          `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${reserva.habitacion}) quedó lista. ` +
+            `Te enviamos la confirmación a ${reserva.email || 'tu correo'}. ¡Te esperamos!`
+        ).catch(() => {});
+      }
+    } else if (tipo.includes('PAYMENT_FAILED') || data.status === 'ERR') {
+      reservasStore.actualizarEstado(reserva.id, 'rechazado');
+      console.log(`[rapyd] Pago rechazado. Reserva ${reserva.id} -> rechazado.`);
+    }
+  } catch (err) {
+    console.error('[rapyd] Error procesando webhook:', err);
+  }
+});
+
+// ---------- Paginas de retorno del pago ----------
+function paginaPago(titulo, mensaje) {
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${titulo}</title></head>
+    <body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#faf7f0;color:#2c2f34;
+      display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
+      <div style="max-width:420px;padding:30px">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#9c6f2b;font-weight:700">Hotel Malibú</div>
+        <h1 style="margin:10px 0">${titulo}</h1>
+        <p style="font-size:16px;line-height:1.5;color:#4a4e55">${mensaje}</p>
+      </div></body></html>`;
+}
+app.get('/pago/gracias', (_req, res) => {
+  res.type('html').send(paginaPago('¡Gracias por tu pago!', 'Estamos confirmando tu reserva. Recibirás la confirmación en tu correo y por WhatsApp en unos minutos. Puedes cerrar esta ventana.'));
+});
+app.get('/pago/cancelado', (_req, res) => {
+  res.type('html').send(paginaPago('Pago cancelado', 'No se completó el pago. Si quieres, vuelve al chat de WhatsApp y con gusto te ayudamos a reservar.'));
 });
 
 // ---------- Arranque ----------
