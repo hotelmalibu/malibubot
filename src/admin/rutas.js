@@ -12,11 +12,91 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
+import { config } from '../config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML = readFileSync(join(__dirname, 'panel.html'), 'utf8');
 
 export const adminRouter = Router();
+
+// ============================================================
+//  Diagnostico y reparacion de la suscripcion de la WABA.
+//  Es el paso que hace que Meta ENTREGUE los mensajes entrantes al webhook:
+//  la app debe estar suscrita a la cuenta de WhatsApp Business (WABA).
+//  Abrir en el navegador (pide la clave del panel):
+//    /admin/api/waba/reparar?waba=EL_ID_DE_TU_WABA
+//  Muestra el token? No. Solo devuelve el estado de la suscripcion.
+// ============================================================
+adminRouter.get('/api/waba/reparar', async (req, res) => {
+  const { token, graphBase, graphVersion } = config.whatsapp;
+  const wabaId = (req.query.waba || config.whatsapp.wabaId || '').trim();
+
+  if (!token) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Falta WHATSAPP_TOKEN en el entorno (Render).',
+    });
+  }
+  if (!wabaId) {
+    return res.status(400).json({
+      ok: false,
+      error:
+        'Falta el ID de la WABA. Abre esta ruta con ?waba=TU_ID ' +
+        '(el "Identificador de la cuenta de WhatsApp Business" que viste en API Setup).',
+    });
+  }
+
+  const url = `${graphBase}/${graphVersion}/${wabaId}/subscribed_apps`;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  try {
+    // 1) Estado actual
+    const antesResp = await fetch(url, { headers });
+    const antes = await antesResp.json();
+
+    // Si el token esta vencido/invalido, Graph responde con error de OAuth.
+    if (!antesResp.ok) {
+      return res.status(502).json({
+        ok: false,
+        pista:
+          'Graph API rechazo la consulta. Causa tipica: el token esta VENCIDO ' +
+          '(el temporal dura ~24 h) o el ID de WABA no es correcto.',
+        respuesta: antes,
+      });
+    }
+
+    const yaSuscrito = Array.isArray(antes.data) && antes.data.length > 0;
+
+    // 2) Suscribir si hace falta
+    let accion = 'ya-estaba-suscrito';
+    let suscripcion = null;
+    if (!yaSuscrito) {
+      const subResp = await fetch(url, { method: 'POST', headers });
+      suscripcion = await subResp.json();
+      accion = subResp.ok ? 'SUSCRITO-AHORA' : 'error-al-suscribir';
+    }
+
+    // 3) Estado final
+    const despuesResp = await fetch(url, { headers });
+    const despues = await despuesResp.json();
+
+    res.json({
+      ok: true,
+      accion,
+      mensaje:
+        accion === 'SUSCRITO-AHORA'
+          ? 'Listo. La app quedo suscrita a tu WABA. Ahora manda un "Hola" y deberia llegar.'
+          : accion === 'ya-estaba-suscrito'
+          ? 'La app YA estaba suscrita. Si aun no llegan mensajes, el problema es otro (avisale a tu asistente).'
+          : 'No se pudo suscribir; revisa la respuesta de abajo.',
+      wabaId,
+      suscripcion,
+      appsSuscritas: despues,
+    });
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err.message });
+  }
+});
 
 // Consola
 adminRouter.get('/', (_req, res) => {

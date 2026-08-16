@@ -17,6 +17,9 @@ export const config = {
     // Base de la Graph API. En produccion se deja el valor por defecto (Meta);
     // solo se sobreescribe para pruebas locales con un servidor simulado.
     graphBase: process.env.GRAPH_API_BASE || 'https://graph.facebook.com',
+    // ID de la cuenta de WhatsApp Business (opcional; tambien se puede pasar
+    // por ?waba=... en la ruta de reparacion).
+    wabaId: process.env.WHATSAPP_WABA_ID,
   },
 
   hotel: {
