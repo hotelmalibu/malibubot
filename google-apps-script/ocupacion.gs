@@ -1,0 +1,108 @@
+/*  ============================================================
+ *  MALIBUBOT — Contador de ocupación del "Libro de Reservas".
+ *
+ *  Pégalo en tu hoja: Extensiones → Apps Script → borra lo que haya,
+ *  pega esto, Guarda. Luego: Implementar → Nueva implementación →
+ *  Aplicación web → Ejecutar como "Yo" · Acceso "Cualquier persona" →
+ *  Implementar → Autorizar. Copia la URL de la app web y pásasela a tu
+ *  asistente (con el token de abajo).
+ *
+ *  Lee la pestaña del mes actual (p. ej. "AGOSTO 2026"), encuentra la
+ *  columna del día de hoy (por el número en las primeras filas) y cuenta,
+ *  por color de fondo, cuántas habitaciones están:
+ *    - amarillo / verde / naranja -> reservadas (ocupadas)
+ *    - morado (magenta)  -> mantenimiento (no vendible)
+ *    - rojo              -> ya salió (queda libre)
+ *  Vendibles = 85 - (reservadas + mantenimiento).
+ *  ============================================================ */
+
+var TOKEN = 'malibu-ocup-2026';   // debe coincidir con GOOGLE_OCUPACION_TOKEN en Render
+var TOTAL_HABITACIONES = 85;
+
+var MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+             'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+function doGet(e) {
+  try {
+    if (!e || e.parameter.token !== TOKEN) return json({ ok: false, error: 'token invalido' });
+    var fecha = e.parameter.fecha ? new Date(e.parameter.fecha + 'T12:00:00') : new Date();
+    return json(contarOcupacion(fecha));
+  } catch (err) {
+    return json({ ok: false, error: String(err) });
+  }
+}
+
+function contarOcupacion(fecha) {
+  var dia = fecha.getDate();
+  var nombreMes = MESES[fecha.getMonth()] + ' ' + fecha.getFullYear(); // "AGOSTO 2026"
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var hoja = ss.getSheetByName(nombreMes);
+  if (!hoja) {
+    var hojas = ss.getSheets();
+    for (var i = 0; i < hojas.length; i++) {
+      var n = hojas[i].getName().toUpperCase();
+      if (n.indexOf(MESES[fecha.getMonth()]) === 0 && n.indexOf(String(fecha.getFullYear())) > -1) {
+        hoja = hojas[i]; break;
+      }
+    }
+  }
+  if (!hoja) return { ok: false, error: 'no encontre la pestana ' + nombreMes };
+
+  var rango = hoja.getDataRange();
+  var valores = rango.getValues();
+  var fondos = rango.getBackgrounds();
+  var nFilas = valores.length, nCols = valores[0].length;
+
+  // Columna del dia: busca en las primeras 4 filas una celda == dia.
+  var colDia = -1;
+  for (var f = 0; f < Math.min(4, nFilas) && colDia < 0; f++) {
+    for (var c = 1; c < nCols; c++) {
+      if (Number(valores[f][c]) === dia) { colDia = c; break; }
+    }
+  }
+  if (colDia < 0) return { ok: false, error: 'no encontre la columna del dia ' + dia, mes: nombreMes };
+
+  var reservadas = 0, mantenimiento = 0, salidas = 0, habitaciones = 0;
+  for (var fila = 0; fila < nFilas; fila++) {
+    var etiqueta = String(valores[fila][0] || '').trim();
+    if (!/^\d{3}/.test(etiqueta)) continue; // solo filas que empiezan por numero de habitacion (201, 302...)
+    habitaciones++;
+    var cat = clasificar(fondos[fila][colDia]);
+    if (cat === 'reserva') reservadas++;
+    else if (cat === 'mantenimiento') mantenimiento++;
+    else if (cat === 'salida') salidas++;
+  }
+
+  var ocupadas = reservadas + mantenimiento;
+  var disponibles = Math.max(TOTAL_HABITACIONES - ocupadas, 0);
+  return {
+    ok: true,
+    fecha: Utilities.formatDate(fecha, 'GMT-5', 'yyyy-MM-dd'),
+    mes: nombreMes,
+    totalHabitaciones: TOTAL_HABITACIONES,
+    habitacionesEnHoja: habitaciones,
+    reservadas: reservadas,
+    mantenimiento: mantenimiento,
+    salidas: salidas,
+    ocupadas: ocupadas,
+    disponibles: disponibles
+  };
+}
+
+function clasificar(hex) {
+  hex = (hex || '').toLowerCase();
+  if (hex.length < 7 || hex === '#ffffff' || hex === '#000000') return 'libre';
+  var r = parseInt(hex.substr(1, 2), 16);
+  var g = parseInt(hex.substr(3, 2), 16);
+  var b = parseInt(hex.substr(5, 2), 16);
+  if (r > 150 && g < 120 && b > 150) return 'mantenimiento';        // morado / magenta
+  if (r > 150 && g < 90 && b < 110) return 'salida';               // rojo -> ya salio
+  if (r < 160 && g > 140 && b < 170) return 'reserva';            // verde
+  if (r > 200 && g >= 90 && g <= 255 && b < 130) return 'reserva'; // amarillo + naranja
+  return 'libre';
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}

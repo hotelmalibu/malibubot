@@ -209,6 +209,7 @@
         <div class="kpis" id="kpisConv"></div>
 
         <h2>Habitaciones</h2>
+        <div id="fuenteOcup" style="font-size:12px;color:var(--gris);margin:-6px 0 10px;"></div>
         <div class="kpis" id="kpisHab"></div>
 
         <div class="barra-seccion" style="margin:26px 0 12px;">
@@ -334,10 +335,20 @@
       tarjeta('gris', 'Inactivas', c.inactivas, 'Sin actividad reciente') +
       tarjeta('', 'Total', c.total, 'En el rango seleccionado') +
       tarjeta('alerta', 'En atención humana', c.enHumano, 'Handoff activo');
-    document.getElementById('kpisHab').innerHTML =
-      tarjeta('', 'Reservas realizadas', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasEnProceso} en proceso`) +
-      tarjeta('alerta', 'Ocupadas hoy', h.ocupadas, `de ${h.totalHabitaciones} habitaciones`) +
-      tarjeta('verde', 'Disponibles hoy', h.disponibles, `de ${h.totalHabitaciones} habitaciones`);
+    const desdeLibro = h.fuenteOcupacion === 'libro';
+    const pieOcup = desdeLibro
+      ? `${h.reservadasLibro} reservadas · ${h.mantenimiento} mantenim.`
+      : `de ${h.totalHabitaciones} habitaciones`;
+    let htmlHab =
+      tarjeta('verde', 'Disponibles hoy', h.disponibles, `para vender · de ${h.totalHabitaciones}`) +
+      tarjeta('alerta', 'Ocupadas hoy', h.ocupadas, pieOcup) +
+      tarjeta('', 'Reservas del bot', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasEnProceso} en proceso`);
+    if (desdeLibro) htmlHab += tarjeta('gris', 'Salidas hoy', h.salidas, 'ya dejaron la habitación');
+    document.getElementById('kpisHab').innerHTML = htmlHab;
+    const nota = document.getElementById('fuenteOcup');
+    if (nota) nota.textContent = desdeLibro
+      ? 'Ocupación en vivo desde el Libro de Reservas (Google Sheet).'
+      : 'Ocupación estimada (aún sin conectar el Libro de Reservas).';
   }
 
   // ---------- Reservas ----------

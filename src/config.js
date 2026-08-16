@@ -28,6 +28,13 @@ export const config = {
     habitaciones: parseInt(process.env.HOTEL_HABITACIONES || '85', 10),
   },
 
+  // Conexion con el Libro de Reservas (Google Sheet) via un Apps Script Web App
+  // que cuenta la ocupacion por colores y la entrega como JSON.
+  google: {
+    ocupacionUrl: process.env.GOOGLE_OCUPACION_URL || '',
+    ocupacionToken: process.env.GOOGLE_OCUPACION_TOKEN || '',
+  },
+
   admin: {
     // Usuario del panel. Si se deja vacio, se acepta cualquier usuario y solo
     // se valida la contrasena (compatibilidad con el comportamiento anterior).

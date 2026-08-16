@@ -25,6 +25,7 @@ import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
 import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
+import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { config } from '../config.js';
 import {
@@ -85,14 +86,32 @@ adminRouter.get('/', (_req, res) => {
 });
 
 // -------- Estadisticas del dashboard --------
-adminRouter.get('/api/estadisticas', (req, res) => {
+adminRouter.get('/api/estadisticas', async (req, res) => {
   const desde = (req.query.desde || '').trim() || null;
   const hasta = (req.query.hasta || '').trim() || null;
+
+  const habitaciones = reservasStore.estadisticas(desde, hasta);
+
+  // Si esta conectado el Libro de Reservas (Google Sheet), la ocupacion real de
+  // HOY sale de ahi (cuenta los colores); las reservas del bot/manual se suman
+  // aparte. Si no, se usa solo lo que hay en memoria.
+  const libro = await ocupacionDelLibro();
+  if (libro) {
+    habitaciones.ocupadas = libro.ocupadas;
+    habitaciones.disponibles = libro.disponibles;
+    habitaciones.reservadasLibro = libro.reservadas;
+    habitaciones.mantenimiento = libro.mantenimiento;
+    habitaciones.salidas = libro.salidas;
+    habitaciones.fuenteOcupacion = 'libro';
+  } else {
+    habitaciones.fuenteOcupacion = 'memoria';
+  }
+
   res.json({
     ok: true,
     rango: { desde, hasta },
     conversaciones: store.estadisticas(desde, hasta),
-    habitaciones: reservasStore.estadisticas(desde, hasta),
+    habitaciones,
     hotel: {
       nombre: config.hotel.nombre,
       habitaciones: config.hotel.habitaciones,
