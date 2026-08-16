@@ -66,7 +66,8 @@ function contarOcupacion(fecha) {
   var reservadas = 0, mantenimiento = 0, salidas = 0, libre = 0, habitaciones = 0;
   for (var fila = 0; fila < nFilas; fila++) {
     var etiqueta = String(valores[fila][0] || '').trim();
-    if (!/^\d{3}/.test(etiqueta)) continue; // solo filas que empiezan por numero de habitacion (201, 302...)
+    // habitaciones: empiezan por 3 digitos (201..515) o por "TB" (Torre B: TB-101..)
+    if (!/^(\d{3}|TB)/i.test(etiqueta)) continue;
     habitaciones++;
     var cat = clasificar(fondos[fila][colDia]);
     if (cat === 'reserva') reservadas++;
