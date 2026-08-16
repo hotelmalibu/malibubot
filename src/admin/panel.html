@@ -336,14 +336,14 @@
       tarjeta('', 'Total', c.total, 'En el rango seleccionado') +
       tarjeta('alerta', 'En atención humana', c.enHumano, 'Handoff activo');
     const desdeLibro = h.fuenteOcupacion === 'libro';
-    const pieOcup = desdeLibro
-      ? `${h.reservadasLibro} reservadas · ${h.mantenimiento} mantenim.`
-      : `de ${h.totalHabitaciones} habitaciones`;
     let htmlHab =
       tarjeta('verde', 'Disponibles hoy', h.disponibles, `para vender · de ${h.totalHabitaciones}`) +
-      tarjeta('alerta', 'Ocupadas hoy', h.ocupadas, pieOcup) +
-      tarjeta('', 'Reservas del bot', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasEnProceso} en proceso`);
-    if (desdeLibro) htmlHab += tarjeta('gris', 'Salidas hoy', h.salidas, 'ya dejaron la habitación');
+      tarjeta('alerta', 'Ocupadas hoy', h.ocupadas, desdeLibro ? 'con huésped hoy' : `de ${h.totalHabitaciones}`);
+    if (desdeLibro) {
+      htmlHab += tarjeta('gris', 'Mantenimiento', h.mantenimiento, 'no vendibles hoy') +
+                 tarjeta('gris', 'Salidas hoy', h.salidas, 'ya dejaron (quedan libres)');
+    }
+    htmlHab += tarjeta('', 'Reservas del bot', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasEnProceso} en proceso`);
     document.getElementById('kpisHab').innerHTML = htmlHab;
     const nota = document.getElementById('fuenteOcup');
     if (nota) nota.textContent = desdeLibro

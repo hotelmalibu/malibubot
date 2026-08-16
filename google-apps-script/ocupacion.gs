@@ -63,7 +63,7 @@ function contarOcupacion(fecha) {
   }
   if (colDia < 0) return { ok: false, error: 'no encontre la columna del dia ' + dia, mes: nombreMes };
 
-  var reservadas = 0, mantenimiento = 0, salidas = 0, habitaciones = 0;
+  var reservadas = 0, mantenimiento = 0, salidas = 0, libre = 0, habitaciones = 0;
   for (var fila = 0; fila < nFilas; fila++) {
     var etiqueta = String(valores[fila][0] || '').trim();
     if (!/^\d{3}/.test(etiqueta)) continue; // solo filas que empiezan por numero de habitacion (201, 302...)
@@ -72,10 +72,16 @@ function contarOcupacion(fecha) {
     if (cat === 'reserva') reservadas++;
     else if (cat === 'mantenimiento') mantenimiento++;
     else if (cat === 'salida') salidas++;
+    else libre++;
   }
 
-  var ocupadas = reservadas + mantenimiento;
-  var disponibles = Math.max(TOTAL_HABITACIONES - ocupadas, 0);
+  // Reglas del hotel:
+  //   ocupadas    = reservadas (amarillo/verde/naranja, con huesped).
+  //   mantenimiento = morado (no vendible).
+  //   disponibles = total - ocupadas - mantenimiento  (las ROJAS/salidas y las
+  //                 blancas SI son vendibles ese dia).
+  var ocupadas = reservadas;
+  var disponibles = Math.max(TOTAL_HABITACIONES - reservadas - mantenimiento, 0);
   return {
     ok: true,
     fecha: Utilities.formatDate(fecha, 'GMT-5', 'yyyy-MM-dd'),
@@ -85,6 +91,7 @@ function contarOcupacion(fecha) {
     reservadas: reservadas,
     mantenimiento: mantenimiento,
     salidas: salidas,
+    libre: libre,
     ocupadas: ocupadas,
     disponibles: disponibles
   };
