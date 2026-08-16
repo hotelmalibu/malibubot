@@ -64,12 +64,15 @@ function contarOcupacion(fecha) {
   if (colDia < 0) return { ok: false, error: 'no encontre la columna del dia ' + dia, mes: nombreMes };
 
   var reservadas = 0, mantenimiento = 0, salidas = 0, libre = 0, habitaciones = 0;
+  var histo = {}; // diagnostico: cuenta los colores encontrados en la columna del dia
   for (var fila = 0; fila < nFilas; fila++) {
     var etiqueta = String(valores[fila][0] || '').trim();
     // habitaciones: empiezan por 3 digitos (201..515) o por "TB" (Torre B: TB-101..)
     if (!/^(\d{3}|TB)/i.test(etiqueta)) continue;
     habitaciones++;
-    var cat = clasificar(fondos[fila][colDia]);
+    var hex = String(fondos[fila][colDia] || '').toLowerCase();
+    histo[hex] = (histo[hex] || 0) + 1;
+    var cat = clasificar(hex);
     if (cat === 'reserva') reservadas++;
     else if (cat === 'mantenimiento') mantenimiento++;
     else if (cat === 'salida') salidas++;
@@ -94,21 +97,24 @@ function contarOcupacion(fecha) {
     salidas: salidas,
     libre: libre,
     ocupadas: ocupadas,
-    disponibles: disponibles
+    disponibles: disponibles,
+    colores: histo
   };
 }
 
+// A prueba de tonos: SOLO blanco = libre, rojo = salida, morado/magenta =
+// mantenimiento; CUALQUIER otro color de relleno = reserva.
 function clasificar(hex) {
   hex = (hex || '').toLowerCase();
-  if (hex.length < 7 || hex === '#ffffff' || hex === '#000000') return 'libre';
+  if (hex.length < 7) return 'libre';
   var r = parseInt(hex.substr(1, 2), 16);
   var g = parseInt(hex.substr(3, 2), 16);
   var b = parseInt(hex.substr(5, 2), 16);
-  if (r > 150 && g < 120 && b > 150) return 'mantenimiento';        // morado / magenta
-  if (r > 150 && g < 90 && b < 110) return 'salida';               // rojo -> ya salio
-  if (r < 160 && g > 140 && b < 170) return 'reserva';            // verde
-  if (r > 200 && g >= 90 && g <= 255 && b < 130) return 'reserva'; // amarillo + naranja
-  return 'libre';
+  if (r > 235 && g > 235 && b > 235) return 'libre';         // blanco / casi blanco
+  if (r < 40 && g < 40 && b < 40) return 'libre';            // negro (borde)
+  if (b > 140 && r > 120 && g < 130) return 'mantenimiento'; // morado / magenta
+  if (r > 150 && g < 95 && b < 95) return 'salida';          // rojo -> ya salio
+  return 'reserva';                                          // cualquier otro color
 }
 
 function json(obj) {
