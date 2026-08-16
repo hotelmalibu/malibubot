@@ -65,31 +65,35 @@ adminRouter.get('/api/waba/reparar', async (req, res) => {
       });
     }
 
-    const yaSuscrito = Array.isArray(antes.data) && antes.data.length > 0;
-
-    // 2) Suscribir si hace falta
-    let accion = 'ya-estaba-suscrito';
-    let suscripcion = null;
-    if (!yaSuscrito) {
-      const subResp = await fetch(url, { method: 'POST', headers });
-      suscripcion = await subResp.json();
-      accion = subResp.ok ? 'SUSCRITO-AHORA' : 'error-al-suscribir';
+    // 2) SIEMPRE suscribe la app dueña del token (MALIBUBOT). Es idempotente:
+    //    si ya estaba, no pasa nada; si estaba otra app (p. ej. la de prueba de
+    //    Meta), esto agrega la nuestra para que los webhooks lleguen a Render.
+    //    Con ?limpiar=1 primero quita la suscripcion de la app del token y la
+    //    vuelve a crear (util para forzar un reenganche limpio).
+    let limpiar = null;
+    if (req.query.limpiar === '1') {
+      const delResp = await fetch(url, { method: 'DELETE', headers });
+      limpiar = await delResp.json();
     }
+
+    const subResp = await fetch(url, { method: 'POST', headers });
+    const suscripcion = await subResp.json();
+    const accion = subResp.ok ? 'SUSCRIPCION-FORZADA-OK' : 'error-al-suscribir';
 
     // 3) Estado final
     const despuesResp = await fetch(url, { headers });
     const despues = await despuesResp.json();
 
     res.json({
-      ok: true,
+      ok: subResp.ok,
       accion,
       mensaje:
-        accion === 'SUSCRITO-AHORA'
-          ? 'Listo. La app quedo suscrita a tu WABA. Ahora manda un "Hola" y deberia llegar.'
-          : accion === 'ya-estaba-suscrito'
-          ? 'La app YA estaba suscrita. Si aun no llegan mensajes, el problema es otro (avisale a tu asistente).'
+        accion === 'SUSCRIPCION-FORZADA-OK'
+          ? 'Listo. Se forzo la suscripcion de tu app (MALIBUBOT) a la WABA. Manda un "Hola": ahora deberia llegar al servidor.'
           : 'No se pudo suscribir; revisa la respuesta de abajo.',
       wabaId,
+      antes,
+      limpiar,
       suscripcion,
       appsSuscritas: despues,
     });
