@@ -197,6 +197,7 @@
         <div class="filtro-fechas">
           <div class="campo"><label>Desde</label><input type="date" id="fDesde" /></div>
           <div class="campo"><label>Hasta</label><input type="date" id="fHasta" /></div>
+          <button class="btn primario" style="align-self:flex-end;" onclick="buscar()">Buscar</button>
           <div class="presets">
             <button onclick="preset('hoy')">Hoy</button>
             <button onclick="preset('7')">7 días</button>
@@ -315,6 +316,8 @@
     else { const desde = new Date(hoy); desde.setDate(hoy.getDate() - parseInt(tipo, 10) + 1); fD.value = iso(desde); fH.value = iso(hoy); }
     cargarEstadisticas();
   }
+
+  function buscar() { cargarEstadisticas(); cargarReservas(); }
 
   async function cargarEstadisticas() {
     try {
