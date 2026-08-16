@@ -35,6 +35,15 @@ export const config = {
     ocupacionToken: process.env.GOOGLE_OCUPACION_TOKEN || '',
   },
 
+  // Claude (IA del bot). Modelo mas economico: Haiku 4.5.
+  ia: {
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    modelo: process.env.ANTHROPIC_MODELO || 'claude-haiku-4-5',
+    // Link/contacto de consulta para salones, restaurante u otros planes
+    // (el bot SOLO vende habitaciones; lo demas lo deriva aqui).
+    linkConsulta: process.env.LINK_CONSULTA || 'https://hotelmalibu.co',
+  },
+
   admin: {
     // Usuario del panel. Si se deja vacio, se acepta cualquier usuario y solo
     // se valida la contrasena (compatibilidad con el comportamiento anterior).

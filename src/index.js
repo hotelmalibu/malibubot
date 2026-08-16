@@ -18,6 +18,7 @@ import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store } from './almacen/conversaciones.js';
+import { responderIA } from './ia/agente.js';
 import { requiereSesion } from './admin/sesion.js';
 import { loginRouter, adminRouter } from './admin/rutas.js';
 
@@ -101,12 +102,18 @@ app.post('/webhook/whatsapp', async (req, res) => {
         continue;
       }
 
-      // Modo bot -> eco (Fase 1).
-      const respuesta =
-        m.tipo === 'text'
-          ? `MALIBUBOT (prueba Fase 1) recibio tu mensaje: "${m.texto}"`
-          : `MALIBUBOT (prueba Fase 1) recibio un mensaje de tipo "${m.tipo}". ` +
-            `Por ahora solo respondo texto.`;
+      // Modo bot -> responde la IA (Claude). Respaldo si no hay IA disponible.
+      let respuesta = null;
+      if (m.tipo === 'text') {
+        respuesta = await responderIA(m.from);
+      }
+      if (!respuesta) {
+        respuesta =
+          m.tipo === 'text'
+            ? 'Gracias por escribir al Hotel Malibú. En un momento te atendemos. ' +
+              'Para reservas de habitaciones cuéntame tus fechas y número de personas.'
+            : 'Por ahora solo puedo atender mensajes de texto. Escríbeme tu consulta y con gusto te ayudo.';
+      }
 
       await enviarTexto(m.from, respuesta);
       store.registrarSaliente({ waId: m.from, autor: 'bot', texto: respuesta });
