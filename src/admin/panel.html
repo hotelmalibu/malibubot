@@ -89,10 +89,10 @@
     padding: 11px 14px; border-bottom: 1px solid var(--linea); background: #fcfaf5; }
   table.reservas td { padding: 10px 14px; border-bottom: 1px solid var(--linea); }
   table.reservas tr:last-child td { border-bottom: none; }
-  .badge-estado { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
-  .badge-estado.confirmada { background: var(--verde-suave); color: var(--verde); }
-  .badge-estado.pendiente { background: var(--oro-suave); color: var(--oro-profundo); }
-  .badge-estado.cancelada { background: #eee; color: var(--gris); text-decoration: line-through; }
+  .badge-estado { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .badge-estado.pagado { background: var(--verde-suave); color: var(--verde); }
+  .badge-estado.en_proceso { background: var(--oro-suave); color: var(--oro-profundo); }
+  .badge-estado.rechazado { background: #eee; color: var(--gris); text-decoration: line-through; }
   .vacio-tabla { padding: 22px; text-align: center; color: var(--gris); font-size: 13.5px; }
 
   dialog#dlgReserva { border: none; border-radius: 16px; padding: 0; box-shadow: 0 30px 80px rgba(44,47,52,.3); width: min(460px, 94vw); }
@@ -218,7 +218,7 @@
         <div class="tabla-wrap">
           <table class="reservas">
             <thead>
-              <tr><th>Huésped</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Estado</th><th></th></tr>
+              <tr><th>Huésped</th><th>Celular</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th></th></tr>
             </thead>
             <tbody id="cuerpoReservas"></tbody>
           </table>
@@ -256,13 +256,15 @@
     <div class="dlg-cab">Nueva reserva de habitación</div>
     <div class="dlg-cuerpo">
       <div class="campo full"><label>Nombre del huésped</label><input type="text" id="rNombre" placeholder="Ej. María Gómez" /></div>
-      <div class="campo"><label>Habitación (opcional)</label><input type="text" id="rHab" placeholder="Ej. 201 / Doble" /></div>
+      <div class="campo"><label>Celular</label><input type="text" id="rCelular" placeholder="Ej. +57 300 123 4567" /></div>
       <div class="campo"><label>Personas</label><input type="number" id="rPersonas" min="1" placeholder="2" /></div>
+      <div class="campo full"><label>Tipo de habitación</label><select id="rTipo"></select></div>
+      <div class="campo"><label>N° habitación (opcional)</label><input type="text" id="rHab" placeholder="Ej. 201" /></div>
+      <div class="campo"><label>Estado del pago</label>
+        <select id="rEstado"><option value="pagado">Pagado</option><option value="en_proceso">En proceso</option></select>
+      </div>
       <div class="campo"><label>Check-in</label><input type="date" id="rIn" /></div>
       <div class="campo"><label>Check-out</label><input type="date" id="rOut" /></div>
-      <div class="campo full"><label>Estado</label>
-        <select id="rEstado"><option value="confirmada">Confirmada</option><option value="pendiente">Pendiente</option></select>
-      </div>
     </div>
     <div class="dlg-nota" id="rNota"></div>
     <div class="dlg-pie">
@@ -274,6 +276,8 @@
 <script>
   const API = '/admin/api/conversaciones';
   let seleccion = null, listaCache = [], convCache = null, vistaActual = 'dashboard';
+  let catalogoTipos = [];
+  const pesos = (v) => (v || v === 0) ? '$' + Number(v).toLocaleString('es-CO') : '';
 
   const fmtHora = (ts) => {
     const d = new Date(ts), hoy = new Date();
@@ -323,6 +327,7 @@
     return `<div class="kpi ${clase}"><div class="lbl">${lbl}</div><div class="num">${num}</div>${pie ? `<div class="pie">${pie}</div>` : ''}</div>`;
   }
   function pintarKPIs(d) {
+    if (d.hotel && Array.isArray(d.hotel.tipos)) catalogoTipos = d.hotel.tipos;
     const c = d.conversaciones, h = d.habitaciones;
     document.getElementById('kpisConv').innerHTML =
       tarjeta('verde', 'Activas', c.activas, 'Actividad en 24 h o con recepción') +
@@ -330,7 +335,7 @@
       tarjeta('', 'Total', c.total, 'En el rango seleccionado') +
       tarjeta('alerta', 'En atención humana', c.enHumano, 'Handoff activo');
     document.getElementById('kpisHab').innerHTML =
-      tarjeta('', 'Reservas realizadas', h.reservasRealizadas, `${h.reservasConfirmadas} confirmadas · ${h.reservasPendientes} pendientes`) +
+      tarjeta('', 'Reservas realizadas', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasEnProceso} en proceso`) +
       tarjeta('alerta', 'Ocupadas hoy', h.ocupadas, `de ${h.totalHabitaciones} habitaciones`) +
       tarjeta('verde', 'Disponibles hoy', h.disponibles, `de ${h.totalHabitaciones} habitaciones`);
   }
@@ -348,23 +353,30 @@
     const cuerpo = document.getElementById('cuerpoReservas'), vacio = document.getElementById('vacioReservas');
     if (!rs.length) { cuerpo.innerHTML = ''; vacio.style.display = 'block'; return; }
     vacio.style.display = 'none';
+    const etiqueta = { pagado: 'Pagado', en_proceso: 'En proceso', rechazado: 'Rechazado' };
     cuerpo.innerHTML = rs.map((r) => `
       <tr>
         <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}</td>
+        <td>${esc(r.celular) || '—'}</td>
         <td>${esc(r.habitacion) || '—'}</td>
         <td>${r.personas || '—'}</td>
         <td>${esc(r.checkIn) || '—'}</td>
         <td>${esc(r.checkOut) || '—'}</td>
-        <td><span class="badge-estado ${r.estado}">${r.estado}</span></td>
+        <td><span class="badge-estado ${r.estado}">${etiqueta[r.estado] || r.estado}</span></td>
         <td style="text-align:right;white-space:nowrap;">
-          ${r.estado !== 'cancelada' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'cancelada')">Cancelar</button>` : ''}
+          ${r.estado === 'en_proceso' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
+          ${r.estado !== 'rechazado' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button>` : ''}
         </td>
       </tr>`).join('');
   }
   function abrirDlgReserva() {
     document.getElementById('rNota').textContent = '';
-    ['rNombre','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
-    document.getElementById('rEstado').value = 'confirmada';
+    ['rNombre','rCelular','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
+    document.getElementById('rEstado').value = 'pagado';
+    const sel = document.getElementById('rTipo');
+    sel.innerHTML = catalogoTipos.map((t) =>
+      `<option value="${esc(t.nombre)}">${esc(t.nombre)}${t.precioDesde ? ' — desde ' + pesos(t.precioDesde) : ''}</option>`
+    ).join('') || '<option value="">(sin catálogo)</option>';
     document.getElementById('dlgReserva').showModal();
   }
   async function guardarReserva() {
@@ -373,11 +385,14 @@
     if (!nombre) { nota.textContent = 'Indica el nombre del huésped.'; return; }
     btn.disabled = true; nota.textContent = '';
     try {
+      const tipo = document.getElementById('rTipo').value;
+      const num = document.getElementById('rHab').value.trim();
       const r = await fetch('/admin/api/reservas', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre,
-          habitacion: document.getElementById('rHab').value.trim(),
+          celular: document.getElementById('rCelular').value.trim(),
+          habitacion: tipo + (num ? ' · N° ' + num : ''),
           personas: document.getElementById('rPersonas').value,
           checkIn: document.getElementById('rIn').value,
           checkOut: document.getElementById('rOut').value,

@@ -23,7 +23,8 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
-import { reservasStore } from '../almacen/reservas.js';
+import { reservasStore, ESTADOS } from '../almacen/reservas.js';
+import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { config } from '../config.js';
 import {
@@ -92,7 +93,11 @@ adminRouter.get('/api/estadisticas', (req, res) => {
     rango: { desde, hasta },
     conversaciones: store.estadisticas(desde, hasta),
     habitaciones: reservasStore.estadisticas(desde, hasta),
-    hotel: { nombre: config.hotel.nombre, habitaciones: config.hotel.habitaciones },
+    hotel: {
+      nombre: config.hotel.nombre,
+      habitaciones: config.hotel.habitaciones,
+      tipos: TIPOS_HABITACION,
+    },
   });
 });
 
@@ -108,6 +113,7 @@ adminRouter.post('/api/reservas', (req, res) => {
   }
   const reserva = reservasStore.crear({
     waId: b.waId,
+    celular: b.celular,
     nombre: b.nombre,
     habitacion: b.habitacion,
     personas: b.personas,
@@ -121,7 +127,7 @@ adminRouter.post('/api/reservas', (req, res) => {
 
 adminRouter.post('/api/reservas/:id/estado', (req, res) => {
   const estado = req.body?.estado;
-  if (!['confirmada', 'pendiente', 'cancelada'].includes(estado)) {
+  if (!ESTADOS.includes(estado)) {
     return res.status(400).json({ ok: false, error: 'Estado inválido.' });
   }
   const r = reservasStore.actualizarEstado(req.params.id, estado);

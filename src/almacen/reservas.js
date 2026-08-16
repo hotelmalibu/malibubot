@@ -1,44 +1,58 @@
 // ============================================================
 //  reservas.js — Almacen en memoria de reservas de HABITACIONES.
 //
-//  Alimenta las estadisticas del panel (reservas realizadas, habitaciones
-//  ocupadas y disponibles). Por ahora se puede registrar a mano desde el
-//  panel; en la Fase 2 el bot creara reservas automaticamente.
+//  El estado sigue el flujo de pago (RAPYD confirma la reserva):
+//    'pagado'      -> pago confirmado; ocupa habitacion.
+//    'en_proceso'  -> pago iniciado, aun sin confirmar.
+//    'rechazado'   -> pago rechazado/cancelado; no ocupa.
+//
+//  Datos de una reserva: tipo de habitacion, nombre del huesped, celular,
+//  check-in, check-out y estado. En Fase 3 estas reservas las creara el
+//  webhook de RAPYD al confirmar el pago; hoy tambien se pueden registrar a
+//  mano desde el panel.
 //
 //  NOTA: en memoria. Se reinicia al redesplegar. La persistencia duradera
-//  (Google Sheet / base de datos) llega en una fase posterior.
+//  llega en una fase posterior (base de datos / Google Sheet).
 // ============================================================
 import { config } from '../config.js';
+
+export const ESTADOS = ['pagado', 'en_proceso', 'rechazado'];
 
 let secuencia = 1;
 /** @type {Array<object>} */
 const reservas = [];
 
 function hoyISO() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return new Date().toISOString().slice(0, 10);
 }
 
-/** ¿La reserva ocupa una habitacion en la fecha dada? (check-in <= fecha < check-out) */
+/** Solo las PAGADAS ocupan habitacion (check-in <= fecha < check-out). */
 function ocupaEn(r, fechaISO) {
-  if (r.estado === 'cancelada') return false;
+  if (r.estado !== 'pagado') return false;
   if (!r.checkIn) return false;
   const fin = r.checkOut || r.checkIn;
   return r.checkIn <= fechaISO && fechaISO < fin;
 }
 
 export const reservasStore = {
-  /** Crea una reserva. datos: { waId, nombre, habitacion, personas, checkIn, checkOut, estado, fuente } */
+  /**
+   * Crea una reserva.
+   * datos: { waId, celular, nombre, habitacion, personas, checkIn, checkOut, estado, fuente, referenciaPago }
+   */
   crear(datos = {}) {
+    const estado = ESTADOS.includes(datos.estado) ? datos.estado : 'en_proceso';
     const r = {
       id: secuencia++,
       waId: datos.waId || '',
+      celular: datos.celular || datos.waId || '',
       nombre: datos.nombre || '',
       habitacion: datos.habitacion || '',
       personas: Number(datos.personas) || null,
       checkIn: datos.checkIn || '',
       checkOut: datos.checkOut || '',
-      estado: datos.estado || 'confirmada', // confirmada | pendiente | cancelada
-      fuente: datos.fuente || 'manual',     // manual | bot
+      estado,                                   // pagado | en_proceso | rechazado
+      fuente: datos.fuente || 'manual',         // manual | bot | rapyd
+      referenciaPago: datos.referenciaPago || '',
       creado: Date.now(),
     };
     reservas.push(r);
@@ -50,6 +64,7 @@ export const reservasStore = {
   },
 
   actualizarEstado(id, estado) {
+    if (!ESTADOS.includes(estado)) return null;
     const r = reservas.find((x) => x.id === Number(id));
     if (r) r.estado = estado;
     return r || null;
@@ -57,34 +72,37 @@ export const reservasStore = {
 
   /**
    * Estadisticas de habitaciones/reservas.
-   * @param {string} [desde] YYYY-MM-DD (filtra reservas creadas desde)
-   * @param {string} [hasta] YYYY-MM-DD (filtra reservas creadas hasta, inclusive)
+   * @param {string} [desde] YYYY-MM-DD (filtra por fecha de creacion)
+   * @param {string} [hasta] YYYY-MM-DD
    */
   estadisticas(desde, hasta) {
     const total = config.hotel.habitaciones;
     const hoy = hoyISO();
 
-    // Reservas realizadas dentro del rango (por fecha de creacion).
     const enRango = reservas.filter((r) => {
-      if (r.estado === 'cancelada') return false;
       const dia = new Date(r.creado).toISOString().slice(0, 10);
       if (desde && dia < desde) return false;
       if (hasta && dia > hasta) return false;
       return true;
     });
 
-    // Ocupacion de HOY (independiente del filtro de fechas).
     const ocupadasHoy = reservas.filter((r) => ocupaEn(r, hoy)).length;
     const ocupadas = Math.min(ocupadasHoy, total);
     const disponibles = Math.max(total - ocupadas, 0);
+
+    const pagadas = enRango.filter((r) => r.estado === 'pagado').length;
+    const enProceso = enRango.filter((r) => r.estado === 'en_proceso').length;
+    const rechazadas = enRango.filter((r) => r.estado === 'rechazado').length;
 
     return {
       totalHabitaciones: total,
       ocupadas,
       disponibles,
-      reservasRealizadas: enRango.length,
-      reservasConfirmadas: enRango.filter((r) => r.estado === 'confirmada').length,
-      reservasPendientes: enRango.filter((r) => r.estado === 'pendiente').length,
+      // "reservas realizadas" = pagadas + en proceso (excluye rechazadas)
+      reservasRealizadas: pagadas + enProceso,
+      reservasPagadas: pagadas,
+      reservasEnProceso: enProceso,
+      reservasRechazadas: rechazadas,
     };
   },
 };

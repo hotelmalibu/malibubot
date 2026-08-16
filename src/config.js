@@ -25,7 +25,7 @@ export const config = {
   hotel: {
     nombre: process.env.HOTEL_NOMBRE || 'Hotel y Centro de Eventos Malibu',
     // Total de habitaciones del hotel (para el calculo de ocupadas/disponibles).
-    habitaciones: parseInt(process.env.HOTEL_HABITACIONES || '20', 10),
+    habitaciones: parseInt(process.env.HOTEL_HABITACIONES || '85', 10),
   },
 
   admin: {
