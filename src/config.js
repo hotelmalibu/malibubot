@@ -14,6 +14,9 @@ export const config = {
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
     appSecret: process.env.WHATSAPP_APP_SECRET,
     graphVersion: process.env.GRAPH_API_VERSION || 'v21.0',
+    // Base de la Graph API. En produccion se deja el valor por defecto (Meta);
+    // solo se sobreescribe para pruebas locales con un servidor simulado.
+    graphBase: process.env.GRAPH_API_BASE || 'https://graph.facebook.com',
   },
 
   hotel: {

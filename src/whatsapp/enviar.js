@@ -5,7 +5,7 @@
 import { config } from '../config.js';
 
 function urlMensajes() {
-  return `https://graph.facebook.com/${config.whatsapp.graphVersion}/${config.whatsapp.phoneNumberId}/messages`;
+  return `${config.whatsapp.graphBase}/${config.whatsapp.graphVersion}/${config.whatsapp.phoneNumberId}/messages`;
 }
 
 async function llamarGraph(payload) {
