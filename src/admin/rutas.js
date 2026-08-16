@@ -199,6 +199,43 @@ adminRouter.post('/api/conversaciones/:waId/modo', (req, res) => {
   res.json({ ok: true, modo: conv.modo });
 });
 
+// -------- Lista los numeros de la WABA con su Phone number ID --------
+// Abrir en el navegador (tras login):
+//   /admin/api/waba/numeros?waba=EL_ID_DE_TU_WABA
+adminRouter.get('/api/waba/numeros', async (req, res) => {
+  const { token, graphBase, graphVersion } = config.whatsapp;
+  const wabaId = (req.query.waba || config.whatsapp.wabaId || '').trim();
+  if (!token) return res.status(400).json({ ok: false, error: 'Falta WHATSAPP_TOKEN.' });
+  if (!wabaId) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Falta el ID de la WABA. Abre esta ruta con ?waba=TU_ID.',
+    });
+  }
+  const url =
+    `${graphBase}/${graphVersion}/${wabaId}/phone_numbers` +
+    `?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,platform_type`;
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json();
+    if (!r.ok) {
+      return res.status(502).json({
+        ok: false,
+        pista: 'Graph API rechazo la consulta (token vencido o WABA incorrecta).',
+        respuesta: d,
+      });
+    }
+    res.json({
+      ok: true,
+      instruccion:
+        'Copia el "id" del numero real (+57 300 2299991) y ponlo en Render como WHATSAPP_PHONE_NUMBER_ID.',
+      numeros: d.data || [],
+    });
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
 // -------- Diagnostico/reparacion de la suscripcion de la WABA --------
 adminRouter.get('/api/waba/reparar', async (req, res) => {
   const { token, graphBase, graphVersion } = config.whatsapp;
