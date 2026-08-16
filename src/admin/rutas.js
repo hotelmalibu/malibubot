@@ -95,13 +95,17 @@ adminRouter.get('/api/estadisticas', async (req, res) => {
   // Si esta conectado el Libro de Reservas (Google Sheet), la ocupacion real de
   // HOY sale de ahi (cuenta los colores); las reservas del bot/manual se suman
   // aparte. Si no, se usa solo lo que hay en memoria.
-  const libro = await ocupacionDelLibro();
+  // Consulta el libro para el día elegido (desde) o el de hoy.
+  const libro = await ocupacionDelLibro(desde || null);
   if (libro) {
     habitaciones.ocupadas = libro.ocupadas;
     habitaciones.disponibles = libro.disponibles;
     habitaciones.reservadasLibro = libro.reservadas;
     habitaciones.mantenimiento = libro.mantenimiento;
     habitaciones.salidas = libro.salidas;
+    habitaciones.nochesReservadasMes = libro.nochesReservadasMes;
+    habitaciones.diaConsultado = libro.fecha;
+    habitaciones.mes = libro.mes;
     habitaciones.fuenteOcupacion = 'libro';
   } else {
     habitaciones.fuenteOcupacion = 'memoria';

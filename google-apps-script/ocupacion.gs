@@ -54,22 +54,33 @@ function contarOcupacion(fecha) {
   var fondos = rango.getBackgrounds();
   var nFilas = valores.length, nCols = valores[0].length;
 
-  // Columna del dia: busca en las primeras 4 filas una celda == dia.
-  var colDia = -1;
-  for (var f = 0; f < Math.min(4, nFilas) && colDia < 0; f++) {
-    for (var c = 1; c < nCols; c++) {
-      if (Number(valores[f][c]) === dia) { colDia = c; break; }
+  // Mapa dia -> columna (una columna por cada numero de dia 1..31 en las
+  // primeras 4 filas). Sirve para el dia pedido y para recorrer todo el mes.
+  var colPorDia = {};
+  for (var c = 1; c < nCols; c++) {
+    for (var f = 0; f < Math.min(4, nFilas); f++) {
+      var v = valores[f][c];
+      if (typeof v === 'number' && v >= 1 && v <= 31 && v === Math.floor(v)) {
+        if (colPorDia[v] === undefined) colPorDia[v] = c;
+        break;
+      }
     }
   }
-  if (colDia < 0) return { ok: false, error: 'no encontre la columna del dia ' + dia, mes: nombreMes };
+  var colDia = colPorDia[dia];
+  if (colDia === undefined) return { ok: false, error: 'no encontre la columna del dia ' + dia, mes: nombreMes };
+  var diasCols = [];
+  for (var k in colPorDia) diasCols.push(colPorDia[k]);
 
   var reservadas = 0, mantenimiento = 0, salidas = 0, libre = 0, habitaciones = 0;
-  var histo = {}; // diagnostico: cuenta los colores encontrados en la columna del dia
+  var nochesReservadasMes = 0; // habitaciones-noche reservadas en TODO el mes
+  var histo = {};              // diagnostico: colores en la columna del dia
   for (var fila = 0; fila < nFilas; fila++) {
     var etiqueta = String(valores[fila][0] || '').trim();
     // habitaciones: empiezan por 3 digitos (201..515) o por "TB" (Torre B: TB-101..)
     if (!/^(\d{3}|TB)/i.test(etiqueta)) continue;
     habitaciones++;
+
+    // --- Del dia pedido ---
     var hex = String(fondos[fila][colDia] || '').toLowerCase();
     histo[hex] = (histo[hex] || 0) + 1;
     var cat = clasificar(hex);
@@ -77,13 +88,17 @@ function contarOcupacion(fecha) {
     else if (cat === 'mantenimiento') mantenimiento++;
     else if (cat === 'salida') salidas++;
     else libre++;
+
+    // --- Del mes completo (noches reservadas) ---
+    for (var j = 0; j < diasCols.length; j++) {
+      if (clasificar(fondos[fila][diasCols[j]]) === 'reserva') nochesReservadasMes++;
+    }
   }
 
   // Reglas del hotel:
-  //   ocupadas    = reservadas (amarillo/verde/naranja, con huesped).
+  //   ocupadas (reservas del dia) = reservadas (amarillo/verde/naranja).
   //   mantenimiento = morado (no vendible).
-  //   disponibles = total - ocupadas - mantenimiento  (las ROJAS/salidas y las
-  //                 blancas SI son vendibles ese dia).
+  //   disponibles = total - ocupadas - mantenimiento (rojas/blancas SI venden).
   var ocupadas = reservadas;
   var disponibles = Math.max(TOTAL_HABITACIONES - reservadas - mantenimiento, 0);
   return {
@@ -98,6 +113,8 @@ function contarOcupacion(fecha) {
     libre: libre,
     ocupadas: ocupadas,
     disponibles: disponibles,
+    nochesReservadasMes: nochesReservadasMes,
+    diasDelMes: diasCols.length,
     colores: histo
   };
 }
