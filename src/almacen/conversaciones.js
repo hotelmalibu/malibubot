@@ -122,24 +122,41 @@ export const store = {
     return conv;
   },
 
-  /** Resumen de todas las conversaciones para la lista del panel. */
-  listar() {
-    return [...conversaciones.values()]
-      .map((c) => {
-        const ultimo = c.mensajes[c.mensajes.length - 1];
-        return {
-          waId: c.waId,
-          nombre: c.nombre,
-          modo: c.modo,
-          escalado: c.escalado,
-          noLeidos: c.noLeidos,
-          necesitaAtencion: c.escalado || c.modo === 'humano',
-          ultimaActividad: c.ultimaActividad,
-          ultimoTexto: ultimo?.texto || '',
-          ultimoAutor: ultimo?.autor || '',
-        };
-      })
-      .sort((a, b) => b.ultimaActividad - a.ultimaActividad);
+  /**
+   * Resumen de conversaciones para la lista del panel.
+   * Con desde/hasta (YYYY-MM-DD) muestra solo las que tuvieron algun mensaje
+   * en ese rango de dias, y el "ultimo" mostrado es el ultimo dentro del rango.
+   */
+  listar(desde, hasta) {
+    const ini = desde ? new Date(desde + 'T00:00:00').getTime() : null;
+    const fin = hasta ? new Date(hasta + 'T23:59:59.999').getTime() : null;
+    const filtrando = ini != null || fin != null;
+    const salida = [];
+
+    for (const c of conversaciones.values()) {
+      let ultimo;
+      if (filtrando) {
+        const enRango = c.mensajes.filter(
+          (m) => (ini == null || m.ts >= ini) && (fin == null || m.ts <= fin)
+        );
+        if (!enRango.length) continue; // sin actividad en el rango: se omite
+        ultimo = enRango[enRango.length - 1];
+      } else {
+        ultimo = c.mensajes[c.mensajes.length - 1];
+      }
+      salida.push({
+        waId: c.waId,
+        nombre: c.nombre,
+        modo: c.modo,
+        escalado: c.escalado,
+        noLeidos: c.noLeidos,
+        necesitaAtencion: c.escalado || c.modo === 'humano',
+        ultimaActividad: ultimo ? ultimo.ts : c.ultimaActividad,
+        ultimoTexto: ultimo?.texto || '',
+        ultimoAutor: ultimo?.autor || '',
+      });
+    }
+    return salida.sort((a, b) => b.ultimaActividad - a.ultimaActividad);
   },
 
   /** Conversacion completa (para el transcript). */

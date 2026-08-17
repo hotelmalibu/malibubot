@@ -165,8 +165,10 @@ adminRouter.post('/api/reservas/:id/estado', (req, res) => {
 });
 
 // -------- Conversaciones --------
-adminRouter.get('/api/conversaciones', (_req, res) => {
-  res.json({ conversaciones: store.listar() });
+adminRouter.get('/api/conversaciones', (req, res) => {
+  const desde = (req.query.desde || '').trim() || null;
+  const hasta = (req.query.hasta || '').trim() || null;
+  res.json({ conversaciones: store.listar(desde, hasta) });
 });
 
 adminRouter.get('/api/conversaciones/:waId', (req, res) => {
