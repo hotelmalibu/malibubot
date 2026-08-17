@@ -66,6 +66,42 @@ function plantilla(reserva, paraRecepcion) {
   </div>`;
 }
 
+/** Diagnostico: envia un correo de prueba y devuelve la respuesta de Resend. */
+export async function probarCorreo(to) {
+  if (!config.correo.resendApiKey) {
+    return { ok: false, error: 'Falta RESEND_API_KEY en el entorno.' };
+  }
+  const destino = to || config.correo.recepcion;
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.correo.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: config.correo.remitente,
+        to: destino,
+        subject: 'Prueba MALIBUBOT ✅',
+        html: '<p>Correo de prueba de MALIBUBOT. Si lo ves, el envío funciona. 🌴</p>',
+      }),
+    });
+    const texto = await resp.text();
+    let respuesta;
+    try { respuesta = JSON.parse(texto); } catch { respuesta = texto; }
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      remitente: config.correo.remitente,
+      destino,
+      recepcionConfig: config.correo.recepcion,
+      respuesta,
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 /** Envia la confirmacion de reserva al cliente y a recepcion. */
 export async function confirmarReservaPorCorreo(reserva) {
   const tareas = [];

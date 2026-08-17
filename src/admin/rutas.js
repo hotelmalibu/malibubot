@@ -26,6 +26,7 @@ import { store } from '../almacen/conversaciones.js';
 import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
+import { probarCorreo } from '../correo/enviar.js';
 import {
   probarAuth as probarAuthRapyd,
   metodosPais as metodosPaisRapyd,
@@ -217,6 +218,11 @@ adminRouter.get('/api/rapyd/diag', async (req, res) => {
     secretKeyPista: pista(secretKey),
     resultado,
   });
+});
+
+// -------- Diagnóstico de correo (Resend) --------
+adminRouter.get('/api/correo/prueba', async (req, res) => {
+  res.json(await probarCorreo((req.query.to || '').trim()));
 });
 
 // -------- Crea un checkout de prueba y devuelve la respuesta completa --------
