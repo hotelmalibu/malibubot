@@ -20,8 +20,8 @@ import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store } from './almacen/conversaciones.js';
 import { reservasStore } from './almacen/reservas.js';
 import { responderIA } from './ia/agente.js';
-import { verificarWebhook as verificarWebhookRapyd } from './pagos/rapyd.js';
-import { confirmarReservaPorCorreo } from './correo/enviar.js';
+import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
+import { confirmarPago } from './pagos/confirmar.js';
 import { requiereSesion } from './admin/sesion.js';
 import { loginRouter, adminRouter } from './admin/rutas.js';
 
@@ -148,16 +148,7 @@ app.post('/webhook/rapyd', async (req, res) => {
     }
 
     if (tipo.includes('PAYMENT_COMPLETED') || data.paid === true || data.status === 'CLO') {
-      reservasStore.actualizarEstado(reserva.id, 'pagado');
-      console.log(`[rapyd] Pago confirmado. Reserva ${reserva.id} -> pagado.`);
-      confirmarReservaPorCorreo(reserva).catch(() => {});
-      if (reserva.waId) {
-        enviarTexto(
-          reserva.waId,
-          `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${reserva.habitacion}) quedó lista. ` +
-            `Te enviamos la confirmación a ${reserva.email || 'tu correo'}. ¡Te esperamos!`
-        ).catch(() => {});
-      }
+      await confirmarPago(reserva);
     } else if (tipo.includes('PAYMENT_FAILED') || data.status === 'ERR') {
       reservasStore.actualizarEstado(reserva.id, 'rechazado');
       console.log(`[rapyd] Pago rechazado. Reserva ${reserva.id} -> rechazado.`);
@@ -185,6 +176,25 @@ app.get('/pago/gracias', (_req, res) => {
 app.get('/pago/cancelado', (_req, res) => {
   res.type('html').send(paginaPago('Pago cancelado', 'No se completó el pago. Si quieres, vuelve al chat de WhatsApp y con gusto te ayudamos a reservar.'));
 });
+
+// ---------- Revisor de pagos (sin depender del webhook compartido) ----------
+// Cada 90 s le pregunta a RAPYD por los checkouts "en proceso" recientes.
+// Asi MALIBUBOT confirma el pago sin tocar el webhook de la pagina web.
+const REVISION_MS = 90 * 1000;
+const VENTANA_MS = 3 * 60 * 60 * 1000; // deja de revisar tras 3 h
+async function revisarPagosPendientes() {
+  if (!rapydActivo()) return;
+  const ahora = Date.now();
+  for (const r of reservasStore.listar()) {
+    if (r.estado !== 'en_proceso' || !r.checkoutId) continue;
+    if (ahora - r.creado > VENTANA_MS) continue;
+    const estado = await consultarCheckout(r.checkoutId);
+    if (!estado) continue;
+    if (estado.pagado) await confirmarPago(reservasStore.obtenerPorId(r.id));
+    else if (estado.rechazado) reservasStore.actualizarEstado(r.id, 'rechazado');
+  }
+}
+setInterval(() => revisarPagosPendientes().catch((e) => console.error('[pago] revisor:', e.message)), REVISION_MS);
 
 // ---------- Arranque ----------
 app.listen(config.puerto, () => {

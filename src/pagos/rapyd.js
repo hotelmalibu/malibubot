@@ -74,6 +74,25 @@ export async function crearCheckout({ monto, referencia, descripcion, metadata }
 }
 
 /**
+ * Consulta el estado de un checkout que creamos (para saber si ya se pagó,
+ * sin depender del webhook de la cuenta — que puede estar usado por la web).
+ * @returns {Promise<{pagado:boolean, estado:string, datos:object}|null>}
+ */
+export async function consultarCheckout(checkoutId) {
+  if (!activo() || !checkoutId) return null;
+  try {
+    const data = await pedir('get', `/v1/checkout/${encodeURIComponent(checkoutId)}`, null);
+    const pago = data.payment || {};
+    const pagado = pago.paid === true || pago.status === 'CLO';
+    const rechazado = pago.status === 'ERR' || pago.status === 'EXP' || data.status === 'CAN';
+    return { pagado, rechazado, estado: pago.status || data.status || '', datos: data };
+  } catch (err) {
+    console.warn('[rapyd] No se pudo consultar el checkout', checkoutId, ':', err.message);
+    return null;
+  }
+}
+
+/**
  * Verifica la firma de un webhook entrante de RAPYD.
  * @param {import('express').Request} req  con req.rawBody (Buffer) y cabeceras.
  * @returns {boolean}
