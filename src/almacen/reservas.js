@@ -11,16 +11,25 @@
 //  webhook de RAPYD al confirmar el pago; hoy tambien se pueden registrar a
 //  mano desde el panel.
 //
-//  NOTA: en memoria. Se reinicia al redesplegar. La persistencia duradera
-//  llega en una fase posterior (base de datos / Google Sheet).
+//  Capa EN VIVO (en memoria). Si hay base de datos (DATABASE_URL), cada
+//  cambio se replica alli en segundo plano y al arrancar la memoria se
+//  hidrata desde la base (ver hidratarReservas). Sin base de datos, se
+//  comporta como antes: se reinicia al redesplegar.
 // ============================================================
 import { config } from '../config.js';
+import { dbActivo, dbGuardarReserva } from './db.js';
 
 export const ESTADOS = ['pagado', 'en_proceso', 'rechazado'];
 
 let secuencia = 1;
 /** @type {Array<object>} */
 const reservas = [];
+
+/** Replica una reserva en la base de datos, sin bloquear. */
+function persistirReserva(r) {
+  if (!dbActivo() || !r) return;
+  dbGuardarReserva(r).catch((e) => console.error('[db] reserva:', e.message));
+}
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -59,7 +68,14 @@ export const reservasStore = {
       creado: Date.now(),
     };
     reservas.push(r);
+    persistirReserva(r);
     return r;
+  },
+
+  /** Guarda en la base los cambios hechos directamente sobre una reserva. */
+  guardar(reserva) {
+    persistirReserva(reserva);
+    return reserva;
   },
 
   listar() {
@@ -73,7 +89,10 @@ export const reservasStore = {
   actualizarEstado(id, estado) {
     if (!ESTADOS.includes(estado)) return null;
     const r = reservas.find((x) => x.id === Number(id));
-    if (r) r.estado = estado;
+    if (r) {
+      r.estado = estado;
+      persistirReserva(r);
+    }
     return r || null;
   },
 
@@ -113,3 +132,34 @@ export const reservasStore = {
     };
   },
 };
+
+/**
+ * Reconstruye las reservas en memoria desde la base de datos (al arrancar)
+ * y restaura el contador de IDs para que no colisionen los nuevos.
+ * @param {object[]} reservaRows
+ */
+export function hidratarReservas(reservaRows = []) {
+  let maxId = 0;
+  for (const r of reservaRows) {
+    reservas.push({
+      id: Number(r.id),
+      waId: r.wa_id || '',
+      celular: r.celular || '',
+      nombre: r.nombre || '',
+      email: r.email || '',
+      habitacion: r.habitacion || '',
+      personas: r.personas != null ? Number(r.personas) : null,
+      checkIn: r.check_in || '',
+      checkOut: r.check_out || '',
+      monto: r.monto != null ? Number(r.monto) : null,
+      estado: ESTADOS.includes(r.estado) ? r.estado : 'en_proceso',
+      fuente: r.fuente || 'manual',
+      referenciaPago: r.referencia_pago || '',
+      checkoutId: r.checkout_id || '',
+      creado: Number(r.creado) || Date.now(),
+    });
+    if (Number(r.id) > maxId) maxId = Number(r.id);
+  }
+  secuencia = maxId + 1;
+  return reservas.length;
+}

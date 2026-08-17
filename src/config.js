@@ -47,6 +47,14 @@ export const config = {
   // URL publica del servicio (para los retornos y el webhook de RAPYD).
   publicUrl: process.env.PUBLIC_URL || 'https://malibubot.onrender.com',
 
+  // Base de datos PostgreSQL (Neon/Supabase/Render). Si no se define, el bot
+  // funciona en memoria (las conversaciones y reservas se borran al reiniciar).
+  db: {
+    url: process.env.DATABASE_URL || '',
+    // Cuantos dias de historial de mensajes cargar en memoria al arrancar.
+    historialDias: parseInt(process.env.HISTORIAL_DIAS || '120', 10),
+  },
+
   // Pasarela de pagos RAPYD.
   rapyd: {
     accessKey: process.env.RAPYD_ACCESS_KEY || '',

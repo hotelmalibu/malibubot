@@ -5,12 +5,21 @@
 //  "modo bot" (responde MALIBUBOT) o "modo humano" (lo atiende una
 //  persona desde el panel).
 //
-//  NOTA: es en memoria. Se reinicia si el servicio se reinicia o
-//  se redespliega. El historial DURADERO se guardara en el Google
-//  Sheet en la Fase 2; aqui vive el estado en vivo del panel.
+//  Es la capa EN VIVO (rapida, en memoria). Si hay base de datos
+//  (DATABASE_URL), cada cambio se replica alli en segundo plano y al
+//  arrancar la memoria se hidrata desde la base (ver hidratarConversaciones).
+//  Sin base de datos, se comporta como antes: se borra al reiniciar.
 // ============================================================
+import { dbActivo, dbGuardarConversacion, dbGuardarMensaje } from './db.js';
 
 const MAX_MENSAJES = 300; // tope por conversacion para acotar memoria
+
+/** Replica un cambio en la base de datos, sin bloquear (fire-and-forget). */
+function persistir(conv, mensaje) {
+  if (!dbActivo()) return;
+  dbGuardarConversacion(conv).catch((e) => console.error('[db] conv:', e.message));
+  if (mensaje) dbGuardarMensaje(conv.waId, mensaje).catch((e) => console.error('[db] msg:', e.message));
+}
 
 /** @type {Map<string, object>} */
 const conversaciones = new Map();
@@ -57,27 +66,31 @@ export const store = {
   /** Registra un mensaje entrante del cliente. */
   registrarEntrante({ waId, nombre, tipo, texto }) {
     const conv = obtenerOCrear(waId, nombre);
-    agregarMensaje(conv, {
+    const mensaje = {
       direccion: 'entrada',
       autor: 'cliente',
       tipo: tipo || 'text',
       texto: texto || '',
       ts: ahora(),
-    });
+    };
+    agregarMensaje(conv, mensaje);
     conv.noLeidos += 1;
+    persistir(conv, mensaje);
     return conv;
   },
 
   /** Registra un mensaje saliente (autor: 'bot' o 'humano'). */
   registrarSaliente({ waId, autor, texto }) {
     const conv = obtenerOCrear(waId);
-    agregarMensaje(conv, {
+    const mensaje = {
       direccion: 'salida',
       autor: autor || 'bot',
       tipo: 'text',
       texto: texto || '',
       ts: ahora(),
-    });
+    };
+    agregarMensaje(conv, mensaje);
+    persistir(conv, mensaje);
     return conv;
   },
 
@@ -90,6 +103,7 @@ export const store = {
     const conv = obtenerOCrear(waId);
     conv.modo = modo === 'humano' ? 'humano' : 'bot';
     if (conv.modo === 'bot') conv.escalado = false;
+    persistir(conv);
     return conv;
   },
 
@@ -98,6 +112,7 @@ export const store = {
     const conv = obtenerOCrear(waId);
     conv.escalado = !!valor;
     if (valor) conv.modo = 'humano';
+    persistir(conv);
     return conv;
   },
 
@@ -163,3 +178,45 @@ export const store = {
     };
   },
 };
+
+/**
+ * Reconstruye la memoria desde las filas de la base de datos (al arrancar).
+ * @param {{convRows:object[], msgRows:object[]}} datos
+ */
+export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
+  for (const c of convRows) {
+    conversaciones.set(c.wa_id, {
+      waId: c.wa_id,
+      nombre: c.nombre || '',
+      modo: c.modo === 'humano' ? 'humano' : 'bot',
+      escalado: !!c.escalado,
+      noLeidos: 0,
+      creado: Number(c.creado) || ahora(),
+      ultimaActividad: Number(c.ultima_actividad) || ahora(),
+      mensajes: [],
+    });
+  }
+  for (const m of msgRows) {
+    let conv = conversaciones.get(m.wa_id);
+    if (!conv) {
+      // Mensaje sin metadatos de conversacion (raro): crea una minima.
+      conv = crearConversacion(m.wa_id);
+    }
+    conv.mensajes.push({
+      direccion: m.direccion,
+      autor: m.autor,
+      tipo: m.tipo || 'text',
+      texto: m.texto || '',
+      ts: Number(m.ts),
+    });
+  }
+  // Acota cada conversacion al tope y ajusta la ultima actividad al ultimo mensaje.
+  for (const conv of conversaciones.values()) {
+    if (conv.mensajes.length > MAX_MENSAJES) {
+      conv.mensajes.splice(0, conv.mensajes.length - MAX_MENSAJES);
+    }
+    const ultimo = conv.mensajes[conv.mensajes.length - 1];
+    if (ultimo && ultimo.ts > conv.ultimaActividad) conv.ultimaActividad = ultimo.ts;
+  }
+  return conversaciones.size;
+}

@@ -223,6 +223,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
       });
       reserva.referenciaPago = String(reserva.id);
       reserva.checkoutId = checkout.checkoutId;
+      reservasStore.guardar(reserva); // persiste el checkoutId/referencia en la base
       // Enviar el enlace en un mensaje APARTE y limpio (para que WhatsApp no lo
       // corte). Se registra como saliente del bot.
       await enviarTexto(waId, checkout.redirectUrl);

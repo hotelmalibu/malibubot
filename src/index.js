@@ -17,8 +17,9 @@ import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
-import { store } from './almacen/conversaciones.js';
-import { reservasStore } from './almacen/reservas.js';
+import { store, hidratarConversaciones } from './almacen/conversaciones.js';
+import { reservasStore, hidratarReservas } from './almacen/reservas.js';
+import { iniciarDB, dbCargar } from './almacen/db.js';
 import { responderIA } from './ia/agente.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
@@ -197,8 +198,29 @@ async function revisarPagosPendientes() {
 setInterval(() => revisarPagosPendientes().catch((e) => console.error('[pago] revisor:', e.message)), REVISION_MS);
 
 // ---------- Arranque ----------
-app.listen(config.puerto, () => {
-  revisarConfig();
-  console.log(`[servidor] MALIBUBOT escuchando en el puerto ${config.puerto}`);
-  console.log(`[servidor] Consola disponible en /admin`);
-});
+async function arrancar() {
+  // 1) Base de datos (si hay DATABASE_URL): conecta y reconstruye la memoria
+  //    desde lo guardado, para que el historial sobreviva a los reinicios.
+  const dbOk = await iniciarDB();
+  if (dbOk) {
+    try {
+      const datos = await dbCargar();
+      if (datos) {
+        const nConv = hidratarConversaciones(datos);
+        const nRes = hidratarReservas(datos.reservaRows);
+        console.log(`[db] Memoria hidratada: ${nConv} conversaciones, ${nRes} reservas.`);
+      }
+    } catch (err) {
+      console.error('[db] Error hidratando desde la base:', err.message);
+    }
+  }
+
+  // 2) Enciende el servidor.
+  app.listen(config.puerto, () => {
+    revisarConfig();
+    console.log(`[servidor] MALIBUBOT escuchando en el puerto ${config.puerto}`);
+    console.log(`[servidor] Consola disponible en /admin`);
+  });
+}
+
+arrancar();
