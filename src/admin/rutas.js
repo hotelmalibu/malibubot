@@ -26,6 +26,7 @@ import { store } from '../almacen/conversaciones.js';
 import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
+import { probarAuth as probarAuthRapyd } from '../pagos/rapyd.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { config } from '../config.js';
 import {
@@ -197,6 +198,21 @@ adminRouter.post('/api/conversaciones/:waId/modo', (req, res) => {
   }
   const conv = store.establecerModo(req.params.waId, modo);
   res.json({ ok: true, modo: conv.modo });
+});
+
+// -------- Diagnostico de autenticacion con RAPYD --------
+adminRouter.get('/api/rapyd/diag', async (req, res) => {
+  const { accessKey, secretKey, baseUrl } = config.rapyd;
+  const pista = (k) => (k ? `${k.slice(0, 4)}...${k.slice(-4)} (largo ${k.length})` : null);
+  const resultado = await probarAuthRapyd();
+  res.json({
+    baseUrl,
+    accessKeyPresente: !!accessKey,
+    accessKeyPista: pista(accessKey),
+    secretKeyPresente: !!secretKey,
+    secretKeyPista: pista(secretKey),
+    resultado,
+  });
 });
 
 // -------- Lista los numeros de la WABA con su Phone number ID --------

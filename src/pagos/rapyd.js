@@ -116,3 +116,17 @@ export function verificarWebhook(req) {
 }
 
 export const rapydActivo = activo;
+
+/**
+ * Prueba rapida de autenticacion con RAPYD (GET autenticado a datos de paises).
+ * Sirve para verificar que las llaves y la base URL estan bien.
+ */
+export async function probarAuth() {
+  if (!activo()) return { ok: false, error: 'Faltan RAPYD_ACCESS_KEY / RAPYD_SECRET_KEY.' };
+  try {
+    const data = await pedir('get', '/v1/data/countries', null);
+    return { ok: true, mensaje: 'Autenticación OK con RAPYD ✅', paises: Array.isArray(data) ? data.length : undefined };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
