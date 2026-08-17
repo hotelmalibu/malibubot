@@ -26,7 +26,11 @@ import { store } from '../almacen/conversaciones.js';
 import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
-import { probarAuth as probarAuthRapyd, metodosPais as metodosPaisRapyd } from '../pagos/rapyd.js';
+import {
+  probarAuth as probarAuthRapyd,
+  metodosPais as metodosPaisRapyd,
+  crearCheckoutDebug as crearCheckoutDebugRapyd,
+} from '../pagos/rapyd.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { config } from '../config.js';
 import {
@@ -213,6 +217,16 @@ adminRouter.get('/api/rapyd/diag', async (req, res) => {
     secretKeyPista: pista(secretKey),
     resultado,
   });
+});
+
+// -------- Crea un checkout de prueba y devuelve la respuesta completa --------
+adminRouter.get('/api/rapyd/prueba-checkout', async (req, res) => {
+  const r = await crearCheckoutDebugRapyd({
+    monto: req.query.monto,
+    metodo: req.query.metodo,
+    categoria: req.query.categoria,
+  });
+  res.json(r);
 });
 
 // -------- Métodos de pago disponibles en RAPYD para un país/moneda --------

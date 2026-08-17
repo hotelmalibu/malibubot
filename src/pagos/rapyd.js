@@ -118,6 +118,31 @@ export function verificarWebhook(req) {
 export const rapydActivo = activo;
 
 /**
+ * Crea un checkout de prueba y devuelve la RESPUESTA COMPLETA de RAPYD
+ * (para diagnosticar el redirect_url, status, etc.). Opcional: metodo/categoria.
+ */
+export async function crearCheckoutDebug({ monto, metodo, categoria } = {}) {
+  if (!activo()) return { ok: false, error: 'RAPYD no configurado' };
+  const cuerpo = {
+    amount: Number(monto) || 50000,
+    currency: config.rapyd.moneda,
+    country: config.rapyd.pais,
+    merchant_reference_id: 'diag-' + Math.round(Date.now() / 1000),
+    complete_payment_url: `${config.publicUrl}/pago/gracias`,
+    cancel_payment_url: `${config.publicUrl}/pago/cancelado`,
+    description: 'Prueba de checkout MALIBUBOT',
+  };
+  if (metodo) cuerpo.payment_method_type = metodo;
+  if (categoria) cuerpo.payment_method_type_categories = [categoria];
+  try {
+    const data = await pedir('post', '/v1/checkout', cuerpo);
+    return { ok: true, enviado: cuerpo, data };
+  } catch (err) {
+    return { ok: false, enviado: cuerpo, error: err.message };
+  }
+}
+
+/**
  * Lista los metodos de pago disponibles para un pais/moneda (sandbox).
  * Si viene vacio, la pagina de checkout no tiene que mostrar y da 404.
  */
