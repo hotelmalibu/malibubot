@@ -29,6 +29,23 @@ function noches(checkIn, checkOut) {
   return dias > 0 ? dias : 1;
 }
 
+/**
+ * Limpia el texto para WhatsApp:
+ *  - WhatsApp usa UN solo asterisco para negrita, no dobles (Markdown).
+ *  - Un asterisco/guion pegado a un enlace lo corta; se despega.
+ */
+function limpiarWhatsApp(texto) {
+  if (!texto) return texto;
+  let t = texto;
+  // Dobles (o mas) asteriscos de Markdown -> uno solo (negrita de WhatsApp).
+  t = t.replace(/\*\*+/g, '*');
+  // Quita asteriscos/guiones/tildes/backticks pegados ANTES de un enlace.
+  t = t.replace(/[*_~`]+(\s*)(https?:\/\/)/gi, '$1$2');
+  // ...y los pegados DESPUES de un enlace (lo que lo rompe).
+  t = t.replace(/(https?:\/\/[^\s*_~`]+)[*_~`]+/gi, '$1');
+  return t.trim();
+}
+
 function buscarTipo(nombre) {
   const n = (nombre || '').toLowerCase();
   return (
@@ -63,6 +80,11 @@ function sistema() {
     `LO QUE NO HACES:`,
     `- No cotizas ni reservas SALONES, EVENTOS, RESTAURANTE ni otros planes distintos al alojamiento.`,
     `- Para esos temas, deriva amablemente con este enlace de consulta personal: ${config.ia.linkConsulta}`,
+    `- Al compartir ese enlace, escríbelo SOLO, en una línea aparte, completo y EXACTO. No le pegues asteriscos, puntos, comas, paréntesis ni ningún texto inmediatamente antes o después (si lo haces, el enlace se corta y no abre).`,
+    ``,
+    `FORMATO (WhatsApp):`,
+    `- WhatsApp NO usa Markdown. Para negrita usa UN solo asterisco (*palabra*), NUNCA dobles (**palabra**).`,
+    `- Nunca empieces ni termines un mensaje con asteriscos. Escribe en texto plano, claro y natural.`,
     ``,
     `CÓMO ATIENDES UNA RESERVA DE HABITACIÓN:`,
     `- Pregunta lo necesario: fechas (entrada y salida), número de personas y tipo de habitación.`,
@@ -290,7 +312,7 @@ export async function responderIA(waId) {
         .map((b) => b.text)
         .join('\n')
         .trim();
-      return texto || null;
+      return limpiarWhatsApp(texto) || null;
     }
     return null;
   } catch (err) {
