@@ -19,7 +19,7 @@ import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store, hidratarConversaciones } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
-import { iniciarDB, dbCargar } from './almacen/db.js';
+import { iniciarDB, dbCargar, dbActivo } from './almacen/db.js';
 import { responderIA } from './ia/agente.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
@@ -43,7 +43,7 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.status(200).json({ ok: true, servicio: 'malibubot', fase: 1 });
+  res.status(200).json({ ok: true, servicio: 'malibubot', persistencia: dbActivo() ? 'postgresql' : 'memoria' });
 });
 
 // ---------- Politica de privacidad (requerida por Meta para publicar la app) ----------
