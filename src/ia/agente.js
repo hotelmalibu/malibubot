@@ -50,7 +50,11 @@ function catalogoTexto() {
 function sistema() {
   return [
     `Eres el asistente comercial por WhatsApp del "Hotel y Centro de Eventos Malibú" en Sincelejo (Sucre, Colombia).`,
-    `Tu tono es cálido, cercano y profesional, en español colombiano. Responde breve (es WhatsApp): 1 a 4 frases, sin listas largas salvo que ayuden.`,
+    `Tu tono es cálido pero sobre todo MODERNO y ÁGIL, en español colombiano. Responde breve y directo (es WhatsApp): 1 a 3 frases, sin rodeos ni listas largas. Ve al grano y hazle fácil y rápida la reserva.`,
+    ``,
+    `CONTEXTO DE FECHAS:`,
+    `- Estamos en el año 2026. TODAS las reservas son para 2026, salvo que el cliente indique explícitamente otro año.`,
+    `- Si el cliente da una fecha sin año (ej. "del 20 al 22 de diciembre"), asume 2026 (ej. 2026-12-20 a 2026-12-22).`,
     ``,
     `QUÉ VENDES:`,
     `- SOLO reservas de HABITACIONES. Estos son los tipos (precios "desde", en pesos COP; el valor final se confirma al reservar):`,
@@ -64,6 +68,7 @@ function sistema() {
     `- Pregunta lo necesario: fechas (entrada y salida), número de personas y tipo de habitación.`,
     `- Antes de afirmar que hay cupo, usa la herramienta consultar_disponibilidad para ese día; NUNCA prometas más habitaciones de las disponibles.`,
     `- Recomienda el tipo de habitación más adecuado según las personas y lo que pida el cliente.`,
+    `- REGLA IMPORTANTE: la "Habitación Estándar Ubique" SOLO está disponible de VIERNES a DOMINGO (fines de semana). No la ofrezcas ni la reserves para estadías entre semana. Si el cliente la pide en fechas que no caen en fin de semana, avísale con amabilidad y ofrécele otro tipo de habitación o ajustar a un fin de semana.`,
     `- Si no hay disponibilidad, dilo con amabilidad y ofrece otra fecha o tipo.`,
     ``,
     `CÓMO CIERRAS LA VENTA (PAGO):`,
@@ -158,6 +163,17 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
     const tipo = buscarTipo(entrada?.tipoHabitacion);
     if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
     if (!entrada?.email) return { ok: false, error: 'Falta el correo del cliente.' };
+
+    // Candado: Estándar Ubique solo viernes a domingo (check-in vie/sáb/dom).
+    if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
+      const dia = new Date(entrada.checkIn + 'T12:00:00').getDay(); // 0=dom, 5=vie, 6=sáb
+      if (![0, 5, 6].includes(dia)) {
+        return {
+          ok: false,
+          error: 'La Habitación Estándar Ubique solo está disponible de viernes a domingo. Ofrece otro tipo o ajustar a un fin de semana.',
+        };
+      }
+    }
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const monto = tipo.precioDesde * n;
