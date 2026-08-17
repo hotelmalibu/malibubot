@@ -118,6 +118,22 @@ export function verificarWebhook(req) {
 export const rapydActivo = activo;
 
 /**
+ * Lista los metodos de pago disponibles para un pais/moneda (sandbox).
+ * Si viene vacio, la pagina de checkout no tiene que mostrar y da 404.
+ */
+export async function metodosPais(country, currency) {
+  if (!activo()) return { ok: false, error: 'RAPYD no configurado' };
+  try {
+    const qs = `?country=${encodeURIComponent(country)}` + (currency ? `&currency=${encodeURIComponent(currency)}` : '');
+    const data = await pedir('get', '/v1/payment_methods/country' + qs, null);
+    const lista = Array.isArray(data) ? data : [];
+    return { ok: true, cantidad: lista.length, metodos: lista.map((m) => m.type || m.name).slice(0, 40) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Prueba rapida de autenticacion con RAPYD (GET autenticado a datos de paises).
  * Sirve para verificar que las llaves y la base URL estan bien.
  */

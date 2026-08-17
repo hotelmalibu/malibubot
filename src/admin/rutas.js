@@ -26,7 +26,7 @@ import { store } from '../almacen/conversaciones.js';
 import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
-import { probarAuth as probarAuthRapyd } from '../pagos/rapyd.js';
+import { probarAuth as probarAuthRapyd, metodosPais as metodosPaisRapyd } from '../pagos/rapyd.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { config } from '../config.js';
 import {
@@ -213,6 +213,13 @@ adminRouter.get('/api/rapyd/diag', async (req, res) => {
     secretKeyPista: pista(secretKey),
     resultado,
   });
+});
+
+// -------- Métodos de pago disponibles en RAPYD para un país/moneda --------
+adminRouter.get('/api/rapyd/metodos', async (req, res) => {
+  const country = (req.query.country || 'CO').toUpperCase();
+  const currency = (req.query.currency || 'COP').toUpperCase();
+  res.json({ country, currency, ...(await metodosPaisRapyd(country, currency)) });
 });
 
 // -------- Lista los numeros de la WABA con su Phone number ID --------
