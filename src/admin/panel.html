@@ -91,6 +91,7 @@
   table.reservas tr:last-child td { border-bottom: none; }
   .badge-estado { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .badge-estado.pagado { background: var(--verde-suave); color: var(--verde); }
+  .badge-estado.pendiente_hotel { background: #e9f0f8; color: #2f5b8a; }
   .badge-estado.en_proceso { background: var(--oro-suave); color: var(--oro-profundo); }
   .badge-estado.rechazado { background: #eee; color: var(--gris); text-decoration: line-through; }
   .vacio-tabla { padding: 22px; text-align: center; color: var(--gris); font-size: 13.5px; }
@@ -290,7 +291,7 @@
       <div class="campo full"><label>Tipo de habitación</label><select id="rTipo"></select></div>
       <div class="campo"><label>N° habitación (opcional)</label><input type="text" id="rHab" placeholder="Ej. 201" /></div>
       <div class="campo"><label>Estado del pago</label>
-        <select id="rEstado"><option value="pagado">Pagado</option><option value="en_proceso">En proceso</option></select>
+        <select id="rEstado"><option value="pagado">Pagado</option><option value="pendiente_hotel">Pago en hotel</option><option value="en_proceso">En proceso</option></select>
       </div>
       <div class="campo"><label>Check-in</label><input type="date" id="rIn" /></div>
       <div class="campo"><label>Check-out</label><input type="date" id="rOut" /></div>
@@ -375,7 +376,7 @@
                  tarjeta('gris', 'Mantenimiento', h.mantenimiento, `no vendibles ${cuando}`) +
                  tarjeta('gris', 'Salidas', h.salidas, `ya dejaron (quedan libres) ${cuando}`);
     }
-    htmlHab += tarjeta('', 'Reservas del bot', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasEnProceso} en proceso`);
+    htmlHab += tarjeta('', 'Reservas del bot', h.reservasRealizadas, `${h.reservasPagadas} pagadas · ${h.reservasPendienteHotel || 0} en hotel · ${h.reservasEnProceso} en proceso`);
     document.getElementById('kpisHab').innerHTML = htmlHab;
     const nota = document.getElementById('fuenteOcup');
     if (nota) nota.textContent = desdeLibro
@@ -396,7 +397,7 @@
     const cuerpo = document.getElementById('cuerpoReservas'), vacio = document.getElementById('vacioReservas');
     if (!rs.length) { cuerpo.innerHTML = ''; vacio.style.display = 'block'; return; }
     vacio.style.display = 'none';
-    const etiqueta = { pagado: 'Pagado', en_proceso: 'En proceso', rechazado: 'Rechazado' };
+    const etiqueta = { pagado: 'Pagado', pendiente_hotel: 'Pago en hotel', en_proceso: 'En proceso', rechazado: 'Rechazado' };
     cuerpo.innerHTML = rs.map((r) => `
       <tr>
         <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}</td>
@@ -407,7 +408,7 @@
         <td>${esc(r.checkOut) || '—'}</td>
         <td><span class="badge-estado ${r.estado}">${etiqueta[r.estado] || r.estado}</span></td>
         <td style="text-align:right;white-space:nowrap;">
-          ${r.estado === 'en_proceso' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
+          ${(r.estado === 'en_proceso' || r.estado === 'pendiente_hotel') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
           ${r.estado !== 'rechazado' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button>` : ''}
         </td>
       </tr>`).join('');

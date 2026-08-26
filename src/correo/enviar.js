@@ -38,10 +38,25 @@ async function enviarCorreo({ to, subject, html }) {
 
 function plantilla(reserva, paraRecepcion) {
   const total = reserva.monto ? precioCOP(reserva.monto) : '';
-  const titulo = paraRecepcion ? 'Nueva reserva PAGADA' : '¡Reserva confirmada!';
+  const pendiente = reserva.estado === 'pendiente_hotel';
+
+  const titulo = paraRecepcion
+    ? (pendiente ? 'Nueva reserva — PAGO PENDIENTE (cobro en el hotel)' : 'Nueva reserva PAGADA')
+    : '¡Reserva confirmada!';
   const intro = paraRecepcion
-    ? 'Se confirmó el pago de una nueva reserva desde MALIBUBOT:'
-    : `Hola ${reserva.nombre || ''}, tu reserva en el Hotel Malibú quedó confirmada. ¡Te esperamos!`;
+    ? (pendiente
+        ? 'Se confirmó una nueva reserva desde MALIBUBOT con PAGO PENDIENTE. El valor se cobra al huésped en el hotel:'
+        : 'Se confirmó el pago de una nueva reserva desde MALIBUBOT:')
+    : (pendiente
+        ? `Hola ${reserva.nombre || ''}, tu reserva en el Hotel Malibú quedó confirmada. El pago está PENDIENTE y se realiza directamente en el hotel al llegar. ¡Te esperamos!`
+        : `Hola ${reserva.nombre || ''}, tu reserva en el Hotel Malibú quedó confirmada. ¡Te esperamos!`);
+
+  const etiquetaTotal = pendiente ? 'Total a pagar en el hotel' : 'Total pagado';
+  // Aviso destacado del estado del pago.
+  const avisoPago = pendiente
+    ? `<div style="margin:14px 0;padding:10px 14px;background:#e9f0f8;border:1px solid #cddcee;border-radius:10px;color:#2f5b8a;font-size:14px;font-weight:700">PAGO PENDIENTE — se cobra en el hotel al llegar</div>`
+    : `<div style="margin:14px 0;padding:10px 14px;background:#e4f2ea;border:1px solid #cbe6d6;border-radius:10px;color:#2f8f5b;font-size:14px;font-weight:700">PAGO CONFIRMADO ✓</div>`;
+
   const fila = (k, v) =>
     v ? `<tr><td style="padding:6px 10px;color:#6b6f77">${k}</td><td style="padding:6px 10px;font-weight:600;color:#2c2f34">${v}</td></tr>` : '';
   return `
@@ -51,6 +66,7 @@ function plantilla(reserva, paraRecepcion) {
       <h2 style="margin:6px 0 0">${titulo}</h2>
     </div>
     <p style="font-size:15px;line-height:1.5">${intro}</p>
+    ${avisoPago}
     <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
       ${fila('Huésped', reserva.nombre)}
       ${fila('Celular', reserva.celular)}
@@ -59,7 +75,7 @@ function plantilla(reserva, paraRecepcion) {
       ${fila('Personas', reserva.personas)}
       ${fila('Check-in', reserva.checkIn)}
       ${fila('Check-out', reserva.checkOut)}
-      ${fila('Total pagado', total)}
+      ${fila(etiquetaTotal, total)}
       ${fila('Referencia de pago', reserva.referenciaPago)}
     </table>
     <p style="font-size:12px;color:#9aa0a8;margin-top:16px">Hotel y Centro de Eventos Malibú · Sincelejo, Sucre, Colombia</p>
@@ -104,12 +120,15 @@ export async function probarCorreo(to) {
 
 /** Envia la confirmacion de reserva al cliente y a recepcion. */
 export async function confirmarReservaPorCorreo(reserva) {
+  const pendiente = reserva.estado === 'pendiente_hotel';
   const tareas = [];
   if (reserva.email) {
     tareas.push(
       enviarCorreo({
         to: reserva.email,
-        subject: 'Reserva confirmada — Hotel Malibú',
+        subject: pendiente
+          ? 'Reserva confirmada (pago pendiente en el hotel) — Hotel Malibú'
+          : 'Reserva confirmada — Hotel Malibú',
         html: plantilla(reserva, false),
       })
     );
@@ -118,7 +137,9 @@ export async function confirmarReservaPorCorreo(reserva) {
     tareas.push(
       enviarCorreo({
         to: config.correo.recepcion,
-        subject: `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`,
+        subject: pendiente
+          ? `Nueva reserva PAGO PENDIENTE (cobro en hotel) — ${reserva.nombre || reserva.celular || ''}`
+          : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`,
         html: plantilla(reserva, true),
       })
     );

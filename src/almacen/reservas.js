@@ -19,7 +19,12 @@
 import { config } from '../config.js';
 import { dbActivo, dbGuardarReserva } from './db.js';
 
-export const ESTADOS = ['pagado', 'en_proceso', 'rechazado'];
+// Estados de una reserva:
+//   'pagado'          -> pago en línea confirmado (ocupa habitación).
+//   'pendiente_hotel' -> reserva CONFIRMADA, el pago se cobra en el hotel (ocupa).
+//   'en_proceso'      -> pago en línea iniciado, aún sin confirmar.
+//   'rechazado'       -> pago rechazado/cancelado (no ocupa).
+export const ESTADOS = ['pagado', 'pendiente_hotel', 'en_proceso', 'rechazado'];
 
 let secuencia = 1;
 /** @type {Array<object>} */
@@ -35,9 +40,10 @@ function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Solo las PAGADAS ocupan habitacion (check-in <= fecha < check-out). */
+/** Ocupan habitacion las reservas confirmadas: pagadas o con pago pendiente
+ *  en el hotel (check-in <= fecha < check-out). */
 function ocupaEn(r, fechaISO) {
-  if (r.estado !== 'pagado') return false;
+  if (r.estado !== 'pagado' && r.estado !== 'pendiente_hotel') return false;
   if (!r.checkIn) return false;
   const fin = r.checkOut || r.checkIn;
   return r.checkIn <= fechaISO && fechaISO < fin;
@@ -117,6 +123,7 @@ export const reservasStore = {
     const disponibles = Math.max(total - ocupadas, 0);
 
     const pagadas = enRango.filter((r) => r.estado === 'pagado').length;
+    const pendienteHotel = enRango.filter((r) => r.estado === 'pendiente_hotel').length;
     const enProceso = enRango.filter((r) => r.estado === 'en_proceso').length;
     const rechazadas = enRango.filter((r) => r.estado === 'rechazado').length;
 
@@ -124,9 +131,10 @@ export const reservasStore = {
       totalHabitaciones: total,
       ocupadas,
       disponibles,
-      // "reservas realizadas" = pagadas + en proceso (excluye rechazadas)
-      reservasRealizadas: pagadas + enProceso,
+      // "reservas realizadas" = confirmadas + en proceso (excluye rechazadas)
+      reservasRealizadas: pagadas + pendienteHotel + enProceso,
       reservasPagadas: pagadas,
+      reservasPendienteHotel: pendienteHotel,
       reservasEnProceso: enProceso,
       reservasRechazadas: rechazadas,
     };
