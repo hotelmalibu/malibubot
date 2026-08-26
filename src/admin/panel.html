@@ -372,7 +372,15 @@
       tarjeta('verde', 'Disponibles', h.disponibles, `para vender ${cuando} · de ${h.totalHabitaciones}`) +
       tarjeta('alerta', 'Reservas del día', h.ocupadas, desdeLibro ? `habitaciones ocupadas ${cuando}` : `de ${h.totalHabitaciones}`);
     if (desdeLibro) {
-      htmlHab += tarjeta('', 'Reservas del mes', h.nochesReservadasMes, `noches reservadas · ${h.mes || ''}`) +
+      const rg = d.rango || {};
+      const hayRango = !!(rg.desde || rg.hasta);
+      const usarRango = hayRango && h.nochesReservadasRango != null;
+      const nochesVal = usarRango ? h.nochesReservadasRango : h.nochesReservadasMes;
+      const nochesLbl = usarRango ? 'Reservas del período' : 'Reservas del mes';
+      const nochesPie = usarRango
+        ? `del ${rg.desde || '…'} al ${rg.hasta || '…'}`
+        : `noches reservadas · ${h.mes || ''}`;
+      htmlHab += tarjeta('', nochesLbl, nochesVal, nochesPie) +
                  tarjeta('gris', 'Mantenimiento', h.mantenimiento, `no vendibles ${cuando}`) +
                  tarjeta('gris', 'Salidas', h.salidas, `ya dejaron (quedan libres) ${cuando}`);
     }
