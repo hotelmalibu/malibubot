@@ -21,7 +21,7 @@ import { store, hidratarConversaciones } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo } from './almacen/db.js';
 import { responderIA } from './ia/agente.js';
-import { calentarOcupacion } from './datos/ocupacion.js';
+import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
 import { requiereSesion } from './admin/sesion.js';
@@ -216,9 +216,14 @@ async function arrancar() {
     }
   }
 
-  // 2) Precalienta la ocupación de hoy y la mantiene fresca (dashboard rápido).
-  calentarOcupacion();
-  setInterval(calentarOcupacion, 4 * 60 * 1000);
+  // 2) Ocupación: carga la caché guardada (instantánea tras reinicios) y
+  //    precalcula las vistas fijas cada rato (dashboard siempre listo).
+  if (dbOk) {
+    const n = await hidratarOcupacion();
+    if (n) console.log(`[ocupacion] ${n} vistas cargadas desde la base.`);
+  }
+  refrescarVistas();
+  setInterval(refrescarVistas, 4 * 60 * 1000);
 
   // 3) Enciende el servidor.
   app.listen(config.puerto, () => {

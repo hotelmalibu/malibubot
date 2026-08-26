@@ -1,15 +1,16 @@
 // ============================================================
 //  ocupacion.js — Lee la ocupacion real del "Libro de Reservas" (Google Sheet).
 //
-//  El Apps Script que cuenta los colores es LENTO (lee toda la hoja). Para que
-//  el dashboard nunca se quede esperando, se usa "stale-while-revalidate":
-//    - Si hay un valor en cache (fresco o viejo) -> se devuelve AL INSTANTE.
-//      Si estaba viejo, se refresca en segundo plano (sin bloquear).
-//    - Solo se espera (con timeout) cuando NO hay ningun valor en cache.
-//  Ademas un "calentador" precarga la ocupacion de hoy al arrancar y cada rato,
-//  para que la vista por defecto siempre este lista.
+//  El Apps Script que cuenta los colores es LENTO. Estrategia:
+//   - CACHE en memoria + PostgreSQL (sobrevive reinicios).
+//   - "stale-while-revalidate": si hay dato (fresco o viejo) se devuelve al
+//     instante y, si esta viejo, se refresca en segundo plano.
+//   - VISTAS FIJAS (hoy, cada mes, ultimos 7, ultimos 30, todo el periodo) se
+//     precalculan solas cada rato -> el dashboard las lee instantaneas.
+//   - Un rango libre que no sea una vista fija se calcula al momento (SWR).
 // ============================================================
 import { config } from '../config.js';
+import { dbActivo, dbGuardarOcupacion, dbCargarOcupacion } from '../almacen/db.js';
 
 const TTL_MS = 5 * 60 * 1000;   // 5 min: el libro cambia lento
 const TIMEOUT_MS = 10 * 1000;   // corta la consulta a la hoja si se cuelga
@@ -18,6 +19,13 @@ const refrescando = new Set();   // claves con refresco en curso (evita duplicad
 
 function claveDe(fecha, desde, hasta) {
   return `${fecha || 'hoy'}|${desde || ''}|${hasta || ''}`;
+}
+
+/** Guarda en memoria y (si hay) en la base, para que sobreviva reinicios. */
+function guardarEnCache(clave, datos) {
+  const ts = Date.now();
+  cache.set(clave, { ts, datos });
+  if (dbActivo()) dbGuardarOcupacion(clave, datos, ts).catch((e) => console.error('[ocupacion] db:', e.message));
 }
 
 /** Consulta real al Apps Script (con timeout). Devuelve los datos o null. */
@@ -52,7 +60,7 @@ function refrescarEnSegundoPlano(clave, params) {
   if (refrescando.has(clave)) return;
   refrescando.add(clave);
   fetchLibro(params)
-    .then((d) => { if (d) cache.set(clave, { ts: Date.now(), datos: d }); })
+    .then((d) => { if (d) guardarEnCache(clave, d); })
     .finally(() => refrescando.delete(clave));
 }
 
@@ -67,13 +75,12 @@ async function consultarLibro(params) {
   const enCache = cache.get(clave);
 
   if (enCache) {
-    const viejo = Date.now() - enCache.ts >= TTL_MS;
-    if (viejo) refrescarEnSegundoPlano(clave, params);
+    if (Date.now() - enCache.ts >= TTL_MS) refrescarEnSegundoPlano(clave, params);
     return enCache.datos; // instantaneo
   }
 
   const d = await fetchLibro(params);
-  if (d) cache.set(clave, { ts: Date.now(), datos: d });
+  if (d) guardarEnCache(clave, d);
   return d;
 }
 
@@ -104,7 +111,6 @@ export async function ocupacionDelLibro(fechaISO, desdeISO, hastaISO) {
   if (desdeISO && hastaISO) {
     const meses = mesesEntre(desdeISO, hastaISO);
     if (meses.length > 1) {
-      // base ya cubre el mes de fechaISO (= mes de desde); suma los demás EN PARALELO.
       const extras = await Promise.all(
         meses.slice(1).map((m) => consultarLibro({ fecha: m, desde: desdeISO, hasta: hastaISO }))
       );
@@ -112,15 +118,79 @@ export async function ocupacionDelLibro(fechaISO, desdeISO, hastaISO) {
       for (const dm of extras) {
         if (dm && typeof dm.nochesReservadasRango === 'number') total += dm.nochesReservadasRango;
       }
-      base.nochesReservadasRango = total;
+      // Copia (NO mutar el objeto cacheado, que es del primer mes crudo).
+      return { ...base, nochesReservadasRango: total };
     }
   }
   return base;
 }
 
-/** Precarga la ocupación de hoy (para que la vista por defecto arranque rápida). */
-export function calentarOcupacion() {
-  if (!config.google.ocupacionUrl) return;
-  const clave = claveDe(null, null, null);
-  refrescarEnSegundoPlano(clave, { fecha: null, desde: null, hasta: null });
+// ---------- Persistencia y vistas fijas ----------
+
+/** Carga en memoria las vistas de ocupación guardadas en la base (al arrancar). */
+export async function hidratarOcupacion() {
+  if (!dbActivo()) return 0;
+  try {
+    const filas = await dbCargarOcupacion();
+    for (const f of filas) {
+      let datos;
+      try { datos = JSON.parse(f.datos); } catch { continue; }
+      cache.set(f.clave, { ts: Number(f.actualizado) || 0, datos });
+    }
+    return filas.length;
+  } catch (err) {
+    console.error('[ocupacion] Error hidratando cache:', err.message);
+    return 0;
+  }
+}
+
+function iso(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Lista de vistas fijas a precalcular (relativas a HOY, en UTC igual que el
+ * dashboard). Cada una tiene los mismos parámetros que envía el panel.
+ */
+function vistasFijas() {
+  const hoy = new Date();
+  const hoyISO = iso(hoy);
+  const menos = (n) => { const d = new Date(hoy); d.setUTCDate(d.getUTCDate() - n); return iso(d); };
+
+  const vistas = [
+    { fecha: null, desde: null, hasta: null },                 // Todo (mes actual)
+    { fecha: hoyISO, desde: hoyISO, hasta: hoyISO },            // Hoy
+    { fecha: menos(6), desde: menos(6), hasta: hoyISO },        // Últimos 7 días
+    { fecha: menos(29), desde: menos(29), hasta: hoyISO },      // Últimos 30 días
+  ];
+
+  // Cada mes del año en curso hasta el mes actual (para filtros por mes).
+  const anio = hoy.getUTCFullYear();
+  for (let m = 0; m <= hoy.getUTCMonth(); m++) {
+    const mm = String(m + 1).padStart(2, '0');
+    const ult = new Date(Date.UTC(anio, m + 1, 0)).getUTCDate(); // último día del mes
+    const desde = `${anio}-${mm}-01`;
+    const hasta = `${anio}-${mm}-${String(ult).padStart(2, '0')}`;
+    vistas.push({ fecha: desde, desde, hasta });
+  }
+  return vistas;
+}
+
+let refrescandoVistas = false;
+
+/** Precalcula (en segundo plano, secuencial) todas las vistas fijas. */
+export async function refrescarVistas() {
+  if (!config.google.ocupacionUrl || refrescandoVistas) return;
+  refrescandoVistas = true;
+  try {
+    // ocupacionDelLibro internamente consulta y cachea cada mes crudo, así que
+    // basta con recorrer las vistas para dejar la cache lista.
+    for (const v of vistasFijas()) {
+      await ocupacionDelLibro(v.fecha, v.desde, v.hasta);
+    }
+  } catch (err) {
+    console.error('[ocupacion] Error refrescando vistas:', err.message);
+  } finally {
+    refrescandoVistas = false;
+  }
 }

@@ -74,6 +74,11 @@ export async function iniciarDB() {
         checkout_id     TEXT,
         creado          BIGINT
       );
+      CREATE TABLE IF NOT EXISTS ocupacion_cache (
+        clave       TEXT PRIMARY KEY,
+        datos       TEXT,
+        actualizado BIGINT
+      );
     `);
     console.log('[db] Conectada a PostgreSQL y tablas listas. ✅');
     return true;
@@ -139,6 +144,24 @@ export async function dbGuardarReserva(r) {
       r.fuente || 'manual', r.referenciaPago || '', r.checkoutId || '', r.creado,
     ]
   );
+}
+
+/** Guarda/actualiza una vista de ocupación en la caché persistente. */
+export async function dbGuardarOcupacion(clave, datos, actualizado) {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO ocupacion_cache (clave, datos, actualizado)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (clave) DO UPDATE SET datos = EXCLUDED.datos, actualizado = EXCLUDED.actualizado`,
+    [clave, JSON.stringify(datos), actualizado]
+  );
+}
+
+/** Lee todas las vistas de ocupación guardadas (para hidratar al arrancar). */
+export async function dbCargarOcupacion() {
+  if (!pool) return [];
+  const r = await pool.query('SELECT clave, datos, actualizado FROM ocupacion_cache');
+  return r.rows;
 }
 
 // ---------- Lectura para hidratar la memoria al arrancar ----------
