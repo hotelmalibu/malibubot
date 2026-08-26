@@ -21,6 +21,7 @@ import { store, hidratarConversaciones } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo } from './almacen/db.js';
 import { responderIA } from './ia/agente.js';
+import { calentarOcupacion } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
 import { requiereSesion } from './admin/sesion.js';
@@ -215,7 +216,11 @@ async function arrancar() {
     }
   }
 
-  // 2) Enciende el servidor.
+  // 2) Precalienta la ocupación de hoy y la mantiene fresca (dashboard rápido).
+  calentarOcupacion();
+  setInterval(calentarOcupacion, 4 * 60 * 1000);
+
+  // 3) Enciende el servidor.
   app.listen(config.puerto, () => {
     revisarConfig();
     console.log(`[servidor] MALIBUBOT escuchando en el puerto ${config.puerto}`);
