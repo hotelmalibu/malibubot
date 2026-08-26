@@ -90,8 +90,12 @@ function contarOcupacion(fecha) {
     else libre++;
 
     // --- Del mes completo (noches reservadas) ---
+    // Cuenta como reserva del mes tanto las celdas de reserva (amarillo/verde/
+    // naranja/azul) COMO las rojas (salidas): la habitacion estuvo reservada ese
+    // dia aunque el huesped ya se haya ido. Asi el total del mes es el real.
     for (var j = 0; j < diasCols.length; j++) {
-      if (clasificar(fondos[fila][diasCols[j]]) === 'reserva') nochesReservadasMes++;
+      var catMes = clasificar(fondos[fila][diasCols[j]]);
+      if (catMes === 'reserva' || catMes === 'salida') nochesReservadasMes++;
     }
   }
 
