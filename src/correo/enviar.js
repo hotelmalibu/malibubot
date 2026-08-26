@@ -22,7 +22,13 @@ async function enviarCorreo({ to, subject, html }) {
         Authorization: `Bearer ${config.correo.resendApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: config.correo.remitente, to, subject, html }),
+      body: JSON.stringify({
+        from: config.correo.remitente,
+        to,
+        subject,
+        html,
+        ...(config.correo.responder ? { reply_to: config.correo.responder } : {}),
+      }),
     });
     if (!resp.ok) {
       const d = await resp.text().catch(() => '');
@@ -100,6 +106,7 @@ export async function probarCorreo(to) {
         to: destino,
         subject: 'Prueba MALIBUBOT ✅',
         html: '<p>Correo de prueba de MALIBUBOT. Si lo ves, el envío funciona. 🌴</p>',
+        ...(config.correo.responder ? { reply_to: config.correo.responder } : {}),
       }),
     });
     const texto = await resp.text();
