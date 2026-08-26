@@ -74,9 +74,9 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
   }
   if (!hoja) return { ok: false, error: 'no encontre la pestana ' + nombreMes };
 
-  var rango = hoja.getDataRange();
-  var valores = rango.getValues();
-  var fondos = rango.getBackgrounds();
+  var rangoDatos = hoja.getDataRange();
+  var valores = rangoDatos.getValues();
+  var fondos = rangoDatos.getBackgrounds();
   var nFilas = valores.length, nCols = valores[0].length;
 
   // Mapa dia -> columna (una columna por cada numero de dia 1..31 en las
