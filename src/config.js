@@ -42,6 +42,9 @@ export const config = {
     // Link/contacto de consulta para salones, restaurante u otros planes
     // (el bot SOLO vende habitaciones; lo demas lo deriva aqui).
     linkConsulta: process.env.LINK_CONSULTA || 'https://hotelmalibu.co',
+    // Link con fotos, descripciones y datos de las habitaciones (para cuando
+    // el cliente pide fotos o detalles).
+    linkReserva: process.env.LINK_RESERVA || 'https://hotelmalibu.co/reserve',
   },
 
   // URL publica del servicio (para los retornos y el webhook de RAPYD).
