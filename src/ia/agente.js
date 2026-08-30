@@ -21,6 +21,7 @@ import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
+import { registrarUso } from './metricas.js';
 
 function noches(checkIn, checkOut) {
   if (!checkIn || !checkOut) return 1;
@@ -375,11 +376,14 @@ export async function responderIA(waId) {
       const resp = await cliente.messages.create({
         model: config.ia.modelo,
         max_tokens: 1024,
-        system: sistema(),
+        // Cachea el prompt de sistema (grande y estable): ahorra ~90% en esos
+        // tokens de entrada en las llamadas siguientes.
+        system: [{ type: 'text', text: sistema(), cache_control: { type: 'ephemeral' } }],
         tools: HERRAMIENTAS,
         tool_choice: { type: 'auto' },
         messages: mensajes,
       });
+      registrarUso(config.ia.modelo, resp.usage);
 
       if (resp.stop_reason === 'tool_use') {
         // Agrega el turno del asistente (con los tool_use) y ejecuta.

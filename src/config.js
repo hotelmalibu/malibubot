@@ -47,6 +47,8 @@ export const config = {
     // Link con fotos, descripciones y datos de las habitaciones (para cuando
     // el cliente pide fotos o detalles).
     linkReserva: process.env.LINK_RESERVA || 'https://hotelmalibu.co/reserve',
+    // Tasa de cambio para estimar el costo de tokens en pesos (aprox.).
+    copPorUsd: parseFloat(process.env.COP_POR_USD || '4200'),
   },
 
   // URL publica del servicio (para los retornos y el webhook de RAPYD).

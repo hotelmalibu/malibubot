@@ -27,6 +27,7 @@ import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
+import { resumenMetricas } from '../ia/metricas.js';
 import {
   probarAuth as probarAuthRapyd,
   metodosPais as metodosPaisRapyd,
@@ -135,6 +136,14 @@ adminRouter.get('/api/estadisticas', async (req, res) => {
 // -------- Reservas de habitaciones --------
 adminRouter.get('/api/reservas', (_req, res) => {
   res.json({ ok: true, reservas: reservasStore.listar() });
+});
+
+// -------- Monitor de tokens (uso y costo de la IA) --------
+adminRouter.get('/api/metricas', (_req, res) => {
+  const reservasBot = reservasStore
+    .listar()
+    .filter((r) => r.fuente === 'bot' && r.estado !== 'rechazado').length;
+  res.json(resumenMetricas(reservasBot));
 });
 
 adminRouter.post('/api/reservas', (req, res) => {

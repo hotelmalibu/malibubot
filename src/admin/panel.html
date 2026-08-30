@@ -195,6 +195,7 @@
     <nav class="tabs">
       <button id="tabDashboard" class="activo" onclick="mostrarVista('dashboard')">Dashboard</button>
       <button id="tabChats" onclick="mostrarVista('chats')">Conversaciones</button>
+      <button id="tabTokens" onclick="mostrarVista('tokens')">Monitor de tokens</button>
     </nav>
     <div class="acciones-top">
       <div class="estado"><span class="punto"></span> En vivo</div>
@@ -279,6 +280,27 @@
         </div>
       </section>
     </section>
+
+    <!-- ============ MONITOR DE TOKENS ============ -->
+    <section id="vistaTokens" class="vista" style="flex-direction:column; overflow-y:auto;">
+      <div class="dash">
+        <h2>Monitor de tokens · Costo de la IA</h2>
+        <div id="tokMeta" style="font-size:12px;color:var(--gris);margin:-6px 0 12px;"></div>
+        <div class="kpis" id="kpisTokens"></div>
+
+        <h2 style="margin-top:26px;">Consumo por día (últimos 30)</h2>
+        <div class="tabla-wrap">
+          <table class="reservas">
+            <thead><tr><th>Día</th><th>Llamadas IA</th><th>Tokens</th><th>Costo (COP)</th></tr></thead>
+            <tbody id="cuerpoTokens"></tbody>
+          </table>
+          <div class="vacio-tabla" id="vacioTokens" style="display:none;">Aún no hay consumo registrado.</div>
+        </div>
+        <p style="font-size:12px;color:var(--gris);margin-top:10px;">
+          Costo estimado con las tarifas de Anthropic y la tasa COP/USD configurada. El caché reduce el costo de los tokens repetidos.
+        </p>
+      </div>
+    </section>
   </main>
 
   <!-- Modal nueva reserva -->
@@ -322,9 +344,39 @@
     vistaActual = v;
     document.getElementById('vistaDashboard').classList.toggle('activa', v === 'dashboard');
     document.getElementById('vistaChats').classList.toggle('activa', v === 'chats');
+    document.getElementById('vistaTokens').classList.toggle('activa', v === 'tokens');
     document.getElementById('tabDashboard').classList.toggle('activo', v === 'dashboard');
     document.getElementById('tabChats').classList.toggle('activo', v === 'chats');
+    document.getElementById('tabTokens').classList.toggle('activo', v === 'tokens');
     if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); }
+    if (v === 'tokens') { cargarMetricas(); }
+  }
+
+  // ---------- Monitor de tokens ----------
+  const milesTok = (n) => Number(n || 0).toLocaleString('es-CO');
+  async function cargarMetricas() {
+    try {
+      const r = await fetch('/admin/api/metricas');
+      if (!r.ok) return;
+      pintarMetricas(await r.json());
+    } catch (_) {}
+  }
+  function pintarMetricas(m) {
+    document.getElementById('tokMeta').textContent =
+      `Modelo: ${m.modelo} · Tasa: $${milesTok(m.copPorUsd)} COP/USD · ${milesTok(m.llamadas)} llamadas a la IA`;
+    const porRes = m.costoPorReservaCOP != null ? ('$' + milesTok(m.costoPorReservaCOP)) : '—';
+    document.getElementById('kpisTokens').innerHTML =
+      tarjeta('verde', 'Reservas del bot', m.reservasBot, 'creadas por MALIBUBOT') +
+      tarjeta('alerta', 'Costo total IA', '$' + milesTok(m.costoCOP), `≈ US$${m.costoUSD} acumulado`) +
+      tarjeta('', 'Costo por reserva', porRes, 'COP invertidos por reserva') +
+      tarjeta('gris', 'Tokens totales', milesTok(m.tokens.total), `${milesTok(m.tokens.input)} in · ${milesTok(m.tokens.output)} out`) +
+      tarjeta('gris', 'Ahorro por caché', milesTok(m.ahorroCacheTokens), 'tokens servidos desde caché (−90%)');
+    const cuerpo = document.getElementById('cuerpoTokens'), vacio = document.getElementById('vacioTokens');
+    if (!m.porDia || !m.porDia.length) { cuerpo.innerHTML = ''; vacio.style.display = 'block'; return; }
+    vacio.style.display = 'none';
+    cuerpo.innerHTML = m.porDia.map((d) =>
+      `<tr><td>${d.dia}</td><td>${milesTok(d.llamadas)}</td><td>${milesTok(d.tokens)}</td><td>$${milesTok(d.costoCOP)}</td></tr>`
+    ).join('');
   }
 
   // ---------- Dashboard: estadísticas ----------
@@ -582,6 +634,7 @@
     cargarLista();
     if (vistaActual === 'chats' && seleccion) cargarConv();
     if (vistaActual === 'dashboard') cargarEstadisticas();
+    if (vistaActual === 'tokens') cargarMetricas();
   }, 4000);
 </script>
 </body>

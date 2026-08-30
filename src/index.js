@@ -19,7 +19,8 @@ import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store, hidratarConversaciones } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
-import { iniciarDB, dbCargar, dbActivo } from './almacen/db.js';
+import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas } from './almacen/db.js';
+import { hidratarMetricas } from './ia/metricas.js';
 import { responderIA } from './ia/agente.js';
 import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
@@ -211,6 +212,7 @@ async function arrancar() {
         const nRes = hidratarReservas(datos.reservaRows);
         console.log(`[db] Memoria hidratada: ${nConv} conversaciones, ${nRes} reservas.`);
       }
+      hidratarMetricas(await dbCargarMetricas());
     } catch (err) {
       console.error('[db] Error hidratando desde la base:', err.message);
     }

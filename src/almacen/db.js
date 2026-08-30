@@ -79,6 +79,11 @@ export async function iniciarDB() {
         datos       TEXT,
         actualizado BIGINT
       );
+      CREATE TABLE IF NOT EXISTS metricas (
+        id          INTEGER PRIMARY KEY,
+        datos       TEXT,
+        actualizado BIGINT
+      );
     `);
     console.log('[db] Conectada a PostgreSQL y tablas listas. ✅');
     return true;
@@ -162,6 +167,23 @@ export async function dbCargarOcupacion() {
   if (!pool) return [];
   const r = await pool.query('SELECT clave, datos, actualizado FROM ocupacion_cache');
   return r.rows;
+}
+
+/** Guarda el acumulado de métricas de tokens (una sola fila, id=1). */
+export async function dbGuardarMetricas(datos) {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO metricas (id, datos, actualizado) VALUES (1,$1,$2)
+     ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = EXCLUDED.actualizado`,
+    [JSON.stringify(datos), Date.now()]
+  );
+}
+
+/** Lee el acumulado de métricas guardado (para hidratar al arrancar). */
+export async function dbCargarMetricas() {
+  if (!pool) return null;
+  const r = await pool.query('SELECT datos FROM metricas WHERE id = 1');
+  return r.rows[0]?.datos || null;
 }
 
 // ---------- Lectura para hidratar la memoria al arrancar ----------
