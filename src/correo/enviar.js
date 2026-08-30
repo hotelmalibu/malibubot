@@ -32,9 +32,11 @@ async function enviarCorreo({ to, subject, html }) {
     });
     if (!resp.ok) {
       const d = await resp.text().catch(() => '');
-      console.error('[correo] Error Resend:', resp.status, d.slice(0, 200));
+      console.error('[correo] Error Resend:', resp.status, d.slice(0, 200), '| para:', to, '| asunto:', subject);
       return false;
     }
+    const info = await resp.json().catch(() => ({}));
+    console.log('[correo] Enviado OK ->', to, '| id:', info.id || '?', '| asunto:', subject);
     return true;
   } catch (err) {
     console.error('[correo] Error enviando:', err.message);

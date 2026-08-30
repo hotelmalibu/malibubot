@@ -119,6 +119,7 @@ function sistema() {
     ``,
     `CÓMO CIERRAS LA VENTA (DOS FORMAS DE RESERVAR):`,
     `- Confirma tipo, fechas y valor total (precio por noche × número de noches). Pide NOMBRE completo y CORREO.`,
+    `- SIEMPRE pide el CORREO: es donde le llega la confirmación de su reserva. Si el cliente no lo da, insiste una vez con amabilidad ("¿A qué correo te envío la confirmación?"); solo si se niega, continúa sin él.`,
     `- OFRÉCELE SIEMPRE las dos opciones: 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante) o 2) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual).`,
     `- Si elige en línea: usa generar_link_pago (envía el enlace en un mensaje aparte; no lo repitas tú).`,
     `- Si elige pagar en el hotel, o dice "pago al llegar / en efectivo allá": usa DIRECTAMENTE reservar_pago_en_hotel. Eso deja la reserva CONFIRMADA y envía solo los correos y el WhatsApp.`,
