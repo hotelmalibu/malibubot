@@ -71,10 +71,12 @@ export const config = {
   // Envio de correos (Resend).
   correo: {
     resendApiKey: process.env.RESEND_API_KEY || '',
-    // Remitente (el "De:"). Debe ser una direccion del dominio verificado
-    // hotelmalibu.co. Se usa una distinta a la de recepcion para que el aviso
-    // que llega a recepcion NO parezca enviado por ella misma.
-    remitente: process.env.CORREO_REMITENTE || 'Reservas Hotel Malibú <reservasbot@hotelmalibu.co>',
+    // Remitente (el "De:"). Debe ser una direccion REAL del dominio verificado
+    // hotelmalibu.co. OJO: usar una direccion que NO existe como buzon (p.ej.
+    // reservasbot@) hace que el propio servidor del dominio RECHACE el correo a
+    // recepcion (aunque a externos como Gmail sí llegue). Por eso se usa
+    // reservas@ (buzon real y entregable).
+    remitente: process.env.CORREO_REMITENTE || 'Reservas Hotel Malibú <reservas@hotelmalibu.co>',
     // A quien le llega el aviso de nueva reserva (recepcion).
     recepcion: process.env.CORREO_RECEPCION || 'reservas@hotelmalibu.co',
     // A donde van las RESPUESTAS del cliente (reply-to): el buzon real.
