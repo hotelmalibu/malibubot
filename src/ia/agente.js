@@ -374,9 +374,10 @@ export async function responderIA(waId) {
     for (let vuelta = 0; vuelta < 4; vuelta++) {
       const resp = await cliente.messages.create({
         model: config.ia.modelo,
-        max_tokens: 700,
+        max_tokens: 1024,
         system: sistema(),
         tools: HERRAMIENTAS,
+        tool_choice: { type: 'auto' },
         messages: mensajes,
       });
 

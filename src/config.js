@@ -35,10 +35,12 @@ export const config = {
     ocupacionToken: process.env.GOOGLE_OCUPACION_TOKEN || '',
   },
 
-  // Claude (IA del bot). Modelo mas economico: Haiku 4.5.
+  // Claude (IA del bot). Sonnet ejecuta las herramientas de forma CONFIABLE
+  // (Haiku a veces "confirmaba" sin llamar la herramienta y no se creaba la
+  // reserva). Se puede sobreescribir con ANTHROPIC_MODELO.
   ia: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
-    modelo: process.env.ANTHROPIC_MODELO || 'claude-haiku-4-5',
+    modelo: process.env.ANTHROPIC_MODELO || 'claude-sonnet-5',
     // Link/contacto de consulta para salones, restaurante u otros planes
     // (el bot SOLO vende habitaciones; lo demas lo deriva aqui).
     linkConsulta: process.env.LINK_CONSULTA || 'https://hotelmalibu.co',
