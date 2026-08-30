@@ -34,6 +34,7 @@ function crearConversacion(waId, nombre) {
     nombre: nombre || '',
     modo: 'bot',          // 'bot' | 'humano'
     escalado: false,      // true si el bot pidio ayuda humana
+    canal: '',            // de que "puerta" llego (Maps, Instagram, QR...)
     noLeidos: 0,          // mensajes del cliente sin leer en el panel
     creado: ahora(),
     ultimaActividad: ahora(),
@@ -41,6 +42,19 @@ function crearConversacion(waId, nombre) {
   };
   conversaciones.set(waId, conv);
   return conv;
+}
+
+// Detecta de que canal viene el cliente por el texto del PRIMER mensaje
+// (los enlaces medibles wa.me traen una frase distinta por canal).
+function detectarCanal(texto) {
+  const t = (texto || '').toLowerCase();
+  if (t.includes('google maps') || /\bmaps\b/.test(t)) return 'Google Maps';
+  if (t.includes('instagram')) return 'Instagram';
+  if (t.includes('tiktok')) return 'TikTok';
+  if (t.includes('facebook')) return 'Facebook';
+  if (t.includes('qr') || t.includes('código qr') || t.includes('codigo qr') || t.includes('escane')) return 'QR físico';
+  if (t.includes('página web') || t.includes('pagina web') || t.includes('sitio web')) return 'Sitio web';
+  return '';
 }
 
 function obtenerOCrear(waId, nombre) {
@@ -66,6 +80,11 @@ export const store = {
   /** Registra un mensaje entrante del cliente. */
   registrarEntrante({ waId, nombre, tipo, texto }) {
     const conv = obtenerOCrear(waId, nombre);
+    // La primera vez que detectamos un canal en el texto, lo fijamos.
+    if (!conv.canal) {
+      const c = detectarCanal(texto);
+      if (c) conv.canal = c;
+    }
     const mensaje = {
       direccion: 'entrada',
       autor: 'cliente',
@@ -194,6 +213,25 @@ export const store = {
       enHumano,
     };
   },
+
+  /**
+   * Cuenta las conversaciones por canal de origen (Maps, Instagram, QR...).
+   * Filtro opcional por fechas (según última actividad). Devuelve una lista
+   * ordenada de mayor a menor.
+   */
+  canalesResumen(desde, hasta) {
+    const conteo = new Map();
+    for (const c of conversaciones.values()) {
+      const dia = new Date(c.ultimaActividad).toISOString().slice(0, 10);
+      if (desde && dia < desde) continue;
+      if (hasta && dia > hasta) continue;
+      const canal = c.canal || 'Directo / Anuncio';
+      conteo.set(canal, (conteo.get(canal) || 0) + 1);
+    }
+    return [...conteo.entries()]
+      .map(([canal, total]) => ({ canal, total }))
+      .sort((a, b) => b.total - a.total);
+  },
 };
 
 /**
@@ -207,6 +245,7 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
       nombre: c.nombre || '',
       modo: c.modo === 'humano' ? 'humano' : 'bot',
       escalado: !!c.escalado,
+      canal: c.canal || '',
       noLeidos: 0,
       creado: Number(c.creado) || ahora(),
       ultimaActividad: Number(c.ultima_actividad) || ahora(),

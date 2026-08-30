@@ -124,6 +124,7 @@ adminRouter.get('/api/estadisticas', async (req, res) => {
     ok: true,
     rango: { desde, hasta },
     conversaciones: store.estadisticas(desde, hasta),
+    canales: store.canalesResumen(desde, hasta),
     habitaciones,
     hotel: {
       nombre: config.hotel.nombre,
