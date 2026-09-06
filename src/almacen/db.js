@@ -84,8 +84,14 @@ export async function iniciarDB() {
         datos       TEXT,
         actualizado BIGINT
       );
+      CREATE TABLE IF NOT EXISTS ajustes (
+        clave       TEXT PRIMARY KEY,
+        valor       TEXT,
+        actualizado BIGINT
+      );
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
+      ALTER TABLE reservas ADD COLUMN IF NOT EXISTS recordatorio_enviado BIGINT;
     `);
     console.log('[db] Conectada a PostgreSQL y tablas listas. ✅');
     return true;
@@ -133,9 +139,11 @@ export async function dbGuardarReserva(r) {
   await pool.query(
     `INSERT INTO reservas
        (id, wa_id, celular, nombre, email, habitacion, personas, check_in, check_out,
-        monto, estado, fuente, referencia_pago, checkout_id, creado)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        monto, estado, fuente, referencia_pago, checkout_id, creado, recordatorio_enviado)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      ON CONFLICT (id) DO UPDATE SET
+       -- Nunca "baja": el recordatorio pre-llegada se envia UNA vez por reserva.
+       recordatorio_enviado = GREATEST(COALESCE(reservas.recordatorio_enviado, 0), COALESCE(EXCLUDED.recordatorio_enviado, 0)),
        wa_id = EXCLUDED.wa_id,
        celular = EXCLUDED.celular,
        nombre = EXCLUDED.nombre,
@@ -153,8 +161,26 @@ export async function dbGuardarReserva(r) {
       r.id, r.waId || '', r.celular || '', r.nombre || '', r.email || '', r.habitacion || '',
       r.personas ?? null, r.checkIn || '', r.checkOut || '', r.monto ?? null, r.estado,
       r.fuente || 'manual', r.referenciaPago || '', r.checkoutId || '', r.creado,
+      r.recordatorioEnviado || 0,
     ]
   );
+}
+
+/** Guarda un ajuste del panel (p. ej. la meta semanal). */
+export async function dbGuardarAjuste(clave, valor) {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO ajustes (clave, valor, actualizado) VALUES ($1,$2,$3)
+     ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, actualizado = EXCLUDED.actualizado`,
+    [clave, valor, Date.now()]
+  );
+}
+
+/** Lee todos los ajustes guardados (para hidratar al arrancar). */
+export async function dbCargarAjustes() {
+  if (!pool) return [];
+  const r = await pool.query('SELECT clave, valor FROM ajustes');
+  return r.rows;
 }
 
 /** Guarda/actualiza una vista de ocupación en la caché persistente. */

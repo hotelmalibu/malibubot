@@ -42,6 +42,26 @@ export async function enviarTexto(destino, texto) {
 }
 
 /**
+ * Envia una PLANTILLA aprobada por Meta (funciona aunque la ventana de 24 h
+ * este cerrada). Los parametros llenan {{1}}, {{2}}... del cuerpo, en orden.
+ * @param {string} destino   Numero del cliente (wa_id).
+ * @param {string} nombre    Nombre exacto de la plantilla en Meta.
+ * @param {string} idioma    Codigo de idioma de la plantilla (es, es_CO...).
+ * @param {string[]} parametros
+ */
+export async function enviarPlantilla(destino, nombre, idioma = 'es', parametros = []) {
+  const components = parametros.length
+    ? [{ type: 'body', parameters: parametros.map((p) => ({ type: 'text', text: String(p) })) }]
+    : [];
+  return llamarGraph({
+    messaging_product: 'whatsapp',
+    to: destino,
+    type: 'template',
+    template: { name: nombre, language: { code: idioma }, components },
+  });
+}
+
+/**
  * Marca un mensaje como leido (los dos ticks azules). Opcional, mejora la UX.
  * @param {string} messageId  id del mensaje entrante (wamid...).
  */

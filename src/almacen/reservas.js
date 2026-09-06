@@ -71,9 +71,19 @@ export const reservasStore = {
       fuente: datos.fuente || 'manual',         // manual | bot | rapyd
       referenciaPago: datos.referenciaPago || '',
       checkoutId: datos.checkoutId || '',
+      recordatorioEnviado: 0,                   // ts del recordatorio pre-llegada (0 = aun no)
       creado: Date.now(),
     };
     reservas.push(r);
+    persistirReserva(r);
+    return r;
+  },
+
+  /** Marca que ya se envio el recordatorio pre-llegada (uno solo por reserva). */
+  marcarRecordatorio(id) {
+    const r = reservas.find((x) => x.id === Number(id));
+    if (!r) return null;
+    r.recordatorioEnviado = Date.now();
     persistirReserva(r);
     return r;
   },
@@ -164,6 +174,7 @@ export function hidratarReservas(reservaRows = []) {
       fuente: r.fuente || 'manual',
       referenciaPago: r.referencia_pago || '',
       checkoutId: r.checkout_id || '',
+      recordatorioEnviado: Number(r.recordatorio_enviado) || 0,
       creado: Number(r.creado) || Date.now(),
     });
     if (Number(r.id) > maxId) maxId = Number(r.id);

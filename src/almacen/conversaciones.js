@@ -11,6 +11,7 @@
 //  Sin base de datos, se comporta como antes: se borra al reiniciar.
 // ============================================================
 import { dbActivo, dbGuardarConversacion, dbGuardarMensaje } from './db.js';
+import { diaColombia } from '../util/fechas.js';
 
 const MAX_MENSAJES = 300; // tope por conversacion para acotar memoria
 
@@ -344,6 +345,49 @@ export const store = {
     return this.calientes({ cerrados, ahora: ts, ventanaMs: maxMs })
       .filter((c) => !c.seguimientoEnviado && ts - c.ultimoEntrante >= minMs)
       .slice(0, limite);
+  },
+
+  /**
+   * Embudo de conversion: de las conversaciones INICIADAS en el rango (dia de
+   * Colombia), cuantas mostraron interes, cuantas recibieron un precio del bot
+   * y cuantas terminaron en reserva confirmada (waId en `reservados`).
+   * Las etapas son acumulativas: reservar implica cotizada e interesada.
+   * @param {{desde?:string, hasta?:string, reservados:Set<string>}} p
+   */
+  embudo({ desde, hasta, reservados = new Set() }) {
+    const nueva = () => ({ total: 0, interesadas: 0, cotizadas: 0, reservaron: 0 });
+    const etapas = nueva();
+    const porCanal = new Map();
+    for (const c of conversaciones.values()) {
+      const dia = diaColombia(c.creado);
+      if (desde && dia < desde) continue;
+      if (hasta && dia > hasta) continue;
+      const canal = c.canal || 'Directo / Otro';
+      if (!porCanal.has(canal)) porCanal.set(canal, nueva());
+      const reservo = reservados.has(c.waId);
+      const cotizada = reservo || c.mensajes.some((m) => m.autor === 'bot' && /\$\s?\d/.test(m.texto || ''));
+      const interesada = cotizada || tieneInteres(c);
+      for (const e of [etapas, porCanal.get(canal)]) {
+        e.total++;
+        if (interesada) e.interesadas++;
+        if (cotizada) e.cotizadas++;
+        if (reservo) e.reservaron++;
+      }
+    }
+    const pct = (a, b) => (b ? Math.round((a / b) * 100) : null);
+    const canales = [...porCanal.entries()]
+      .map(([canal, e]) => ({ canal, ...e, conversionPct: pct(e.reservaron, e.total) }))
+      .sort((a, b) => b.total - a.total || b.reservaron - a.reservaron);
+    return {
+      etapas,
+      tasas: {
+        interesPct: pct(etapas.interesadas, etapas.total),
+        cotizacionPct: pct(etapas.cotizadas, etapas.interesadas),
+        cierrePct: pct(etapas.reservaron, etapas.cotizadas),
+        conversionPct: pct(etapas.reservaron, etapas.total),
+      },
+      canales,
+    };
   },
 
   /** Marca que ya se envio el seguimiento (automatico o manual). */

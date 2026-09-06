@@ -29,6 +29,8 @@ import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
 import { resumenMetricas } from '../ia/metricas.js';
 import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
+import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
+import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import {
   probarAuth as probarAuthRapyd,
   metodosPais as metodosPaisRapyd,
@@ -142,8 +144,33 @@ adminRouter.get('/api/reservas', (_req, res) => {
   const reservas = reservasStore.listar().map((r) => ({
     ...r,
     canal: r.fuente === 'manual' ? 'Manual' : (store.obtener(r.waId)?.canal || 'Directo / Otro'),
+    puedeRecordar: puedeRecordar(r), // recordatorio pre-llegada disponible (llega hoy o mañana)
   }));
   res.json({ ok: true, reservas });
+});
+
+// Recordatorio pre-llegada a mano (uno solo por reserva).
+adminRouter.post('/api/reservas/:id/recordatorio', async (req, res) => {
+  const r = await enviarRecordatorio(req.params.id);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+// -------- Embudo de conversión (chats -> interés -> cotización -> reserva) --------
+adminRouter.get('/api/embudo', (req, res) => {
+  const desde = (req.query.desde || '').trim() || null;
+  const hasta = (req.query.hasta || '').trim() || null;
+  res.json({ ok: true, rango: { desde, hasta }, ...store.embudo({ desde, hasta, reservados: waIdsConReserva() }) });
+});
+
+// -------- Meta semanal de reservas y tasa de conversión --------
+adminRouter.get('/api/meta-semanal', (_req, res) => {
+  res.json(resumenMeta());
+});
+
+adminRouter.post('/api/meta-semanal', (req, res) => {
+  const n = fijarMetaSemanal(req.body?.meta);
+  if (!n) return res.status(400).json({ ok: false, error: 'La meta debe ser un número entre 1 y 1000.' });
+  res.json({ ok: true, meta: n });
 });
 
 // -------- Reservas mensuales (gráfico Ene–Dic) --------

@@ -175,6 +175,40 @@
   .chart .val { font-family: var(--ui); font-size: 11px; fill: var(--tinta); font-weight: 700; }
   .chart .bot { font-family: var(--ui); font-size: 10.5px; fill: var(--tinta-2); font-weight: 700; }
 
+  /* Meta semanal */
+  .kpi.meta { grid-template-columns: 46px 1fr; }
+  .kpi.meta .num small { font-family: var(--ui); font-size: 15px; color: var(--gris); font-weight: 600; }
+  .prog { height: 9px; background: var(--gris-suave); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--oro-claro), var(--oro-profundo)); border-radius: 999px; transition: width .4s; }
+  .prog i.ok { background: linear-gradient(90deg, #6cc496, var(--verde)); }
+  .semanas-wrap { background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 16px 18px 8px; box-shadow: var(--sombra); margin-top: 14px; }
+  .semanas-wrap .titulo { font-size: 12px; color: var(--gris); font-weight: 700; letter-spacing: .02em; text-transform: uppercase; margin-bottom: 4px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .chart .bar.ok { fill: var(--verde); }
+  .chart .bar.no { fill: var(--oro-claro); }
+  .chart .meta-l { stroke: var(--alerta); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .chart .meta-t { font-family: var(--ui); font-size: 10.5px; fill: var(--alerta); font-weight: 800; }
+  .chart .sub { font-family: var(--ui); font-size: 10px; fill: var(--gris); font-weight: 600; }
+
+  /* Embudo de conversión */
+  .embudo-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; align-items: start; }
+  .embudo { background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 18px; box-shadow: var(--sombra); display: flex; flex-direction: column; gap: 12px; }
+  .etapa { display: grid; grid-template-columns: 150px 1fr 64px; gap: 12px; align-items: center; }
+  .etapa .lbl { font-weight: 700; font-size: 13.5px; }
+  .etapa .lbl small { display: block; font-weight: 600; font-size: 11px; color: var(--gris); }
+  .etapa .barra-e { height: 30px; background: var(--gris-suave); border-radius: 9px; overflow: hidden; position: relative; }
+  .etapa .barra-e i { display: block; height: 100%; border-radius: 9px; background: linear-gradient(90deg, var(--oro-claro), var(--oro)); min-width: 3px; transition: width .4s; }
+  .etapa:nth-child(2) .barra-e i { background: linear-gradient(90deg, #d9b978, #c89a4e); }
+  .etapa:nth-child(3) .barra-e i { background: linear-gradient(90deg, #c89a4e, var(--oro-profundo)); }
+  .etapa:nth-child(4) .barra-e i { background: linear-gradient(90deg, #6cc496, var(--verde)); }
+  .etapa .barra-e b { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.25); font-variant-numeric: tabular-nums; }
+  .etapa .paso { font-size: 12px; color: var(--gris); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .etapa .paso b { display: block; font-family: var(--display); font-size: 20px; color: var(--tinta); font-weight: 600; }
+  .embudo .resumen { border-top: 1px dashed var(--linea); padding-top: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--gris); }
+  .embudo .resumen b { color: var(--tinta); font-family: var(--display); font-size: 18px; font-weight: 600; }
+  .pill.aviso { background: var(--verde-suave); color: var(--verde); white-space: nowrap; }
+  .pill.sin { background: var(--gris-suave); color: var(--gris); }
+  @media (max-width: 860px) { .embudo-grid { grid-template-columns: 1fr; } .etapa { grid-template-columns: 110px 1fr 56px; } }
+
   /* Tablas */
   .barra-seccion { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .tabla-wrap { overflow-x: auto; background: var(--espuma); border: 1px solid var(--linea); border-radius: 14px; box-shadow: var(--sombra); }
@@ -329,6 +363,16 @@
         <div class="kpis" id="kpisHab" style="margin-top:14px;"></div>
 
         <div class="seccion-cab">
+          <div><div class="eyebrow">Objetivo</div><h2>🎯 Meta semanal de reservas</h2></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            <div class="nota" id="metaNota" style="flex:none;"></div>
+            <button class="btn" onclick="cambiarMeta()">Cambiar meta</button>
+          </div>
+        </div>
+        <div class="kpis" id="kpisMeta"></div>
+        <div class="semanas-wrap" id="semanasWrap"><div class="vacio-tabla">Cargando…</div></div>
+
+        <div class="seccion-cab">
           <div><div class="eyebrow">Seguimiento anual</div><h2><span id="tituloGrafico">Reservas mensuales</span> <span id="anioGrafico">2026</span></h2></div>
           <div class="nota">Noches reservadas según el Libro · 🤖 reservas creadas por el bot</div>
         </div>
@@ -348,13 +392,28 @@
         </div>
 
         <div class="seccion-cab">
+          <div><div class="eyebrow">Conversión</div><h2>Embudo de conversión</h2></div>
+          <div class="nota" id="embudoNota">Chats iniciados en el rango de fechas de arriba → reserva confirmada</div>
+        </div>
+        <div class="embudo-grid">
+          <div class="embudo" id="embudo"><div class="vacio-tabla">Cargando…</div></div>
+          <div class="tabla-wrap">
+            <table class="reservas" style="min-width:0;">
+              <thead><tr><th>Canal</th><th>Chats</th><th>Interés</th><th>Cotizados</th><th>Reservas</th><th>Conv.</th></tr></thead>
+              <tbody id="cuerpoEmbudo"></tbody>
+            </table>
+            <div class="vacio-tabla" id="vacioEmbudo" style="display:none;">Aún no hay conversaciones en el rango.</div>
+          </div>
+        </div>
+
+        <div class="seccion-cab">
           <div><div class="eyebrow">Ventas</div><h2>Reservas de habitaciones</h2></div>
           <button class="btn primario" onclick="abrirDlgReserva()">+ Nueva reserva</button>
         </div>
         <div class="tabla-wrap">
           <table class="reservas">
             <thead>
-              <tr><th>Huésped</th><th>Celular</th><th>Canal</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th></th></tr>
+              <tr><th>Huésped</th><th>Celular</th><th>Canal</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th title="Recordatorio de llegada (anti no-show)">Aviso llegada</th><th></th></tr>
             </thead>
             <tbody id="cuerpoReservas"></tbody>
           </table>
@@ -502,7 +561,7 @@
       document.getElementById(VISTAS[k]).classList.toggle('activa', k === v);
       document.getElementById(TABS[k]).classList.toggle('activo', k === v);
     }
-    if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); }
+    if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarMeta(); cargarEmbudo(); }
     if (v === 'monitor') cargarMonitor();
     if (v === 'tokens') cargarMetricas();
   }
@@ -528,8 +587,8 @@
 
   // ---------- Dashboard ----------
   function rango() { return rangoDe('fDesde', 'fHasta'); }
-  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); }
-  function buscar() { cargarEstadisticas(); cargarReservas(); }
+  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); cargarEmbudo(); }
+  function buscar() { cargarEstadisticas(); cargarReservas(); cargarEmbudo(); }
 
   async function cargarEstadisticas() {
     try {
@@ -717,12 +776,133 @@
         <td>${esc(r.checkIn) || '—'}</td>
         <td>${esc(r.checkOut) || '—'}</td>
         <td><span class="badge-estado ${r.estado}">${etiqueta[r.estado] || r.estado}</span></td>
+        <td>${avisoLlegada(r)}</td>
         <td style="text-align:right;white-space:nowrap;">
           ${(r.estado === 'en_proceso' || r.estado === 'pendiente_hotel') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
           ${r.estado !== 'rechazado' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button>` : ''}
         </td>
       </tr>`).join('');
   }
+  // Recordatorio pre-llegada (anti no-show): uno solo por reserva.
+  function avisoLlegada(r) {
+    if (r.recordatorioEnviado) return `<span class="pill aviso" title="${fmtHora(r.recordatorioEnviado)}">🔔 Enviado ✓</span>`;
+    if (r.puedeRecordar) return `<button class="btn-mini" onclick="recordatorio(${r.id}, this)">🔔 Avisar llegada</button>`;
+    return `<span class="pill sin" title="Se envía solo el día antes del check-in">—</span>`;
+  }
+  async function recordatorio(id, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    try {
+      const r = await fetch(`/admin/api/reservas/${id}/recordatorio`, { method: 'POST' });
+      const d = await r.json();
+      if (!d.ok) alert(d.error || 'No se pudo enviar.');
+    } catch (_) { alert('Error de red.'); }
+    cargarReservas();
+  }
+
+  // ---------- Meta semanal ----------
+  async function cargarMeta() {
+    try {
+      const r = await fetch('/admin/api/meta-semanal');
+      if (!r.ok) return;
+      pintarMeta(await r.json());
+    } catch (_) {}
+  }
+  const fCorta = (iso) => { try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'UTC' }).replace('.', ''); } catch (_) { return iso; } };
+  function pintarMeta(d) {
+    const s = d.semana;
+    document.getElementById('metaNota').textContent = `Semana del lunes ${fCorta(s.desde)} al domingo ${fCorta(s.hasta)} · día ${s.diaDeSemana} de 7`;
+    const cumplida = s.reservas >= d.meta;
+    const pieMeta = cumplida
+      ? `¡Meta cumplida! 🎉 ${s.bot} del bot · ${s.manual} manuales`
+      : `faltan ${s.faltan} · ${s.diasRestantes === 0 ? 'hoy es el último día' : `quedan ${s.diasRestantes} día${s.diasRestantes === 1 ? '' : 's'}`}`;
+    const metaCard = `<div class="kpi meta ${cumplida ? 'verde' : ''}"><div class="ico">🎯</div><div>
+        <div class="lbl">Reservas esta semana</div>
+        <div class="num">${s.reservas} <small>/ ${d.meta}</small></div>
+        <div class="prog"><i class="${cumplida ? 'ok' : ''}" style="width:${s.pct}%"></i></div>
+        <div class="pie">${pieMeta}</div></div></div>`;
+    const conv = s.conversionPct == null ? '—' : s.conversionPct + '%';
+    document.getElementById('kpisMeta').innerHTML = metaCard +
+      tarjeta('azul', '📈', 'Tasa de conversión', conv, `${s.chatsReservaron} de ${s.chats} chats de la semana reservaron`) +
+      tarjeta(s.proyeccion >= d.meta ? 'verde' : 'alerta', '🚀', 'Ritmo proyectado', s.proyeccion, s.proyeccion >= d.meta ? 'a este ritmo cumples la meta' : `a este ritmo cierras con ${s.proyeccion} · sube el ritmo`) +
+      tarjeta('gris', '🏁', 'Semanas cumplidas', `${d.semanasCumplidas}/${d.semanasCerradas}`, `de las últimas ${d.semanasCerradas} semanas cerradas`);
+    pintarSemanas(d);
+  }
+  function pintarSemanas(d) {
+    const cont = document.getElementById('semanasWrap'); if (!cont) return;
+    const sem = d.historial || [];
+    const max = Math.max(d.meta + 1, ...sem.map((s) => s.reservas));
+    const W = 960, H = 200, padL = 40, padR = 14, padT = 22, padB = 44;
+    const cw = W - padL - padR, ch = H - padT - padB, bw = cw / Math.max(1, sem.length);
+    let g = '';
+    for (let i = 0; i <= 3; i++) {
+      const y = padT + ch - (ch * i / 3), v = Math.round(max * i / 3);
+      g += `<line class="gl" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text class="ax" x="${padL - 8}" y="${y + 4}" text-anchor="end">${v}</text>`;
+    }
+    sem.forEach((s, i) => {
+      const x = padL + i * bw + bw * 0.22, w = bw * 0.56, cx = x + w / 2, ultima = i === sem.length - 1;
+      const h = Math.max(2, ch * (s.reservas / max)), y = padT + ch - h;
+      g += `<rect class="bar ${s.cumplida ? 'ok' : 'no'}${ultima ? ' act' : ''}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"${ultima && !s.cumplida ? ' style="fill:var(--oro-profundo)"' : ''}/>`;
+      g += `<text class="val" x="${cx}" y="${y - 6}" text-anchor="middle">${s.reservas}</text>`;
+      g += `<text class="ax mes${ultima ? ' act' : ''}" x="${cx}" y="${H - padB + 18}" text-anchor="middle">${ultima ? 'Esta semana' : fCorta(s.desde)}</text>`;
+      g += `<text class="sub" x="${cx}" y="${H - padB + 33}" text-anchor="middle">${s.chats} chats · ${s.conversionPct == null ? '—' : s.conversionPct + '%'}</text>`;
+    });
+    const ym = padT + ch - ch * (d.meta / max);
+    g += `<line class="meta-l" x1="${padL}" x2="${W - padR}" y1="${ym}" y2="${ym}"/><text class="meta-t" x="${W - padR}" y="${ym - 5}" text-anchor="end">Meta ${d.meta}</text>`;
+    cont.innerHTML = `<div class="titulo"><span>Últimas ${sem.length} semanas · reservas confirmadas</span><span>verde = meta cumplida · debajo: chats y conversión</span></div>
+      <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Reservas por semana vs. meta">${g}</svg>`;
+  }
+  async function cambiarMeta() {
+    const actual = document.querySelector('#kpisMeta .kpi.meta small');
+    const v = prompt('¿Cuántas reservas quieres lograr por semana?', actual ? actual.textContent.replace('/', '').trim() : '10');
+    if (v == null) return;
+    const n = parseInt(v, 10);
+    if (!n || n < 1) { alert('Escribe un número mayor que cero.'); return; }
+    try {
+      const r = await fetch('/admin/api/meta-semanal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ meta: n }) });
+      const d = await r.json();
+      if (!d.ok) alert(d.error || 'No se pudo guardar.');
+    } catch (_) { alert('Error de red.'); }
+    cargarMeta();
+  }
+
+  // ---------- Embudo de conversión ----------
+  async function cargarEmbudo() {
+    try {
+      const r = await fetch('/admin/api/embudo' + rango());
+      if (!r.ok) return;
+      pintarEmbudo(await r.json());
+    } catch (_) {}
+  }
+  function pintarEmbudo(d) {
+    const e = d.etapas, t = d.tasas, cont = document.getElementById('embudo');
+    const rg = d.rango || {};
+    document.getElementById('embudoNota').textContent = (rg.desde || rg.hasta)
+      ? `Chats iniciados del ${rg.desde || '…'} al ${rg.hasta || '…'} → reserva confirmada`
+      : 'Todos los chats registrados → reserva confirmada';
+    const pctDe = (v) => (v == null ? '—' : v + '%');
+    const etapa = (lbl, sub, val, pasoLbl, pasoVal) => {
+      const w = e.total ? Math.max(2, Math.round((val / e.total) * 100)) : 0;
+      return `<div class="etapa"><div class="lbl">${lbl}<small>${sub}</small></div>
+        <div class="barra-e"><i style="width:${w}%"></i><b>${val}</b></div>
+        <div class="paso">${pasoLbl}<b>${pasoVal}</b></div></div>`;
+    };
+    cont.innerHTML =
+      etapa('💬 Llegaron', 'conversaciones iniciadas', e.total, 'base', e.total ? '100%' : '—') +
+      etapa('🙋 Interesados', 'preguntaron precio o fechas', e.interesadas, 'del total', pctDe(t.interesPct)) +
+      etapa('💰 Cotizados', 'recibieron un precio', e.cotizadas, 'de interesados', pctDe(t.cotizacionPct)) +
+      etapa('✅ Reservaron', 'reserva confirmada', e.reservaron, 'de cotizados', pctDe(t.cierrePct)) +
+      `<div class="resumen"><span>Conversión total <b>${pctDe(t.conversionPct)}</b></span>
+        <span>Se pierden entre cotización y reserva <b>${Math.max(e.cotizadas - e.reservaron, 0)}</b></span>
+        <span>Sin interés aún <b>${Math.max(e.total - e.interesadas, 0)}</b></span></div>`;
+    const cuerpo = document.getElementById('cuerpoEmbudo'), vacio = document.getElementById('vacioEmbudo');
+    const canales = d.canales || [];
+    if (!canales.length) { cuerpo.innerHTML = ''; vacio.style.display = 'block'; return; }
+    vacio.style.display = 'none';
+    cuerpo.innerHTML = canales.map((c) => `<tr>
+      <td>${canalPill(c.canal)}</td><td>${c.total}</td><td>${c.interesadas}</td><td>${c.cotizadas}</td>
+      <td><b>${c.reservaron}</b></td><td>${c.conversionPct == null ? '—' : `<b style="color:${c.conversionPct >= 10 ? 'var(--verde)' : 'var(--tinta)'}">${c.conversionPct}%</b>`}</td></tr>`).join('');
+  }
+
   function abrirDlgReserva() {
     document.getElementById('rNota').textContent = '';
     ['rNombre','rCelular','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
@@ -754,7 +934,7 @@
         }),
       });
       const d = await r.json();
-      if (d.ok) { document.getElementById('dlgReserva').close(); cargarReservas(); cargarEstadisticas(); cargarGrafico(); }
+      if (d.ok) { document.getElementById('dlgReserva').close(); cargarReservas(); cargarEstadisticas(); cargarGrafico(); cargarMeta(); cargarEmbudo(); }
       else nota.textContent = d.error || 'No se pudo guardar.';
     } catch (_) { nota.textContent = 'Error de red.'; }
     finally { btn.disabled = false; }
@@ -764,7 +944,7 @@
       await fetch(`/admin/api/reservas/${id}/estado`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }),
       });
-      cargarReservas(); cargarEstadisticas(); cargarGrafico();
+      cargarReservas(); cargarEstadisticas(); cargarGrafico(); cargarMeta(); cargarEmbudo();
     } catch (_) {}
   }
 
@@ -973,19 +1153,19 @@
   }
 
   document.getElementById('filtro').addEventListener('input', pintarLista);
-  document.getElementById('fDesde').addEventListener('change', cargarEstadisticas);
-  document.getElementById('fHasta').addEventListener('change', cargarEstadisticas);
+  document.getElementById('fDesde').addEventListener('change', () => { cargarEstadisticas(); cargarEmbudo(); });
+  document.getElementById('fHasta').addEventListener('change', () => { cargarEstadisticas(); cargarEmbudo(); });
   ['cDesde', 'cHasta'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
     document.querySelectorAll('.presets-conv button').forEach((b) => b.classList.remove('activo'));
     cargarLista();
   }));
 
   // Arranque + ciclos de actualización
-  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarLista();
+  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarMeta(); cargarEmbudo(); cargarLista();
   setInterval(() => {
     cargarLista();
     if (vistaActual === 'chats' && seleccion) cargarConv();
-    if (vistaActual === 'dashboard') cargarEstadisticas();
+    if (vistaActual === 'dashboard') { cargarEstadisticas(); cargarMeta(); cargarEmbudo(); cargarReservas(); }
     if (vistaActual === 'monitor') cargarMonitor();
     if (vistaActual === 'tokens') cargarMetricas();
   }, 4000);

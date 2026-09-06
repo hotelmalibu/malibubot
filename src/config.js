@@ -61,6 +61,22 @@ export const config = {
     horas: parseFloat(process.env.SEGUIMIENTO_HORAS || '3'),
   },
 
+  // Recordatorio pre-llegada (anti no-show): el dia antes del check-in,
+  // Valentina confirma la llegada, UNA sola vez por reserva. Fuera de las
+  // 24 h de WhatsApp necesita una plantilla aprobada por Meta (su nombre
+  // exacto en RECORDATORIO_PLANTILLA; idioma de la plantilla en
+  // RECORDATORIO_IDIOMA, p. ej. "es" o "es_CO").
+  recordatorio: {
+    activo: (process.env.RECORDATORIO_ACTIVO || 'true') !== 'false',
+    plantilla: (process.env.RECORDATORIO_PLANTILLA || '').trim(),
+    idioma: (process.env.RECORDATORIO_IDIOMA || 'es').trim(),
+  },
+
+  // Meta semanal de reservas (valor inicial; se puede cambiar desde el panel).
+  meta: {
+    semanal: Math.max(1, parseInt(process.env.META_SEMANAL || '10', 10) || 10),
+  },
+
   // URL publica del servicio (para los retornos y el webhook de RAPYD).
   publicUrl: process.env.PUBLIC_URL || 'https://malibubot.onrender.com',
 

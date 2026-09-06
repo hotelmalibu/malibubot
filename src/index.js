@@ -19,9 +19,11 @@ import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
-import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas } from './almacen/db.js';
+import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes } from './almacen/db.js';
+import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
+import { enviarRecordatorios } from './ia/recordatorio.js';
 import { responderIA } from './ia/agente.js';
 import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
@@ -217,6 +219,7 @@ async function arrancar() {
         if (nCanal) console.log(`[canal] ${nCanal} conversaciones re-clasificadas por canal.`);
       }
       hidratarMetricas(await dbCargarMetricas());
+      hidratarAjustes(await dbCargarAjustes());
     } catch (err) {
       console.error('[db] Error hidratando desde la base:', err.message);
     }
@@ -237,7 +240,13 @@ async function arrancar() {
   setTimeout(seguir, 2 * 60 * 1000);
   setInterval(seguir, 15 * 60 * 1000);
 
-  // 3) Enciende el servidor.
+  // 4) Recordatorio pre-llegada (anti no-show): el día antes del check-in,
+  //    un solo mensaje por reserva confirmada (9 a. m. – 8 p. m. Colombia).
+  const recordar = () => enviarRecordatorios().catch((e) => console.error('[recordatorio]', e.message));
+  setTimeout(recordar, 3 * 60 * 1000);
+  setInterval(recordar, 30 * 60 * 1000);
+
+  // 5) Enciende el servidor.
   app.listen(config.puerto, () => {
     revisarConfig();
     console.log(`[servidor] MALIBUBOT escuchando en el puerto ${config.puerto}`);
