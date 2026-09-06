@@ -137,7 +137,13 @@ adminRouter.get('/api/estadisticas', async (req, res) => {
 
 // -------- Reservas de habitaciones --------
 adminRouter.get('/api/reservas', (_req, res) => {
-  res.json({ ok: true, reservas: reservasStore.listar() });
+  // Cada reserva sale con el canal de la conversacion que la origino
+  // (Google Ads, Anuncio Facebook, Instagram...); las manuales, "Manual".
+  const reservas = reservasStore.listar().map((r) => ({
+    ...r,
+    canal: r.fuente === 'manual' ? 'Manual' : (store.obtener(r.waId)?.canal || 'Directo / Otro'),
+  }));
+  res.json({ ok: true, reservas });
 });
 
 // -------- Reservas mensuales (gráfico Ene–Dic) --------

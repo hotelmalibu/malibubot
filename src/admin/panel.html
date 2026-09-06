@@ -354,7 +354,7 @@
         <div class="tabla-wrap">
           <table class="reservas">
             <thead>
-              <tr><th>Huésped</th><th>Celular</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th></th></tr>
+              <tr><th>Huésped</th><th>Celular</th><th>Canal</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th></th></tr>
             </thead>
             <tbody id="cuerpoReservas"></tbody>
           </table>
@@ -711,6 +711,7 @@
       <tr>
         <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}</td>
         <td>${esc(r.celular) || '—'}</td>
+        <td>${canalPill(r.canal)}</td>
         <td>${esc(r.habitacion) || '—'}</td>
         <td>${r.personas || '—'}</td>
         <td>${esc(r.checkIn) || '—'}</td>
@@ -772,7 +773,14 @@
     'Anuncio Facebook': ['📣', 'c-fb'], 'Google Ads': ['🔎', 'c-gads'],
     'Google Maps': ['📍', 'c-maps'], 'Instagram': ['📸', 'c-ig'], 'Facebook': ['📘', 'c-fb'],
     'Sitio web': ['🌐', 'c-web'], 'TikTok': ['🎵', 'c-tt'], 'QR físico': ['🔳', 'c-qr'], 'Directo / Otro': ['💬', 'c-dir'],
+    'Manual': ['✍️', 'c-qr'],
   };
+  // Pastilla compacta con icono + nombre del canal (tabla de reservas).
+  function canalPill(c) {
+    const nombre = c || 'Directo / Otro';
+    const [ico] = CANAL_ICO[nombre] || ['💬'];
+    return `<span class="pill canal" title="${esc(nombre)}">${ico} ${esc(nombre)}</span>`;
+  }
   function presetMon(tipo) { aplicarPreset(tipo, 'mDesde', 'mHasta'); cargarMonitor(); }
   async function cargarMonitor() {
     try {
