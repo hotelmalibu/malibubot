@@ -363,16 +363,6 @@
         <div class="kpis" id="kpisHab" style="margin-top:14px;"></div>
 
         <div class="seccion-cab">
-          <div><div class="eyebrow">Objetivo</div><h2>🎯 Meta semanal de reservas</h2></div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-            <div class="nota" id="metaNota" style="flex:none;"></div>
-            <button class="btn" onclick="cambiarMeta()">Cambiar meta</button>
-          </div>
-        </div>
-        <div class="kpis" id="kpisMeta"></div>
-        <div class="semanas-wrap" id="semanasWrap"><div class="vacio-tabla">Cargando…</div></div>
-
-        <div class="seccion-cab">
           <div><div class="eyebrow">Seguimiento anual</div><h2><span id="tituloGrafico">Reservas mensuales</span> <span id="anioGrafico">2026</span></h2></div>
           <div class="nota">Noches reservadas según el Libro · 🤖 reservas creadas por el bot</div>
         </div>
@@ -389,21 +379,6 @@
             </div>
           </div>
           <div id="graficoMeses"><div class="vacio-tabla">Cargando gráfico…</div></div>
-        </div>
-
-        <div class="seccion-cab">
-          <div><div class="eyebrow">Conversión</div><h2>Embudo de conversión</h2></div>
-          <div class="nota" id="embudoNota">Chats iniciados en el rango de fechas de arriba → reserva confirmada</div>
-        </div>
-        <div class="embudo-grid">
-          <div class="embudo" id="embudo"><div class="vacio-tabla">Cargando…</div></div>
-          <div class="tabla-wrap">
-            <table class="reservas" style="min-width:0;">
-              <thead><tr><th>Canal</th><th>Chats</th><th>Interés</th><th>Cotizados</th><th>Reservas</th><th>Conv.</th></tr></thead>
-              <tbody id="cuerpoEmbudo"></tbody>
-            </table>
-            <div class="vacio-tabla" id="vacioEmbudo" style="display:none;">Aún no hay conversaciones en el rango.</div>
-          </div>
         </div>
 
         <div class="seccion-cab">
@@ -477,10 +452,35 @@
         <div class="kpis" id="kpisMon" style="margin-top:14px;"></div>
 
         <div class="seccion-cab">
+          <div><div class="eyebrow">Objetivo</div><h2>🎯 Meta semanal de reservas</h2></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            <div class="nota" id="metaNota" style="flex:none;"></div>
+            <button class="btn" onclick="cambiarMeta()">Cambiar meta</button>
+          </div>
+        </div>
+        <div class="kpis" id="kpisMeta"></div>
+        <div class="semanas-wrap" id="semanasWrap"><div class="vacio-tabla">Cargando…</div></div>
+
+        <div class="seccion-cab">
           <div><div class="eyebrow">Origen</div><h2>De dónde llegan (por canal)</h2></div>
           <div class="nota">Detectado por el mensaje de cada enlace medible</div>
         </div>
         <div class="canales" id="canalesMon"></div>
+
+        <div class="seccion-cab">
+          <div><div class="eyebrow">Conversión</div><h2>Embudo de conversión</h2></div>
+          <div class="nota" id="embudoNota">Chats iniciados en el rango de fechas de arriba → reserva confirmada</div>
+        </div>
+        <div class="embudo-grid">
+          <div class="embudo" id="embudo"><div class="vacio-tabla">Cargando…</div></div>
+          <div class="tabla-wrap">
+            <table class="reservas" style="min-width:0;">
+              <thead><tr><th>Canal</th><th>Chats</th><th>Interés</th><th>Cotizados</th><th>Reservas</th><th>Conv.</th></tr></thead>
+              <tbody id="cuerpoEmbudo"></tbody>
+            </table>
+            <div class="vacio-tabla" id="vacioEmbudo" style="display:none;">Aún no hay conversaciones en el rango.</div>
+          </div>
+        </div>
 
         <div class="seccion-cab">
           <div><div class="eyebrow">Oportunidades</div><h2>🔥 Conversaciones calientes <span class="contador" id="numCalientes">0</span></h2></div>
@@ -561,7 +561,7 @@
       document.getElementById(VISTAS[k]).classList.toggle('activa', k === v);
       document.getElementById(TABS[k]).classList.toggle('activo', k === v);
     }
-    if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarMeta(); cargarEmbudo(); }
+    if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); }
     if (v === 'monitor') cargarMonitor();
     if (v === 'tokens') cargarMetricas();
   }
@@ -587,8 +587,8 @@
 
   // ---------- Dashboard ----------
   function rango() { return rangoDe('fDesde', 'fHasta'); }
-  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); cargarEmbudo(); }
-  function buscar() { cargarEstadisticas(); cargarReservas(); cargarEmbudo(); }
+  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); }
+  function buscar() { cargarEstadisticas(); cargarReservas(); }
 
   async function cargarEstadisticas() {
     try {
@@ -868,7 +868,7 @@
   // ---------- Embudo de conversión ----------
   async function cargarEmbudo() {
     try {
-      const r = await fetch('/admin/api/embudo' + rango());
+      const r = await fetch('/admin/api/embudo' + rangoDe('mDesde', 'mHasta'));
       if (!r.ok) return;
       pintarEmbudo(await r.json());
     } catch (_) {}
@@ -975,7 +975,7 @@
         tarjeta('alerta', '🧑‍💼', 'Atención humana', c.enHumano, 'Handoff activo');
       pintarCanales(d.canales || []);
     } catch (_) {}
-    cargarCalientes();
+    cargarMeta(); cargarEmbudo(); cargarCalientes();
   }
   function pintarCanales(canales) {
     const cont = document.getElementById('canalesMon'); if (!cont) return;
@@ -1153,19 +1153,20 @@
   }
 
   document.getElementById('filtro').addEventListener('input', pintarLista);
-  document.getElementById('fDesde').addEventListener('change', () => { cargarEstadisticas(); cargarEmbudo(); });
-  document.getElementById('fHasta').addEventListener('change', () => { cargarEstadisticas(); cargarEmbudo(); });
+  document.getElementById('fDesde').addEventListener('change', cargarEstadisticas);
+  document.getElementById('fHasta').addEventListener('change', cargarEstadisticas);
+  ['mDesde', 'mHasta'].forEach((id) => document.getElementById(id).addEventListener('change', cargarMonitor));
   ['cDesde', 'cHasta'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
     document.querySelectorAll('.presets-conv button').forEach((b) => b.classList.remove('activo'));
     cargarLista();
   }));
 
   // Arranque + ciclos de actualización
-  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarMeta(); cargarEmbudo(); cargarLista();
+  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarLista();
   setInterval(() => {
     cargarLista();
     if (vistaActual === 'chats' && seleccion) cargarConv();
-    if (vistaActual === 'dashboard') { cargarEstadisticas(); cargarMeta(); cargarEmbudo(); cargarReservas(); }
+    if (vistaActual === 'dashboard') { cargarEstadisticas(); cargarReservas(); }
     if (vistaActual === 'monitor') cargarMonitor();
     if (vistaActual === 'tokens') cargarMetricas();
   }, 4000);
