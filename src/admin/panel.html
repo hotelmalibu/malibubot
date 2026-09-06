@@ -88,6 +88,16 @@
   }
   .presets button:hover, .btn-mini:hover { background: var(--espuma-2); border-color: var(--oro-claro); }
 
+  /* Pestañas de año (seguimiento anual) */
+  .anios { display: flex; gap: 6px; margin: -2px 0 12px; flex-wrap: wrap; }
+  .anios button {
+    font-family: var(--ui); border: 1px solid var(--linea); background: var(--espuma); color: var(--gris);
+    font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .anios button:hover { color: var(--tinta); border-color: var(--oro-claro); }
+  .anios button.activo { background: var(--oro); color: #fff; border-color: var(--oro); }
+  .anios button:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+
   /* KPIs con icono */
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
   .kpi {
@@ -321,6 +331,7 @@
           <div><div class="eyebrow">Seguimiento anual</div><h2>Reservas mensuales <span id="anioGrafico">2026</span></h2></div>
           <div class="nota">Noches reservadas por mes según el Libro · 🤖 reservas creadas por el bot</div>
         </div>
+        <div class="anios" id="aniosTabs" aria-label="Año"></div>
         <div class="grafico-wrap">
           <div class="grafico-top">
             <span class="leyenda"><span class="sw"></span> Noches reservadas</span>
@@ -554,11 +565,29 @@
   }
 
   // ---------- Gráfico mensual ----------
+  // Pestañas de año: desde ANIO_INICIO hasta el año que viene (para planear).
+  const ANIO_INICIO = 2025;
+  let anioSel = new Date().getFullYear();
+  function pintarAniosTabs() {
+    const cont = document.getElementById('aniosTabs'); if (!cont) return;
+    const fin = new Date().getFullYear() + 1;
+    let html = '';
+    for (let y = ANIO_INICIO; y <= fin; y++) html += `<button type="button" class="${y === anioSel ? 'activo' : ''}" onclick="elegirAnio(${y})">${y}</button>`;
+    cont.innerHTML = html;
+  }
+  function elegirAnio(y) {
+    anioSel = y; pintarAniosTabs();
+    document.getElementById('graficoMeses').innerHTML = '<div class="vacio-tabla">Cargando ' + y + '…</div>';
+    cargarGrafico();
+  }
   async function cargarGrafico() {
+    const pedido = anioSel;
     try {
-      const r = await fetch('/admin/api/reservas-mensuales');
+      const r = await fetch('/admin/api/reservas-mensuales?anio=' + pedido);
       if (!r.ok) return;
-      pintarGrafico(await r.json());
+      const d = await r.json();
+      if (pedido !== anioSel) return; // el usuario cambió de año mientras cargaba
+      pintarGrafico(d);
     } catch (_) {}
   }
   function pintarGrafico(d) {
@@ -570,7 +599,9 @@
     const max = Math.max(4, ...vals);
     const W = 960, H = 280, padL = 48, padR = 14, padT = 26, padB = 52;
     const cw = W - padL - padR, ch = H - padT - padB, bw = cw / 12;
-    const actual = (d.mesActual || (new Date().getUTCMonth() + 1)) - 1;
+    // Solo se resalta "mes actual" cuando se mira el año en curso.
+    const esAnioActual = Number(d.anio) === new Date().getFullYear();
+    const actual = esAnioActual ? (d.mesActual || (new Date().getUTCMonth() + 1)) - 1 : -1;
     let g = '';
     for (let i = 0; i <= 4; i++) {
       const y = padT + ch - (ch * i / 4), v = Math.round(max * i / 4);
@@ -878,7 +909,7 @@
   }));
 
   // Arranque + ciclos de actualización
-  cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarLista();
+  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarLista();
   setInterval(() => {
     cargarLista();
     if (vistaActual === 'chats' && seleccion) cargarConv();

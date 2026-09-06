@@ -13,7 +13,7 @@ import { config } from '../config.js';
 import { dbActivo, dbGuardarOcupacion, dbCargarOcupacion } from '../almacen/db.js';
 
 const TTL_MS = 5 * 60 * 1000;   // 5 min: el libro cambia lento
-const TIMEOUT_MS = 10 * 1000;   // corta la consulta a la hoja si se cuelga
+const TIMEOUT_MS = 25 * 1000;   // la hoja puede tardar >10 s en meses grandes; corta si se cuelga
 const cache = new Map();         // clave -> { ts, datos }
 const refrescando = new Set();   // claves con refresco en curso (evita duplicados)
 
@@ -164,15 +164,20 @@ function vistasFijas() {
     { fecha: menos(29), desde: menos(29), hasta: hoyISO },      // Últimos 30 días
   ];
 
-  // Cada mes del año en curso hasta el mes actual (para filtros por mes).
-  const anio = hoy.getUTCFullYear();
-  for (let m = 0; m <= hoy.getUTCMonth(); m++) {
+  // Vista de un mes completo (misma clave que pide el dashboard).
+  const mes = (anio, m, extra) => {
     const mm = String(m + 1).padStart(2, '0');
     const ult = new Date(Date.UTC(anio, m + 1, 0)).getUTCDate(); // último día del mes
     const desde = `${anio}-${mm}-01`;
     const hasta = `${anio}-${mm}-${String(ult).padStart(2, '0')}`;
-    vistas.push({ fecha: desde, desde, hasta });
-  }
+    return { fecha: desde, desde, hasta, ...extra };
+  };
+  const anio = hoy.getUTCFullYear();
+  // Cada mes del año en curso hasta el mes actual (se refrescan siempre).
+  for (let m = 0; m <= hoy.getUTCMonth(); m++) vistas.push(mes(anio, m));
+  // Los 12 meses del año anterior: solo se consultan si aún no están en caché
+  // (esos libros ya no cambian), para el seguimiento anual por pestañas.
+  for (let m = 0; m < 12; m++) vistas.push(mes(anio - 1, m, { soloSiFalta: true }));
   return vistas;
 }
 
@@ -186,6 +191,7 @@ export async function refrescarVistas() {
     // ocupacionDelLibro internamente consulta y cachea cada mes crudo, así que
     // basta con recorrer las vistas para dejar la cache lista.
     for (const v of vistasFijas()) {
+      if (v.soloSiFalta && cache.has(claveDe(v.fecha, v.desde, v.hasta))) continue;
       await ocupacionDelLibro(v.fecha, v.desde, v.hasta);
     }
   } catch (err) {
