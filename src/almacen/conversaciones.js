@@ -75,9 +75,10 @@ function detectarCanal(texto) {
   // "¿Cuáles son las tarifas de habitación?" o su mensaje de bienvenida
   // "Hola 👋 Quiero reservar una habitación en el Hotel Malibú".
   if (t.includes('cuales son las tarifas')) return 'Anuncio Facebook';
-  // Anuncio de Google Ads: llegan con "quiero reservar una habitación"
-  // (con o sin "Hola", con o sin "en el Hotel Malibú", en cualquier parte).
-  if (t.includes('quiero reservar una habitacion')) return 'Google Ads';
+  // Anuncio de Google Ads: llegan con "quiero reservar (una|ua|la) habitación"
+  // (el enlace del anuncio trae "ua" por un error de tipeo; se acepta igual,
+  // con o sin "Hola" y en cualquier parte del mensaje).
+  if (/quiero reservar\s+(?:\S+\s+)?habitacion/.test(t)) return 'Google Ads';
   return '';
 }
 
