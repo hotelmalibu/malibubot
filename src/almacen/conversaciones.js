@@ -51,6 +51,15 @@ function crearConversacion(waId, nombre) {
 function normTexto(t) {
   return (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
+// Frase propia del mensaje de seguimiento (ver src/ia/seguimiento.js). Si ya
+// aparece en el historial, la conversacion YA fue seguida aunque la bandera
+// se hubiera perdido (candado por contenido: sobrevive reinicios).
+const MARCA_SEGUIMIENTO = 'quede pendiente de tu reserva';
+function yaSeguido(conv) {
+  if (conv.seguimientoEnviado) return true;
+  return conv.mensajes.some((m) => m.autor === 'bot' && normTexto(m.texto).includes(MARCA_SEGUIMIENTO));
+}
+
 function detectarCanal(texto) {
   const t = normTexto(texto);
   if (t.includes('google ads') || t.includes('anuncio de google')) return 'Google Ads';
@@ -273,6 +282,12 @@ export const store = {
     return c ? ultimoEntrante(c) : 0;
   },
 
+  /** true si ya se le envio el seguimiento (por bandera o por el mensaje en el historial). */
+  yaSeguido(waId) {
+    const c = conversaciones.get(waId);
+    return c ? yaSeguido(c) : false;
+  },
+
   /**
    * Conversaciones "calientes": mostraron interes (precio/fechas/reserva),
    * NO cerraron reserva, las atiende el bot y el cliente escribio hace
@@ -295,7 +310,7 @@ export const store = {
         ultimoEntrante: ult,
         horasDesde: Math.round(((ts - ult) / 36e5) * 10) / 10,
         dentroVentana24: ts - ult < 24 * 60 * 60 * 1000,
-        seguimientoEnviado: c.seguimientoEnviado || 0,
+        seguimientoEnviado: yaSeguido(c) ? (c.seguimientoEnviado || 1) : 0,
         ultimoTexto: ultimo?.texto || '',
         ultimoAutor: ultimo?.autor || '',
       });
@@ -360,6 +375,12 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
     }
     const ultimo = conv.mensajes[conv.mensajes.length - 1];
     if (ultimo && ultimo.ts > conv.ultimaActividad) conv.ultimaActividad = ultimo.ts;
+    // Auto-reparacion: si la bandera se perdio pero el seguimiento ya esta en
+    // el historial, la restaura (evita re-enviar tras un reinicio).
+    if (!conv.seguimientoEnviado) {
+      const s = conv.mensajes.find((m) => m.autor === 'bot' && normTexto(m.texto).includes(MARCA_SEGUIMIENTO));
+      if (s) conv.seguimientoEnviado = s.ts;
+    }
   }
   return conversaciones.size;
 }

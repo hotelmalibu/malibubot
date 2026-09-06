@@ -46,6 +46,8 @@ export async function enviarEmpujon(waId) {
   const conv = store.obtener(waId);
   if (!conv) return { ok: false, error: 'No existe esa conversación.' };
   if (waIdsCerrados().has(waId)) return { ok: false, error: 'Este cliente ya tiene una reserva confirmada.' };
+  // UN solo seguimiento por conversacion, siempre (bandera o mensaje ya en el historial).
+  if (store.yaSeguido(waId)) return { ok: false, error: 'A esta conversación ya se le envió el seguimiento (solo se permite uno).' };
 
   const ultimo = store.ultimoEntrante(waId);
   if (!ultimo || Date.now() - ultimo > VENTANA_WA_MS) {
@@ -63,8 +65,10 @@ export async function enviarEmpujon(waId) {
   } catch (err) {
     return { ok: false, error: 'WhatsApp no aceptó el envío: ' + err.message };
   }
-  store.registrarSaliente({ waId, autor: 'bot', texto });
+  // PRIMERO la bandera (asi todos los guardados que siguen ya llevan el
+  // "seguimiento enviado" y ninguna carrera puede borrarla), LUEGO el mensaje.
   store.marcarSeguimiento(waId);
+  store.registrarSaliente({ waId, autor: 'bot', texto });
   return { ok: true };
 }
 

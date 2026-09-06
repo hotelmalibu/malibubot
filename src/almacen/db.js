@@ -109,7 +109,9 @@ export async function dbGuardarConversacion(conv) {
        modo = EXCLUDED.modo,
        escalado = EXCLUDED.escalado,
        canal = EXCLUDED.canal,
-       seguimiento_enviado = EXCLUDED.seguimiento_enviado,
+       -- Nunca "baja": si dos guardados casi simultaneos llegan en desorden,
+       -- gana el que ya tiene el seguimiento marcado (evita re-envios).
+       seguimiento_enviado = GREATEST(COALESCE(conversaciones.seguimiento_enviado, 0), COALESCE(EXCLUDED.seguimiento_enviado, 0)),
        ultima_actividad = EXCLUDED.ultima_actividad`,
     [conv.waId, conv.nombre || '', conv.modo || 'bot', !!conv.escalado, conv.canal || '', conv.seguimientoEnviado || 0, conv.creado, conv.ultimaActividad]
   );
