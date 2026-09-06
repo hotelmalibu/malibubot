@@ -139,6 +139,37 @@ adminRouter.get('/api/reservas', (_req, res) => {
   res.json({ ok: true, reservas: reservasStore.listar() });
 });
 
+// -------- Reservas mensuales (gráfico Ene–Dic) --------
+// Noches reservadas por mes según el Libro (cache de ocupación, instantáneo)
+// + reservas creadas por el bot por mes (según check-in).
+adminRouter.get('/api/reservas-mensuales', async (req, res) => {
+  const ahora = new Date();
+  const anio = parseInt(req.query.anio || String(ahora.getUTCFullYear()), 10);
+  const mesLimite =
+    anio < ahora.getUTCFullYear() ? 11 : anio > ahora.getUTCFullYear() ? -1 : ahora.getUTCMonth();
+  const bot = reservasStore.listar().filter((r) => r.estado !== 'rechazado');
+
+  const meses = [];
+  const tareas = [];
+  for (let m = 0; m < 12; m++) {
+    const mm = String(m + 1).padStart(2, '0');
+    const desde = `${anio}-${mm}-01`;
+    const ult = new Date(Date.UTC(anio, m + 1, 0)).getUTCDate();
+    const hasta = `${anio}-${mm}-${String(ult).padStart(2, '0')}`;
+    const reservasBot = bot.filter((r) => (r.checkIn || '').startsWith(`${anio}-${mm}`)).length;
+    meses.push({ mes: m + 1, desde, hasta, reservasBot, nochesLibro: null });
+    if (m <= mesLimite) {
+      tareas.push(
+        ocupacionDelLibro(desde, desde, hasta)
+          .then((d) => ({ m, noches: d ? (d.nochesReservadasRango ?? d.nochesReservadasMes ?? null) : null }))
+          .catch(() => ({ m, noches: null }))
+      );
+    }
+  }
+  for (const r of await Promise.all(tareas)) meses[r.m].nochesLibro = r.noches;
+  res.json({ ok: true, anio, mesActual: ahora.getUTCMonth() + 1, meses });
+});
+
 // -------- Monitor de tokens (uso y costo de la IA) --------
 adminRouter.get('/api/metricas', (_req, res) => {
   const reservasBot = reservasStore
