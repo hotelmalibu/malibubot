@@ -136,6 +136,7 @@
   .c-tt { background: #111; }
   .c-qr { background: #4a4e55; }
   .c-dir { background: linear-gradient(135deg,#d9b978,#b8873a); }
+  .c-gads { background: linear-gradient(135deg,#4285f4,#34a853 55%,#fbbc05); }
   .vacio-cards { grid-column: 1 / -1; padding: 22px; text-align: center; color: var(--gris); font-size: 13.5px; background: var(--espuma); border: 1px dashed var(--linea); border-radius: 14px; }
 
   /* Conversaciones calientes (interes sin reserva) */
@@ -709,8 +710,9 @@
 
   // ---------- Monitor de conversaciones ----------
   const CANAL_ICO = {
+    'Anuncio Facebook': ['📣', 'c-fb'], 'Google Ads': ['🔎', 'c-gads'],
     'Google Maps': ['📍', 'c-maps'], 'Instagram': ['📸', 'c-ig'], 'Facebook': ['📘', 'c-fb'],
-    'Sitio web': ['🌐', 'c-web'], 'TikTok': ['🎵', 'c-tt'], 'QR físico': ['🔳', 'c-qr'], 'Directo / Anuncio': ['📣', 'c-dir'],
+    'Sitio web': ['🌐', 'c-web'], 'TikTok': ['🎵', 'c-tt'], 'QR físico': ['🔳', 'c-qr'], 'Directo / Otro': ['💬', 'c-dir'],
   };
   function presetMon(tipo) { aplicarPreset(tipo, 'mDesde', 'mHasta'); cargarMonitor(); }
   async function cargarMonitor() {

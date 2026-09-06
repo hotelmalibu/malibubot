@@ -47,14 +47,22 @@ function crearConversacion(waId, nombre) {
 
 // Detecta de que canal viene el cliente por el texto del PRIMER mensaje
 // (los enlaces medibles wa.me traen una frase distinta por canal).
+// Minusculas y sin tildes, para comparar sin sorpresas.
+function normTexto(t) {
+  return (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
 function detectarCanal(texto) {
-  const t = (texto || '').toLowerCase();
+  const t = normTexto(texto);
+  if (t.includes('google ads') || t.includes('anuncio de google')) return 'Google Ads';
   if (t.includes('google maps') || /\bmaps\b/.test(t)) return 'Google Maps';
   if (t.includes('instagram')) return 'Instagram';
   if (t.includes('tiktok')) return 'TikTok';
   if (t.includes('facebook')) return 'Facebook';
-  if (t.includes('qr') || t.includes('código qr') || t.includes('codigo qr') || t.includes('escane')) return 'QR físico';
-  if (t.includes('página web') || t.includes('pagina web') || t.includes('sitio web')) return 'Sitio web';
+  if (t.includes('qr') || t.includes('escane')) return 'QR físico';
+  if (t.includes('pagina web') || t.includes('sitio web')) return 'Sitio web';
+  // Pregunta sugerida del anuncio Click-to-WhatsApp de Facebook/Meta:
+  // "¿Cuáles son las tarifas de habitación?"
+  if (t.includes('cuales son las tarifas')) return 'Anuncio Facebook';
   return '';
 }
 
@@ -245,7 +253,7 @@ export const store = {
       const dia = new Date(c.ultimaActividad).toISOString().slice(0, 10);
       if (desde && dia < desde) continue;
       if (hasta && dia > hasta) continue;
-      const canal = c.canal || 'Directo / Anuncio';
+      const canal = c.canal || 'Directo / Otro';
       conteo.set(canal, (conteo.get(canal) || 0) + 1);
     }
     return [...conteo.entries()]
@@ -348,4 +356,24 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
     if (ultimo && ultimo.ts > conv.ultimaActividad) conv.ultimaActividad = ultimo.ts;
   }
   return conversaciones.size;
+}
+
+/**
+ * Re-clasifica el canal de las conversaciones que aun no lo tienen, mirando
+ * su PRIMER mensaje del cliente (sirve para el historico cuando se agregan
+ * reglas nuevas de deteccion). Devuelve cuantas se etiquetaron.
+ */
+export function reclasificarCanales() {
+  let n = 0;
+  for (const c of conversaciones.values()) {
+    if (c.canal) continue;
+    const primero = c.mensajes.find((m) => m.direccion === 'entrada');
+    const canal = primero ? detectarCanal(primero.texto) : '';
+    if (canal) {
+      c.canal = canal;
+      persistir(c);
+      n++;
+    }
+  }
+  return n;
 }

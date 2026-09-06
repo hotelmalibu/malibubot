@@ -17,7 +17,7 @@ import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
-import { store, hidratarConversaciones } from './almacen/conversaciones.js';
+import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas } from './almacen/db.js';
 import { hidratarMetricas } from './ia/metricas.js';
@@ -212,6 +212,9 @@ async function arrancar() {
         const nConv = hidratarConversaciones(datos);
         const nRes = hidratarReservas(datos.reservaRows);
         console.log(`[db] Memoria hidratada: ${nConv} conversaciones, ${nRes} reservas.`);
+        // Etiqueta el canal del historico que aun no lo tenga (reglas nuevas).
+        const nCanal = reclasificarCanales();
+        if (nCanal) console.log(`[canal] ${nCanal} conversaciones re-clasificadas por canal.`);
       }
       hidratarMetricas(await dbCargarMetricas());
     } catch (err) {
