@@ -85,6 +85,7 @@ export async function iniciarDB() {
         actualizado BIGINT
       );
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
+      ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
     `);
     console.log('[db] Conectada a PostgreSQL y tablas listas. ✅');
     return true;
@@ -101,15 +102,16 @@ export async function iniciarDB() {
 export async function dbGuardarConversacion(conv) {
   if (!pool) return;
   await pool.query(
-    `INSERT INTO conversaciones (wa_id, nombre, modo, escalado, canal, creado, ultima_actividad)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO conversaciones (wa_id, nombre, modo, escalado, canal, seguimiento_enviado, creado, ultima_actividad)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT (wa_id) DO UPDATE SET
        nombre = EXCLUDED.nombre,
        modo = EXCLUDED.modo,
        escalado = EXCLUDED.escalado,
        canal = EXCLUDED.canal,
+       seguimiento_enviado = EXCLUDED.seguimiento_enviado,
        ultima_actividad = EXCLUDED.ultima_actividad`,
-    [conv.waId, conv.nombre || '', conv.modo || 'bot', !!conv.escalado, conv.canal || '', conv.creado, conv.ultimaActividad]
+    [conv.waId, conv.nombre || '', conv.modo || 'bot', !!conv.escalado, conv.canal || '', conv.seguimientoEnviado || 0, conv.creado, conv.ultimaActividad]
   );
 }
 

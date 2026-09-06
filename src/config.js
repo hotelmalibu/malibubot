@@ -51,6 +51,14 @@ export const config = {
     copPorUsd: parseFloat(process.env.COP_POR_USD || '4200'),
   },
 
+  // Seguimiento automatico a conversaciones "calientes" que no cerraron:
+  // Valentina escribe sola a las N horas de silencio (dentro de la ventana
+  // de 24 h de WhatsApp), una sola vez por conversacion.
+  seguimiento: {
+    activo: (process.env.SEGUIMIENTO_ACTIVO || 'true') !== 'false',
+    horas: parseFloat(process.env.SEGUIMIENTO_HORAS || '3'),
+  },
+
   // URL publica del servicio (para los retornos y el webhook de RAPYD).
   publicUrl: process.env.PUBLIC_URL || 'https://malibubot.onrender.com',
 

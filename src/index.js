@@ -21,6 +21,7 @@ import { store, hidratarConversaciones } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas } from './almacen/db.js';
 import { hidratarMetricas } from './ia/metricas.js';
+import { enviarSeguimientos } from './ia/seguimiento.js';
 import { responderIA } from './ia/agente.js';
 import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
@@ -226,6 +227,12 @@ async function arrancar() {
   }
   refrescarVistas();
   setInterval(refrescarVistas, 4 * 60 * 1000);
+
+  // 3) Seguimiento automático a conversaciones "calientes" que no cerraron
+  //    (Valentina les escribe sola a las N horas, dentro de las 24 h de WhatsApp).
+  const seguir = () => enviarSeguimientos().catch((e) => console.error('[seguimiento]', e.message));
+  setTimeout(seguir, 2 * 60 * 1000);
+  setInterval(seguir, 15 * 60 * 1000);
 
   // 3) Enciende el servidor.
   app.listen(config.puerto, () => {

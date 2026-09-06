@@ -28,6 +28,7 @@ import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
 import { resumenMetricas } from '../ia/metricas.js';
+import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import {
   probarAuth as probarAuthRapyd,
   metodosPais as metodosPaisRapyd,
@@ -205,6 +206,18 @@ adminRouter.post('/api/reservas/:id/estado', (req, res) => {
   const r = reservasStore.actualizarEstado(req.params.id, estado);
   if (!r) return res.status(404).json({ ok: false, error: 'Reserva no encontrada.' });
   res.json({ ok: true, reserva: r });
+});
+
+// -------- Conversaciones "calientes" (interes sin reserva) --------
+adminRouter.get('/api/calientes', (_req, res) => {
+  const calientes = store.calientes({ cerrados: waIdsCerrados() });
+  res.json({ ok: true, total: calientes.length, calientes });
+});
+
+// Empujon manual: Valentina le escribe ahora (solo dentro de las 24 h de WhatsApp).
+adminRouter.post('/api/calientes/:waId/empujon', async (req, res) => {
+  const r = await enviarEmpujon(req.params.waId);
+  res.status(r.ok ? 200 : 400).json(r);
 });
 
 // -------- Conversaciones --------

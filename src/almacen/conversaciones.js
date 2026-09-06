@@ -35,6 +35,7 @@ function crearConversacion(waId, nombre) {
     modo: 'bot',          // 'bot' | 'humano'
     escalado: false,      // true si el bot pidio ayuda humana
     canal: '',            // de que "puerta" llego (Maps, Instagram, QR...)
+    seguimientoEnviado: 0, // ts del mensaje de seguimiento (0 = aun no)
     noLeidos: 0,          // mensajes del cliente sin leer en el panel
     creado: ahora(),
     ultimaActividad: ahora(),
@@ -55,6 +56,25 @@ function detectarCanal(texto) {
   if (t.includes('qr') || t.includes('código qr') || t.includes('codigo qr') || t.includes('escane')) return 'QR físico';
   if (t.includes('página web') || t.includes('pagina web') || t.includes('sitio web')) return 'Sitio web';
   return '';
+}
+
+// Senales de interes real de compra (para "conversaciones calientes"):
+// el cliente hablo de precio/fechas/reserva, o el bot ya le dio un valor.
+const RE_INTERES = /precio|tarifa|cu[aá]nt[oa]|vale|cuesta|disponib|reserv|fecha|noche|habitaci|cupo|apart/i;
+function tieneInteres(conv) {
+  return conv.mensajes.some(
+    (m) =>
+      (m.autor === 'cliente' && RE_INTERES.test(m.texto || '')) ||
+      (m.autor === 'bot' && /\$\s?\d/.test(m.texto || ''))
+  );
+}
+
+/** ts del ultimo mensaje ENTRANTE (del cliente), o 0 si no hay. */
+function ultimoEntrante(conv) {
+  for (let i = conv.mensajes.length - 1; i >= 0; i--) {
+    if (conv.mensajes[i].direccion === 'entrada') return conv.mensajes[i].ts;
+  }
+  return 0;
 }
 
 function obtenerOCrear(waId, nombre) {
@@ -232,6 +252,58 @@ export const store = {
       .map(([canal, total]) => ({ canal, total }))
       .sort((a, b) => b.total - a.total);
   },
+
+  /** ts del ultimo mensaje del cliente en esa conversacion (0 si no hay). */
+  ultimoEntrante(waId) {
+    const c = conversaciones.get(waId);
+    return c ? ultimoEntrante(c) : 0;
+  },
+
+  /**
+   * Conversaciones "calientes": mostraron interes (precio/fechas/reserva),
+   * NO cerraron reserva, las atiende el bot y el cliente escribio hace
+   * menos de ventanaMs. De la mas reciente a la mas vieja.
+   * @param {{cerrados:Set<string>, ahora?:number, ventanaMs?:number}} p
+   */
+  calientes({ cerrados, ahora: ts = Date.now(), ventanaMs = 72 * 60 * 60 * 1000 }) {
+    const salida = [];
+    for (const c of conversaciones.values()) {
+      if (cerrados.has(c.waId)) continue;
+      if (c.modo !== 'bot' || c.escalado) continue;
+      const ult = ultimoEntrante(c);
+      if (!ult || ts - ult > ventanaMs) continue;
+      if (!tieneInteres(c)) continue;
+      const ultimo = c.mensajes[c.mensajes.length - 1];
+      salida.push({
+        waId: c.waId,
+        nombre: c.nombre,
+        canal: c.canal || '',
+        ultimoEntrante: ult,
+        horasDesde: Math.round(((ts - ult) / 36e5) * 10) / 10,
+        dentroVentana24: ts - ult < 24 * 60 * 60 * 1000,
+        seguimientoEnviado: c.seguimientoEnviado || 0,
+        ultimoTexto: ultimo?.texto || '',
+        ultimoAutor: ultimo?.autor || '',
+      });
+    }
+    return salida.sort((a, b) => b.ultimoEntrante - a.ultimoEntrante);
+  },
+
+  /** Calientes a las que ya toca el seguimiento automatico (sin seguimiento previo, silencio entre minMs y maxMs). */
+  paraSeguimiento({ cerrados, ahora: ts = Date.now(), minMs, maxMs, limite = 20 }) {
+    return this.calientes({ cerrados, ahora: ts, ventanaMs: maxMs })
+      .filter((c) => !c.seguimientoEnviado && ts - c.ultimoEntrante >= minMs)
+      .slice(0, limite);
+  },
+
+  /** Marca que ya se envio el seguimiento (automatico o manual). */
+  marcarSeguimiento(waId) {
+    const conv = conversaciones.get(waId);
+    if (!conv) return null;
+    conv.seguimientoEnviado = ahora();
+    persistir(conv);
+    return conv;
+  },
 };
 
 /**
@@ -246,6 +318,7 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
       modo: c.modo === 'humano' ? 'humano' : 'bot',
       escalado: !!c.escalado,
       canal: c.canal || '',
+      seguimientoEnviado: Number(c.seguimiento_enviado) || 0,
       noLeidos: 0,
       creado: Number(c.creado) || ahora(),
       ultimaActividad: Number(c.ultima_actividad) || ahora(),
