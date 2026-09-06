@@ -240,6 +240,11 @@ adminRouter.post('/api/reservas/:id/estado', (req, res) => {
   res.json({ ok: true, reserva: r });
 });
 
+// -------- Diagnostico de canales (primer mensaje -> canal detectado) --------
+adminRouter.get('/api/canales/diag', (_req, res) => {
+  res.json({ ok: true, grupos: store.diagCanales() });
+});
+
 // -------- Conversaciones "calientes" (interes sin reserva) --------
 adminRouter.get('/api/calientes', (_req, res) => {
   const calientes = store.calientes({ cerrados: waIdsCerrados() });

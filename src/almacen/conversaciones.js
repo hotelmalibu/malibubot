@@ -276,6 +276,26 @@ export const store = {
       .sort((a, b) => b.total - a.total);
   },
 
+  /**
+   * Diagnostico de canales: agrupa las conversaciones por su PRIMER mensaje
+   * del cliente y muestra que canal detectan las reglas actuales vs. el que
+   * tienen guardado. Sirve para afinar las reglas con los textos reales.
+   */
+  diagCanales() {
+    const grupos = new Map();
+    for (const c of conversaciones.values()) {
+      const primero = c.mensajes.find((m) => m.direccion === 'entrada');
+      const completo = primero?.texto || '';
+      const clave = completo.trim().slice(0, 90) || '(sin mensaje)';
+      const g = grupos.get(clave) || { primerMensaje: clave, veces: 0, canalDetectado: detectarCanal(completo), canalesGuardados: {} };
+      g.veces++;
+      const ca = c.canal || '(sin canal)';
+      g.canalesGuardados[ca] = (g.canalesGuardados[ca] || 0) + 1;
+      grupos.set(clave, g);
+    }
+    return [...grupos.values()].sort((a, b) => b.veces - a.veces);
+  },
+
   /** ts del ultimo mensaje del cliente en esa conversacion (0 si no hay). */
   ultimoEntrante(waId) {
     const c = conversaciones.get(waId);
