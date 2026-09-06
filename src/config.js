@@ -26,6 +26,8 @@ export const config = {
     nombre: process.env.HOTEL_NOMBRE || 'Hotel y Centro de Eventos Malibu',
     // Total de habitaciones del hotel (para el calculo de ocupadas/disponibles).
     habitaciones: parseInt(process.env.HOTEL_HABITACIONES || '85', 10),
+    // Primer anio con Libro de Reservas en el Sheet (pestanas del seguimiento anual).
+    anioInicio: parseInt(process.env.HISTORICO_DESDE || '2018', 10),
   },
 
   // Conexion con el Libro de Reservas (Google Sheet) via un Apps Script Web App

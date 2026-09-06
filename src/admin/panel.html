@@ -565,14 +565,15 @@
   }
 
   // ---------- Gráfico mensual ----------
-  // Pestañas de año: desde ANIO_INICIO hasta el año que viene (para planear).
-  const ANIO_INICIO = 2025;
+  // Pestañas de año: desde el primer año con Libro (lo confirma el servidor)
+  // hasta el año que viene (para planear).
+  let anioInicio = 2018;
   let anioSel = new Date().getFullYear();
   function pintarAniosTabs() {
     const cont = document.getElementById('aniosTabs'); if (!cont) return;
     const fin = new Date().getFullYear() + 1;
     let html = '';
-    for (let y = ANIO_INICIO; y <= fin; y++) html += `<button type="button" class="${y === anioSel ? 'activo' : ''}" onclick="elegirAnio(${y})">${y}</button>`;
+    for (let y = anioInicio; y <= fin; y++) html += `<button type="button" class="${y === anioSel ? 'activo' : ''}" onclick="elegirAnio(${y})">${y}</button>`;
     cont.innerHTML = html;
   }
   function elegirAnio(y) {
@@ -586,6 +587,8 @@
       const r = await fetch('/admin/api/reservas-mensuales?anio=' + pedido);
       if (!r.ok) return;
       const d = await r.json();
+      // El servidor dice desde qué año hay Libro; si difiere, redibuja las pestañas.
+      if (d.anioInicio && d.anioInicio !== anioInicio) { anioInicio = d.anioInicio; pintarAniosTabs(); }
       if (pedido !== anioSel) return; // el usuario cambió de año mientras cargaba
       pintarGrafico(d);
     } catch (_) {}

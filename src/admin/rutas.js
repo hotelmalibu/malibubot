@@ -168,7 +168,7 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
     }
   }
   for (const r of await Promise.all(tareas)) meses[r.m].nochesLibro = r.noches;
-  res.json({ ok: true, anio, mesActual: ahora.getUTCMonth() + 1, meses });
+  res.json({ ok: true, anio, anioInicio: config.hotel.anioInicio, mesActual: ahora.getUTCMonth() + 1, meses });
 });
 
 // -------- Monitor de tokens (uso y costo de la IA) --------
