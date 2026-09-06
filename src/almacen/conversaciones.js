@@ -75,9 +75,9 @@ function detectarCanal(texto) {
   // "¿Cuáles son las tarifas de habitación?" o su mensaje de bienvenida
   // "Hola 👋 Quiero reservar una habitación en el Hotel Malibú".
   if (t.includes('cuales son las tarifas')) return 'Anuncio Facebook';
-  if (t.includes('quiero reservar una habitacion en el hotel malibu')) return 'Anuncio Facebook';
-  // Anuncio de Google Ads: "Hola quiero reservar una habitación" (tal cual).
-  if (/^(hola\W*)?quiero reservar una habitacion\b/.test(t)) return 'Google Ads';
+  // Anuncio de Google Ads: llegan con "quiero reservar una habitación"
+  // (con o sin "Hola", con o sin "en el Hotel Malibú", en cualquier parte).
+  if (t.includes('quiero reservar una habitacion')) return 'Google Ads';
   return '';
 }
 
@@ -393,10 +393,15 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
 export function reclasificarCanales() {
   let n = 0;
   for (const c of conversaciones.values()) {
-    if (c.canal) continue;
-    const primero = c.mensajes.find((m) => m.direccion === 'entrada');
-    const canal = primero ? detectarCanal(primero.texto) : '';
-    if (canal) {
+    // Con las reglas ACTUALES, primer mensaje del cliente que coincida.
+    let canal = '';
+    for (const m of c.mensajes) {
+      if (m.direccion !== 'entrada') continue;
+      canal = detectarCanal(m.texto);
+      if (canal) break;
+    }
+    // Si las reglas nuevas dan otro canal, se actualiza; si no dan nada, se conserva.
+    if (canal && canal !== c.canal) {
       c.canal = canal;
       persistir(c);
       n++;

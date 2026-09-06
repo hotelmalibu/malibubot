@@ -25,7 +25,7 @@ import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
 import { reservasStore, ESTADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
-import { ocupacionDelLibro } from '../datos/ocupacion.js';
+import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
 import { resumenMetricas } from '../ia/metricas.js';
 import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
@@ -169,6 +169,38 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
   }
   for (const r of await Promise.all(tareas)) meses[r.m].nochesLibro = r.noches;
   res.json({ ok: true, anio, anioInicio: config.hotel.anioInicio, mesActual: ahora.getUTCMonth() + 1, meses });
+});
+
+// -------- Resumen año a año (pestaña "Resumen" del seguimiento anual) --------
+// Suma las noches de cada año SOLO desde la caché (instantáneo). Los meses que
+// aún no estén en caché se piden en segundo plano y aparecen en la próxima carga.
+adminRouter.get('/api/reservas-anuales', (_req, res) => {
+  const ahora = new Date();
+  const anioActual = ahora.getUTCFullYear();
+  const bot = reservasStore.listar().filter((r) => r.estado !== 'rechazado');
+  const anios = [];
+  for (let a = config.hotel.anioInicio; a <= anioActual + 1; a++) {
+    const mesLimite = a < anioActual ? 11 : a === anioActual ? ahora.getUTCMonth() : -1;
+    let noches = 0, conDato = 0, pendientes = 0;
+    for (let m = 0; m <= mesLimite; m++) {
+      const mm = String(m + 1).padStart(2, '0');
+      const ult = new Date(Date.UTC(a, m + 1, 0)).getUTCDate();
+      const desde = `${a}-${mm}-01`;
+      const d = ocupacionEnCache(desde, desde, `${a}-${mm}-${String(ult).padStart(2, '0')}`);
+      const v = d ? (d.nochesReservadasRango ?? d.nochesReservadasMes ?? null) : null;
+      if (v != null) { noches += v; conDato++; } else pendientes++;
+    }
+    const reservasBot = bot.filter((r) => (r.checkIn || '').startsWith(`${a}-`)).length;
+    anios.push({
+      anio: a,
+      noches: conDato ? noches : null,
+      mesesConDato: conDato,
+      mesesPendientes: pendientes,
+      reservasBot,
+      esActual: a === anioActual,
+    });
+  }
+  res.json({ ok: true, anioActual, anioInicio: config.hotel.anioInicio, anios });
 });
 
 // -------- Monitor de tokens (uso y costo de la IA) --------

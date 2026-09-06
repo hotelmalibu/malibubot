@@ -125,6 +125,21 @@ export async function ocupacionDelLibro(fechaISO, desdeISO, hastaISO) {
   return base;
 }
 
+/**
+ * Lee SOLO de la caché, sin esperar a la hoja (para vistas que suman muchos
+ * meses, como el resumen año a año). Si falta, dispara la consulta en
+ * segundo plano y devuelve null; en la próxima carga ya estará.
+ */
+export function ocupacionEnCache(fechaISO, desdeISO, hastaISO) {
+  const clave = claveDe(fechaISO, desdeISO, hastaISO);
+  const e = cache.get(clave);
+  if (e) return e.datos;
+  if (config.google.ocupacionUrl) {
+    refrescarEnSegundoPlano(clave, { fecha: fechaISO, desde: desdeISO, hasta: hastaISO });
+  }
+  return null;
+}
+
 // ---------- Persistencia y vistas fijas ----------
 
 /** Carga en memoria las vistas de ocupación guardadas en la base (al arrancar). */

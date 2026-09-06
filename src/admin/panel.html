@@ -329,18 +329,18 @@
         <div class="kpis" id="kpisHab" style="margin-top:14px;"></div>
 
         <div class="seccion-cab">
-          <div><div class="eyebrow">Seguimiento anual</div><h2>Reservas mensuales <span id="anioGrafico">2026</span></h2></div>
-          <div class="nota">Noches reservadas por mes según el Libro · 🤖 reservas creadas por el bot</div>
+          <div><div class="eyebrow">Seguimiento anual</div><h2><span id="tituloGrafico">Reservas mensuales</span> <span id="anioGrafico">2026</span></h2></div>
+          <div class="nota">Noches reservadas según el Libro · 🤖 reservas creadas por el bot</div>
         </div>
         <div class="anios" id="aniosTabs" aria-label="Año"></div>
         <div class="grafico-wrap">
           <div class="grafico-top">
             <span class="leyenda"><span class="sw"></span> Noches reservadas</span>
-            <span class="leyenda"><span class="sw act"></span> Mes actual</span>
+            <span class="leyenda"><span class="sw act"></span> <span id="lblActual">Mes actual</span></span>
             <span class="leyenda"><span class="sw bot"></span> 🤖 Reservas del bot</span>
             <div class="grafico-tot">
-              <div>Noches en el año <b id="totNoches">—</b></div>
-              <div>Mejor mes <b id="mejorMes">—</b></div>
+              <div><span id="lblTot">Noches en el año</span> <b id="totNoches">—</b></div>
+              <div><span id="lblMejor">Mejor mes</span> <b id="mejorMes">—</b></div>
               <div>Reservas del bot <b id="totBot">—</b></div>
             </div>
           </div>
@@ -569,30 +569,85 @@
   // Pestañas de año: desde el primer año con Libro (lo confirma el servidor)
   // hasta el año que viene (para planear).
   let anioInicio = 2018;
-  let anioSel = new Date().getFullYear();
+  let anioSel = new Date().getFullYear(); // un año, o 'resumen' (año a año)
   function pintarAniosTabs() {
     const cont = document.getElementById('aniosTabs'); if (!cont) return;
     const fin = new Date().getFullYear() + 1;
     let html = '';
     for (let y = anioInicio; y <= fin; y++) html += `<button type="button" class="${y === anioSel ? 'activo' : ''}" onclick="elegirAnio(${y})">${y}</button>`;
+    html += `<button type="button" class="${anioSel === 'resumen' ? 'activo' : ''}" onclick="elegirAnio('resumen')" style="margin-left:6px;">Resumen</button>`;
     cont.innerHTML = html;
   }
   function elegirAnio(y) {
     anioSel = y; pintarAniosTabs();
-    document.getElementById('graficoMeses').innerHTML = '<div class="vacio-tabla">Cargando ' + y + '…</div>';
+    document.getElementById('graficoMeses').innerHTML = '<div class="vacio-tabla">Cargando ' + (y === 'resumen' ? 'resumen año a año' : y) + '…</div>';
     cargarGrafico();
   }
   async function cargarGrafico() {
     const pedido = anioSel;
     try {
-      const r = await fetch('/admin/api/reservas-mensuales?anio=' + pedido);
+      const url = pedido === 'resumen' ? '/admin/api/reservas-anuales' : '/admin/api/reservas-mensuales?anio=' + pedido;
+      const r = await fetch(url);
       if (!r.ok) return;
       const d = await r.json();
       // El servidor dice desde qué año hay Libro; si difiere, redibuja las pestañas.
       if (d.anioInicio && d.anioInicio !== anioInicio) { anioInicio = d.anioInicio; pintarAniosTabs(); }
-      if (pedido !== anioSel) return; // el usuario cambió de año mientras cargaba
-      pintarGrafico(d);
+      if (pedido !== anioSel) return; // el usuario cambió de pestaña mientras cargaba
+      if (pedido === 'resumen') pintarResumenAnual(d); else pintarGrafico(d);
     } catch (_) {}
+  }
+  function pintarResumenAnual(d) {
+    const cont = document.getElementById('graficoMeses'); if (!cont) return;
+    const anios = d.anios || [];
+    const vals = anios.map((a) => a.noches).filter((v) => v != null);
+    const max = Math.max(4, ...vals);
+    const W = 960, H = 280, padL = 56, padR = 14, padT = 26, padB = 52;
+    const cw = W - padL - padR, ch = H - padT - padB, bw = cw / Math.max(1, anios.length);
+    let g = '';
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + ch - (ch * i / 4), v = Math.round(max * i / 4);
+      g += `<line class="gl" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text class="ax" x="${padL - 8}" y="${y + 4}" text-anchor="end">${miles(v)}</text>`;
+    }
+    let tot = 0, totBot = 0, mejor = null, pendientes = 0;
+    anios.forEach((a, i) => {
+      const x = padL + i * bw + bw * 0.2, w = bw * 0.6, cx = x + w / 2;
+      if (a.noches != null) {
+        tot += a.noches;
+        if (!mejor || a.noches > mejor.v) mejor = { v: a.noches, anio: a.anio };
+        const h = Math.max(2, ch * (a.noches / max)), y = padT + ch - h;
+        g += `<rect class="bar${a.esActual ? ' act' : ''}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>`;
+        g += `<text class="val" x="${cx}" y="${y - 7}" text-anchor="middle">${miles(a.noches)}</text>`;
+      } else {
+        g += `<rect class="bar fut" x="${x}" y="${padT + ch - 5}" width="${w}" height="5" rx="2.5"/>`;
+      }
+      if (a.mesesPendientes && !a.esActual && a.anio < d.anioActual) pendientes++;
+      totBot += a.reservasBot || 0;
+      g += `<text class="ax mes${a.esActual ? ' act' : ''}" x="${cx}" y="${H - padB + 20}" text-anchor="middle">${a.anio}</text>`;
+      if (a.reservasBot) g += `<text class="bot" x="${cx}" y="${H - padB + 38}" text-anchor="middle">🤖 ${a.reservasBot}</text>`;
+    });
+    const filas = anios.map((a, i) => {
+      const prev = anios[i - 1];
+      let variacion = '—';
+      if (a.noches != null && prev && prev.noches) {
+        const p = Math.round(((a.noches - prev.noches) / prev.noches) * 100);
+        variacion = `<span style="color:${p >= 0 ? 'var(--verde)' : 'var(--alerta)'};font-weight:700">${p > 0 ? '+' : ''}${p}%</span>`;
+      }
+      let nota = '';
+      if (a.esActual) nota = ' <span style="color:var(--gris);font-size:11px">(en curso)</span>';
+      else if (a.mesesPendientes) nota = ` <span style="color:var(--gris);font-size:11px">(${a.mesesConDato}/${a.mesesConDato + a.mesesPendientes} meses)</span>`;
+      return `<tr><td>${a.anio}${nota}</td><td>${a.noches != null ? miles(a.noches) : '—'}</td><td>${variacion}</td><td>${a.reservasBot || 0}</td></tr>`;
+    }).join('');
+    const aviso = pendientes ? `<p style="font-size:12px;color:var(--gris);margin:10px 0 0;">Algunos años aún se están cargando en caché; en unos minutos quedan completos.</p>` : '';
+    cont.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Noches reservadas por año">${g}</svg>
+      <div class="tabla-wrap" style="margin-top:14px;"><table class="reservas"><thead><tr><th>Año</th><th>Noches reservadas</th><th>vs. año anterior</th><th>🤖 Reservas del bot</th></tr></thead><tbody>${filas}</tbody></table></div>${aviso}`;
+    document.getElementById('tituloGrafico').textContent = 'Resumen';
+    document.getElementById('anioGrafico').textContent = 'año a año';
+    document.getElementById('lblActual').textContent = 'Año actual';
+    document.getElementById('lblTot').textContent = 'Noches (todos los años)';
+    document.getElementById('totNoches').textContent = miles(tot);
+    document.getElementById('lblMejor').textContent = 'Mejor año';
+    document.getElementById('mejorMes').textContent = mejor ? `${mejor.anio} · ${miles(mejor.v)}` : '—';
+    document.getElementById('totBot').textContent = miles(totBot);
   }
   function pintarGrafico(d) {
     const cont = document.getElementById('graficoMeses'); if (!cont) return;
@@ -628,7 +683,11 @@
       if (m.reservasBot) g += `<text class="bot" x="${cx}" y="${H - padB + 38}" text-anchor="middle">🤖 ${m.reservasBot}</text>`;
     });
     cont.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Noches reservadas por mes ${d.anio}">${g}</svg>`;
+    document.getElementById('tituloGrafico').textContent = 'Reservas mensuales';
     document.getElementById('anioGrafico').textContent = d.anio;
+    document.getElementById('lblActual').textContent = 'Mes actual';
+    document.getElementById('lblTot').textContent = 'Noches en el año';
+    document.getElementById('lblMejor').textContent = 'Mejor mes';
     document.getElementById('totNoches').textContent = miles(totNoches);
     document.getElementById('totBot').textContent = miles(totBot);
     document.getElementById('mejorMes').textContent = mejor ? `${nombres[mejor.i]} · ${miles(mejor.v)}` : '—';

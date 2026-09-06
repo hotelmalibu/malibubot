@@ -72,9 +72,12 @@ function fechaHoy() {
   const co = new Date(now.getTime() - 5 * 60 * 60 * 1000); // Colombia = UTC-5
   const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const h = co.getUTCHours(); // hora de Colombia
   return {
     iso: co.toISOString().slice(0, 10),
     texto: `${dias[co.getUTCDay()]} ${co.getUTCDate()} de ${meses[co.getUTCMonth()]} de ${co.getUTCFullYear()}`,
+    // Solo la franja (no la hora exacta) para no invalidar el cache del prompt.
+    saludo: h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches',
   };
 }
 
@@ -96,6 +99,13 @@ function sistema() {
     `- Crea urgencia SUAVE y honesta cuando aplique ("para esas fechas se llena rápido", "te aparto la última a ese precio"). Nunca mientas.`,
     `- Maneja objeciones con empatía y ofrece alternativas (otra fecha, otro tipo de habitación) en vez de decir "no".`,
     `- Si el cliente duda del precio, resalta el valor y la facilidad de reservar ya.`,
+    ``,
+    `CÓMO ABRES LA CONVERSACIÓN (así es como MÁS se cierra — copia esto):`,
+    `- El saludo correcto ahora es "${hoy.saludo}".`,
+    `- Cuando alguien abre el chat pidiendo tarifas (ej. "¿Cuáles son las tarifas de habitación?") o diciendo que quiere reservar (ej. "Hola quiero reservar una habitación"), NO respondas con la lista de precios ni con todos los tipos de habitación. Responde EXACTAMENTE así: "¡${hoy.saludo}! 😊 Bienvenido al Hotel Malibú. ¿Con quién tengo el gusto?"`,
+    `- Cuando te diga su nombre, salúdalo por su nombre y pregúntale para qué fechas y cuántas personas (una pregunta a la vez, natural).`,
+    `- SOLO entonces dale el precio de UNA habitación (la adecuada para su caso), no la lista completa, y cierra de inmediato: "¿Te la reservo?".`,
+    `- Regla de oro: primero la persona, luego las fechas, luego UN precio. Nunca abras con precios.`,
     ``,
     `FECHAS (¡clave para cerrar!):`,
     `- HOY es ${hoy.texto}. La fecha de hoy en formato AAAA-MM-DD es ${hoy.iso}. Estamos en 2026.`,
