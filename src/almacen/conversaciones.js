@@ -55,14 +55,20 @@ function detectarCanal(texto) {
   const t = normTexto(texto);
   if (t.includes('google ads') || t.includes('anuncio de google')) return 'Google Ads';
   if (t.includes('google maps') || /\bmaps\b/.test(t)) return 'Google Maps';
+  // "Hola vengo de google y quiero reservar..." (anuncio de Google, sin "maps")
+  if (t.includes('vengo de google')) return 'Google Ads';
   if (t.includes('instagram')) return 'Instagram';
   if (t.includes('tiktok')) return 'TikTok';
   if (t.includes('facebook')) return 'Facebook';
   if (t.includes('qr') || t.includes('escane')) return 'QR físico';
   if (t.includes('pagina web') || t.includes('sitio web')) return 'Sitio web';
-  // Pregunta sugerida del anuncio Click-to-WhatsApp de Facebook/Meta:
-  // "¿Cuáles son las tarifas de habitación?"
+  // Anuncio Click-to-WhatsApp de Facebook/Meta: su pregunta sugerida
+  // "¿Cuáles son las tarifas de habitación?" o su mensaje de bienvenida
+  // "Hola 👋 Quiero reservar una habitación en el Hotel Malibú".
   if (t.includes('cuales son las tarifas')) return 'Anuncio Facebook';
+  if (t.includes('quiero reservar una habitacion en el hotel malibu')) return 'Anuncio Facebook';
+  // Anuncio de Google Ads: "Hola quiero reservar una habitación" (tal cual).
+  if (/^(hola\W*)?quiero reservar una habitacion\b/.test(t)) return 'Google Ads';
   return '';
 }
 
