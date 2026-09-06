@@ -64,15 +64,21 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
 
   var hoja = ss.getSheetByName(nombreMes);
   if (!hoja) {
+    // Tolerante: ignora mayusculas, tildes, espacios y guiones
+    // ("julio 2026", " JULIO2026", "Julio-2026", "JULIÓ 2026" ...).
+    var quiero = normalizar(MESES[fecha.getMonth()]);
+    var anioStr = String(fecha.getFullYear());
     var hojas = ss.getSheets();
     for (var i = 0; i < hojas.length; i++) {
-      var n = hojas[i].getName().toUpperCase();
-      if (n.indexOf(MESES[fecha.getMonth()]) === 0 && n.indexOf(String(fecha.getFullYear())) > -1) {
-        hoja = hojas[i]; break;
-      }
+      var n = normalizar(hojas[i].getName());
+      if (n.indexOf(quiero) === 0 && n.indexOf(anioStr) > -1) { hoja = hojas[i]; break; }
     }
   }
-  if (!hoja) return { ok: false, error: 'no encontre la pestana ' + nombreMes };
+  if (!hoja) {
+    // Devuelve los nombres reales de las pestanas para diagnosticar.
+    var nombres = ss.getSheets().map(function (h) { return h.getName(); });
+    return { ok: false, error: 'no encontre la pestana ' + nombreMes, pestanas: nombres };
+  }
 
   var rangoDatos = hoja.getDataRange();
   var valores = rangoDatos.getValues();
@@ -156,6 +162,16 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
     diasDelMes: diasArr.length,
     colores: histo
   };
+}
+
+// Quita tildes, espacios, guiones y pasa a mayusculas para comparar nombres
+// de pestanas sin que un espacio o una tilde de mas rompan la busqueda.
+function normalizar(s) {
+  return String(s || '')
+    .toUpperCase()
+    .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E').replace(/[ÍÌÏÎ]/g, 'I')
+    .replace(/[ÓÒÖÔ]/g, 'O').replace(/[ÚÙÜÛ]/g, 'U').replace(/Ñ/g, 'N')
+    .replace(/[\s\-_.]+/g, '');
 }
 
 // A prueba de tonos: SOLO blanco = libre, rojo = salida, morado/magenta =
