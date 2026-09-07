@@ -62,6 +62,24 @@ export async function enviarPlantilla(destino, nombre, idioma = 'es', parametros
 }
 
 /**
+ * Rechaza una llamada entrante de WhatsApp (evento "calls" con event=connect),
+ * para que el cliente no quede timbrando: enseguida se le manda el numero al
+ * que si puede llamar.
+ * @param {string} callId  id de la llamada (wacid...).
+ */
+export async function rechazarLlamada(callId) {
+  const url = `${config.whatsapp.graphBase}/${config.whatsapp.graphVersion}/${config.whatsapp.phoneNumberId}/calls`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${config.whatsapp.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', call_id: callId, action: 'reject' }),
+  });
+  const datos = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(`Graph API respondio ${resp.status}: ${JSON.stringify(datos)}`);
+  return datos;
+}
+
+/**
  * Marca un mensaje como leido (los dos ticks azules). Opcional, mejora la UX.
  * @param {string} messageId  id del mensaje entrante (wamid...).
  */

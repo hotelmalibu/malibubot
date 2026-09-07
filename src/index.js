@@ -15,8 +15,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
-import { parsearMensajes } from './whatsapp/recibir.js';
+import { parsearMensajes, parsearLlamadas } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
+import { atenderLlamada } from './whatsapp/llamadas.js';
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes } from './almacen/db.js';
@@ -90,6 +91,12 @@ app.post('/webhook/whatsapp', async (req, res) => {
 
   // 3) Procesar.
   try {
+    // Intentos de LLAMADA: se rechazan y se le manda el numero para llamar.
+    for (const ll of parsearLlamadas(req.body)) {
+      console.log(`[llamada] ${ll.nombre || ll.from} intentó llamar (${ll.callId})`);
+      await atenderLlamada(ll);
+    }
+
     const mensajes = parsearMensajes(req.body);
     for (const m of mensajes) {
       console.log(`[msg] de ${m.nombre || m.from} (${m.tipo}): ${m.texto}`);

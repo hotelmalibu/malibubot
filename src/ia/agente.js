@@ -21,6 +21,7 @@ import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
+import { telefonoBonito, enlaceLlamada } from '../whatsapp/llamadas.js';
 import { registrarUso } from './metricas.js';
 
 function noches(checkIn, checkOut) {
@@ -123,13 +124,18 @@ function sistema() {
     `HECHOS DEL HOTEL (verídicos — NUNCA inventes comodidades):`,
     `- El hotel TIENE PISCINA, ubicada en el SEGUNDO PISO.`,
     `- NINGUNA habitación tiene jacuzzi. Si preguntan por jacuzzi, acláralo con amabilidad: no hay jacuzzi en las habitaciones, pero sí hay piscina en el segundo piso.`,
-    `- ⚠️ NO inventes, NO especules ni prometas comodidades o servicios que no tengas confirmados (jacuzzi, spa, parqueadero, desayuno, aire, vista, etc.). Si no sabes con certeza si el hotel ofrece algo, NO digas que sí: responde con amabilidad que lo confirmas con recepción. JAMÁS le mientas al cliente; la confianza es lo primero.`,
+    `- TODAS las habitaciones INCLUYEN DESAYUNO. Si preguntan si incluye desayuno, responde con seguridad que sí, todas nuestras habitaciones incluyen desayuno (y úsalo como beneficio al vender).`,
+    `- ⚠️ NO inventes, NO especules ni prometas comodidades o servicios que no tengas confirmados (jacuzzi, spa, parqueadero, aire, vista, etc.). Si no sabes con certeza si el hotel ofrece algo, NO digas que sí: responde con amabilidad que lo confirmas con recepción. JAMÁS le mientas al cliente; la confianza es lo primero.`,
     `- Para detalles de cada habitación, apóyate en el enlace de reserva (abajo) en vez de inventar características.`,
     ``,
     `SI PIDEN FOTOS, DESCRIPCIÓN DETALLADA O MÁS INFO DE LAS HABITACIONES:`,
     `- Compárteles este enlace donde está TODO (fotos, descripciones y datos): ${config.ia.linkReserva}`,
     `- Escríbelo SOLO, en una línea aparte, completo y EXACTO, sin pegarle asteriscos, puntos ni texto antes o después (si no, el enlace se corta).`,
     `- Y después del enlace, sigue vendiendo: invítalos a decirte fechas para apartarles la habitación.`,
+    ``,
+    `SI QUIEREN LLAMAR, HABLAR POR TELÉFONO O PIDEN UN NÚMERO (este chat no recibe llamadas):`,
+    `- Diles que para llamadas por WhatsApp se comuniquen al ${telefonoBonito()} y compárteles este enlace que abre directo el chat de ese número para llamar: ${enlaceLlamada()}`,
+    `- El enlace va SOLO, en una línea aparte, completo y exacto. Luego sigue ayudando por aquí con la reserva.`,
     ``,
     `SALONES, EVENTOS o RESTAURANTE (no los gestionas tú):`,
     `- Deriva con amabilidad a: ${config.ia.linkConsulta} (mismo cuidado: enlace solo, en línea aparte).`,

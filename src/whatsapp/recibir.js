@@ -36,3 +36,27 @@ export function parsearMensajes(body) {
 
   return resultado;
 }
+
+/**
+ * Extrae los intentos de LLAMADA (campo "calls" del webhook, si Meta tiene
+ * activadas las llamadas para el numero). Solo interesa event=connect
+ * (alguien esta llamando); terminate y demas se ignoran.
+ * @returns {Array<{from:string, callId:string, event:string, nombre:string}>}
+ */
+export function parsearLlamadas(body) {
+  const resultado = [];
+  if (!body || body.object !== 'whatsapp_business_account') return resultado;
+  for (const entry of body.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change.value || {};
+      const llamadas = value.calls || [];
+      if (!llamadas.length) continue;
+      const nombre = value.contacts?.[0]?.profile?.name || '';
+      for (const c of llamadas) {
+        if (c.event !== 'connect') continue;
+        resultado.push({ from: c.from || '', callId: c.id || '', event: c.event, nombre });
+      }
+    }
+  }
+  return resultado;
+}

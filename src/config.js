@@ -28,6 +28,9 @@ export const config = {
     habitaciones: parseInt(process.env.HOTEL_HABITACIONES || '85', 10),
     // Primer anio con Libro de Reservas en el Sheet (pestanas del seguimiento anual).
     anioInicio: parseInt(process.env.HISTORICO_DESDE || '2018', 10),
+    // Numero (solo digitos, con indicativo) al que se remiten las LLAMADAS por
+    // WhatsApp: el numero del bot es de la API y no atiende llamadas.
+    telefonoLlamadas: (process.env.TELEFONO_LLAMADAS || '573145933714').replace(/\D/g, ''),
   },
 
   // Conexion con el Libro de Reservas (Google Sheet) via un Apps Script Web App
