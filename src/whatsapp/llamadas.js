@@ -27,13 +27,12 @@ export function enlaceLlamada(digitos = config.hotel.telefonoLlamadas) {
   return `https://wa.me/${digitos.replace(/\D/g, '')}`;
 }
 
-/** Mensaje que recibe quien intenta llamar (o pide un telefono). */
+/** Mensaje EXACTO (pedido por el hotel) que recibe quien intenta llamar. */
 export function mensajeLlamada() {
   return (
     `📞 Para llamadas por WhatsApp comunícate con nosotros al ${telefonoBonito()}. ` +
     `Toca este enlace y te abre el chat de ese número para llamar de una vez:\n` +
-    enlaceLlamada() +
-    `\n\nSi prefieres, escríbeme por aquí y te ayudo con tu reserva al instante. 😊`
+    enlaceLlamada()
   );
 }
 
