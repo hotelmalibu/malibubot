@@ -17,7 +17,13 @@ import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes, parsearLlamadas } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
-import { atenderLlamada } from './whatsapp/llamadas.js';
+import { atenderLlamada, mensajeLlamada } from './whatsapp/llamadas.js';
+
+// Mensajes que NO son texto (llamadas que llegan como "unsupported", audios,
+// fotos...): se responde con el numero para llamar, maximo una vez por hora
+// por cliente para no repetirlo si manda varias cosas seguidas.
+const avisoNoTexto = new Map();
+const AVISO_NO_TEXTO_MS = 60 * 60 * 1000;
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes } from './almacen/db.js';
@@ -118,17 +124,24 @@ app.post('/webhook/whatsapp', async (req, res) => {
         continue;
       }
 
-      // Modo bot -> responde la IA (Claude). Respaldo si no hay IA disponible.
-      let respuesta = null;
-      if (m.tipo === 'text') {
-        respuesta = await responderIA(m.from);
+      // Lo que no es texto (una llamada llega como tipo "unsupported"; también
+      // audios, fotos, stickers): SOLO se responde con el numero de llamadas.
+      if (m.tipo !== 'text') {
+        const ultimo = avisoNoTexto.get(m.from) || 0;
+        if (Date.now() - ultimo < AVISO_NO_TEXTO_MS) continue;
+        avisoNoTexto.set(m.from, Date.now());
+        const aviso = mensajeLlamada();
+        await enviarTexto(m.from, aviso);
+        store.registrarSaliente({ waId: m.from, autor: 'bot', texto: aviso });
+        continue;
       }
+
+      // Modo bot -> responde la IA (Claude). Respaldo si no hay IA disponible.
+      let respuesta = await responderIA(m.from);
       if (!respuesta) {
         respuesta =
-          m.tipo === 'text'
-            ? 'Gracias por escribir al Hotel Malibú. En un momento te atendemos. ' +
-              'Para reservas de habitaciones cuéntame tus fechas y número de personas.'
-            : 'Por ahora solo puedo atender mensajes de texto. Escríbeme tu consulta y con gusto te ayudo.';
+          'Gracias por escribir al Hotel Malibú. En un momento te atendemos. ' +
+          'Para reservas de habitaciones cuéntame tus fechas y número de personas.';
       }
 
       await enviarTexto(m.from, respuesta);
