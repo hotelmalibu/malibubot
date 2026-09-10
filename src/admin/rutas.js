@@ -44,7 +44,19 @@ import {
   ponerCookieSesion,
   borrarCookieSesion,
   haySesion,
+  sesionActual,
 } from './sesion.js';
+import {
+  ipDe,
+  bloqueoRestante,
+  registrarFallo,
+  registrarExito,
+  totpActivo,
+  verificarTotp,
+  nuevoSecretoTotp,
+  ultimosIntentos,
+  ipsBloqueadas,
+} from './seguridad.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML = readFileSync(join(__dirname, 'panel.html'), 'utf8');
@@ -53,6 +65,10 @@ const HTML = readFileSync(join(__dirname, 'panel.html'), 'utf8');
 const logoMatch = HTML.match(/src="(data:image\/png;base64,[^"]+)"/);
 const LOGO = logoMatch ? logoMatch[1] : '';
 const LOGIN_HTML = readFileSync(join(__dirname, 'login.html'), 'utf8').replace(
+  '__LOGO_DATA_URI__',
+  LOGO
+);
+const SEGURIDAD_HTML = readFileSync(join(__dirname, 'seguridad.html'), 'utf8').replace(
   '__LOGO_DATA_URI__',
   LOGO
 );
@@ -67,15 +83,41 @@ loginRouter.get('/login', (req, res) => {
   res.type('html').send(LOGIN_HTML);
 });
 
-loginRouter.post('/login', (req, res) => {
+loginRouter.get('/login/estado', (_req, res) => {
+  res.json({ ok: true, requiereCodigo: totpActivo() });
+});
+
+loginRouter.post('/login', async (req, res) => {
   if (!config.admin.password) {
     return res.status(503).json({ ok: false, error: 'Panel deshabilitado (falta ADMIN_PASSWORD).' });
   }
-  const usuario = (req.body?.usuario || '').trim();
-  const clave = req.body?.clave || '';
+  const ip = ipDe(req);
+  const espera = bloqueoRestante(ip);
+  if (espera) {
+    return res.status(429).json({
+      ok: false,
+      bloqueado: true,
+      error: `Demasiados intentos fallidos. Espera ${Math.ceil(espera / 60)} min e intenta de nuevo.`,
+    });
+  }
+
+  const usuario = String(req.body?.usuario || '').trim().slice(0, 60);
+  const clave = String(req.body?.clave || '').slice(0, 200);
+  const codigo = String(req.body?.codigo || '').trim();
+
   if (!validarCredenciales(usuario, clave)) {
+    await registrarFallo(ip, usuario, 'clave');
     return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos.' });
   }
+  if (totpActivo()) {
+    if (!codigo) return res.status(401).json({ ok: false, requiereCodigo: true, error: 'Escribe el código de 6 dígitos de tu app de autenticación.' });
+    if (!verificarTotp(config.admin.totpSecret, codigo)) {
+      await registrarFallo(ip, usuario, 'codigo');
+      return res.status(401).json({ ok: false, requiereCodigo: true, error: 'Código incorrecto o vencido. Revisa la app e intenta de nuevo.' });
+    }
+  }
+  registrarExito(ip, usuario);
+  console.log(`[seguridad] Ingreso correcto de "${usuario}" desde ${ip}.`);
   ponerCookieSesion(req, res, crearToken(usuario));
   res.json({ ok: true });
 });
@@ -93,6 +135,30 @@ export const adminRouter = Router();
 // Consola
 adminRouter.get('/', (_req, res) => {
   res.type('html').send(HTML);
+});
+
+// -------- Seguridad del panel (estado, bitácora, activar 2FA) --------
+adminRouter.get('/api/seguridad', (req, res) => {
+  res.json({
+    ok: true,
+    usuario: sesionActual(req)?.u || '',
+    dosFactores: totpActivo(),
+    usuarioFijo: !!config.admin.usuario,
+    secretoPropio: !!config.admin.secretoSesion,
+    bloqueadas: ipsBloqueadas(),
+    intentos: ultimosIntentos(),
+  });
+});
+
+// Genera un secreto nuevo para 2FA. NO lo activa: el dueño lo pega en Render
+// como ADMIN_TOTP_SECRET (así nadie puede activarlo/cambiarlo solo con la sesión).
+adminRouter.get('/api/seguridad/totp/nuevo', (req, res) => {
+  res.json({ ok: true, ...nuevoSecretoTotp(sesionActual(req)?.u || 'admin') });
+});
+
+// Página guiada para activar el segundo factor (QR + clave manual).
+adminRouter.get('/seguridad', (_req, res) => {
+  res.type('html').send(SEGURIDAD_HTML);
 });
 
 // -------- Estadisticas del dashboard --------
@@ -234,6 +300,51 @@ adminRouter.get('/api/reservas-anuales', (_req, res) => {
     });
   }
   res.json({ ok: true, anioActual, anioInicio: config.hotel.anioInicio, anios });
+});
+
+// -------- Promedio mensual de los años cargados (pestaña "Promedio") --------
+// Para cada mes, promedia las noches del Libro de todos los años con dato
+// (desde anioInicio). Del año en curso solo entran los meses ya cerrados.
+// Lee SOLO de caché (instantáneo); lo que falte se pide en segundo plano.
+adminRouter.get('/api/reservas-promedio', (_req, res) => {
+  const ahora = new Date();
+  const anioActual = ahora.getUTCFullYear();
+  const mesActual = ahora.getUTCMonth(); // 0-11
+  const nochesDe = (a, m) => {
+    const mm = String(m + 1).padStart(2, '0');
+    const ult = new Date(Date.UTC(a, m + 1, 0)).getUTCDate();
+    const desde = `${a}-${mm}-01`;
+    const d = ocupacionEnCache(desde, desde, `${a}-${mm}-${String(ult).padStart(2, '0')}`);
+    return d ? (d.nochesReservadasRango ?? d.nochesReservadasMes ?? null) : null;
+  };
+  const meses = [];
+  const aniosUsados = new Set();
+  for (let m = 0; m < 12; m++) {
+    const valores = [];
+    for (let a = config.hotel.anioInicio; a <= anioActual; a++) {
+      if (a === anioActual && m >= mesActual) continue; // mes en curso o futuro: no promedia
+      const v = nochesDe(a, m);
+      if (v != null) { valores.push({ anio: a, noches: v }); aniosUsados.add(a); }
+    }
+    const suma = valores.reduce((s, x) => s + x.noches, 0);
+    const mejor = valores.reduce((b, x) => (!b || x.noches > b.noches ? x : b), null);
+    meses.push({
+      mes: m + 1,
+      promedio: valores.length ? Math.round(suma / valores.length) : null,
+      anios: valores.length,
+      mejorAnio: mejor ? mejor.anio : null,
+      mejorNoches: mejor ? mejor.noches : null,
+      actual: m <= mesActual ? nochesDe(anioActual, m) : null, // año en curso, para comparar
+    });
+  }
+  res.json({
+    ok: true,
+    anioActual,
+    mesActual: mesActual + 1,
+    anioInicio: config.hotel.anioInicio,
+    anios: [...aniosUsados].sort(),
+    meses,
+  });
 });
 
 // -------- Monitor de tokens (uso y costo de la IA) --------

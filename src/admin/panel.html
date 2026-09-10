@@ -337,6 +337,7 @@
     </nav>
     <div class="acciones-top">
       <div class="estado"><span class="punto"></span> En vivo</div>
+      <a class="salir" href="/admin/seguridad" title="Seguridad del inicio de sesión">🔒 Seguridad</a>
       <a class="salir" href="/admin/logout">Salir</a>
     </div>
   </header>
@@ -635,25 +636,84 @@
     let html = '';
     for (let y = anioInicio; y <= fin; y++) html += `<button type="button" class="${y === anioSel ? 'activo' : ''}" onclick="elegirAnio(${y})">${y}</button>`;
     html += `<button type="button" class="${anioSel === 'resumen' ? 'activo' : ''}" onclick="elegirAnio('resumen')" style="margin-left:6px;">Resumen</button>`;
+    html += `<button type="button" class="${anioSel === 'promedio' ? 'activo' : ''}" onclick="elegirAnio('promedio')" title="Promedio mensual de todos los años cargados">Promedio</button>`;
     cont.innerHTML = html;
   }
   function elegirAnio(y) {
     anioSel = y; pintarAniosTabs();
-    document.getElementById('graficoMeses').innerHTML = '<div class="vacio-tabla">Cargando ' + (y === 'resumen' ? 'resumen año a año' : y) + '…</div>';
+    document.getElementById('graficoMeses').innerHTML = '<div class="vacio-tabla">Cargando ' + (y === 'resumen' ? 'resumen año a año' : y === 'promedio' ? 'promedio mensual' : y) + '…</div>';
     cargarGrafico();
   }
   async function cargarGrafico() {
     const pedido = anioSel;
     try {
-      const url = pedido === 'resumen' ? '/admin/api/reservas-anuales' : '/admin/api/reservas-mensuales?anio=' + pedido;
+      const url = pedido === 'resumen' ? '/admin/api/reservas-anuales'
+        : pedido === 'promedio' ? '/admin/api/reservas-promedio'
+        : '/admin/api/reservas-mensuales?anio=' + pedido;
       const r = await fetch(url);
       if (!r.ok) return;
       const d = await r.json();
       // El servidor dice desde qué año hay Libro; si difiere, redibuja las pestañas.
       if (d.anioInicio && d.anioInicio !== anioInicio) { anioInicio = d.anioInicio; pintarAniosTabs(); }
       if (pedido !== anioSel) return; // el usuario cambió de pestaña mientras cargaba
-      if (pedido === 'resumen') pintarResumenAnual(d); else pintarGrafico(d);
+      if (pedido === 'resumen') pintarResumenAnual(d); else if (pedido === 'promedio') pintarPromedio(d); else pintarGrafico(d);
     } catch (_) {}
+  }
+  // Promedio mensual de todos los años cargados; encima, una marca con el año actual.
+  function pintarPromedio(d) {
+    const cont = document.getElementById('graficoMeses'); if (!cont) return;
+    const meses = d.meses || [];
+    const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const vals = meses.flatMap((m) => [m.promedio, m.actual]).filter((v) => v != null);
+    const max = Math.max(4, ...vals);
+    const W = 960, H = 280, padL = 48, padR = 14, padT = 26, padB = 52;
+    const cw = W - padL - padR, ch = H - padT - padB, bw = cw / 12;
+    let g = '';
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + ch - (ch * i / 4), v = Math.round(max * i / 4);
+      g += `<line class="gl" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text class="ax" x="${padL - 8}" y="${y + 4}" text-anchor="end">${miles(v)}</text>`;
+    }
+    let tot = 0, mejor = null, conDato = 0;
+    meses.forEach((m, i) => {
+      const x = padL + i * bw + bw * 0.2, w = bw * 0.6, cx = x + w / 2;
+      if (m.promedio != null) {
+        tot += m.promedio; conDato++;
+        if (!mejor || m.promedio > mejor.v) mejor = { v: m.promedio, i };
+        const h = Math.max(2, ch * (m.promedio / max)), y = padT + ch - h;
+        g += `<rect class="bar" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"><title>Promedio ${nombres[i]}: ${miles(m.promedio)} noches (${m.anios} años). Mejor: ${m.mejorAnio} con ${miles(m.mejorNoches)}</title></rect>`;
+        g += `<text class="val" x="${cx}" y="${y - 7}" text-anchor="middle">${miles(m.promedio)}</text>`;
+      } else {
+        g += `<rect class="bar fut" x="${x}" y="${padT + ch - 5}" width="${w}" height="5" rx="2.5"/>`;
+      }
+      // Marca del año actual (línea gruesa) para comparar contra el promedio.
+      if (m.actual != null) {
+        const ya = padT + ch - ch * (m.actual / max);
+        const enCurso = m.mes === d.mesActual;
+        g += `<line x1="${x - 3}" x2="${x + w + 3}" y1="${ya}" y2="${ya}" stroke="var(--tinta)" stroke-width="3" stroke-linecap="round" ${enCurso ? 'stroke-dasharray="4 3"' : ''}><title>${d.anioActual} ${nombres[i]}: ${miles(m.actual)} noches${enCurso ? ' (mes en curso)' : ''}</title></line>`;
+      }
+      g += `<text class="ax mes" x="${cx}" y="${H - padB + 20}" text-anchor="middle">${nombres[i]}</text>`;
+      if (m.anios) g += `<text class="bot" x="${cx}" y="${H - padB + 38}" text-anchor="middle">${m.anios} años</text>`;
+    });
+    const filas = meses.map((m, i) => {
+      let dif = '—';
+      if (m.actual != null && m.promedio) {
+        const p = Math.round(((m.actual - m.promedio) / m.promedio) * 100);
+        dif = `<span style="color:${p >= 0 ? 'var(--verde)' : 'var(--alerta)'};font-weight:700">${p > 0 ? '+' : ''}${p}%</span>${m.mes === d.mesActual ? ' <span style="color:var(--gris);font-size:11px">(en curso)</span>' : ''}`;
+      }
+      return `<tr><td>${nombres[i]}</td><td>${m.promedio != null ? miles(m.promedio) : '—'}</td><td>${m.anios || 0}</td><td>${m.mejorAnio ? `${m.mejorAnio} · ${miles(m.mejorNoches)}` : '—'}</td><td>${m.actual != null ? miles(m.actual) : '—'}</td><td>${dif}</td></tr>`;
+    }).join('');
+    const anios = d.anios || [];
+    cont.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Promedio mensual de noches reservadas">${g}</svg>
+      <p style="font-size:12px;color:var(--gris);margin:6px 0 0;">Barras: promedio de ${anios.length ? anios[0] + '–' + anios[anios.length - 1] : 'los años cargados'} (del año en curso solo cuentan los meses cerrados). Línea negra: ${d.anioActual} mes a mes (punteada = mes en curso).</p>
+      <div class="tabla-wrap" style="margin-top:14px;"><table class="reservas"><thead><tr><th>Mes</th><th>Promedio noches</th><th>Años</th><th>Mejor año</th><th>${d.anioActual}</th><th>${d.anioActual} vs. promedio</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+    document.getElementById('tituloGrafico').textContent = 'Promedio mensual';
+    document.getElementById('anioGrafico').textContent = anios.length ? `${anios[0]}–${anios[anios.length - 1]}` : '';
+    document.getElementById('lblActual').textContent = `Línea: ${d.anioActual}`;
+    document.getElementById('lblTot').textContent = 'Promedio anual';
+    document.getElementById('totNoches').textContent = conDato ? miles(tot) : '—';
+    document.getElementById('lblMejor').textContent = 'Mejor mes (promedio)';
+    document.getElementById('mejorMes').textContent = mejor ? `${nombres[mejor.i]} · ${miles(mejor.v)}` : '—';
+    document.getElementById('totBot').textContent = anios.length ? `${anios.length} años` : '—';
   }
   function pintarResumenAnual(d) {
     const cont = document.getElementById('graficoMeses'); if (!cont) return;

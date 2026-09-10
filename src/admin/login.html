@@ -62,6 +62,11 @@
       <label for="clave">Contraseña</label>
       <input id="clave" name="clave" type="password" autocomplete="current-password" placeholder="••••••••" required />
 
+      <div id="paso2" style="display:none;">
+        <label for="codigo">Código de verificación (app de autenticación)</label>
+        <input id="codigo" name="codigo" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="123456" />
+      </div>
+
       <button class="btn" id="btn" type="submit">Ingresar</button>
       <div class="error" id="error"></div>
     </form>
@@ -73,6 +78,10 @@
   const form = document.getElementById('form');
   const err = document.getElementById('error');
   const btn = document.getElementById('btn');
+  const paso2 = document.getElementById('paso2');
+  const codigo = document.getElementById('codigo');
+  // Si el panel tiene 2FA activo, muestra el campo del código desde el inicio.
+  fetch('/admin/login/estado').then((r) => r.json()).then((d) => { if (d.requiereCodigo) paso2.style.display = 'block'; }).catch(() => {});
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.textContent = '';
@@ -84,12 +93,14 @@
         body: JSON.stringify({
           usuario: document.getElementById('usuario').value.trim(),
           clave: document.getElementById('clave').value,
+          codigo: codigo.value.trim(),
         }),
       });
       const data = await r.json().catch(() => ({}));
       if (data.ok) {
         window.location.href = '/admin';
       } else {
+        if (data.requiereCodigo) { paso2.style.display = 'block'; codigo.focus(); }
         err.textContent = data.error || 'Usuario o contraseña incorrectos.';
       }
     } catch (_) {

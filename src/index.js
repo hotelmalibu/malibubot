@@ -35,7 +35,7 @@ import { responderIA } from './ia/agente.js';
 import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
-import { requiereSesion } from './admin/sesion.js';
+import { requiereSesion, cabecerasSeguridad } from './admin/sesion.js';
 import { loginRouter, adminRouter } from './admin/rutas.js';
 
 const app = express();
@@ -67,7 +67,7 @@ app.get(['/privacidad', '/politica-de-privacidad', '/privacy'], (_req, res) => {
 
 // ---------- Consola de monitoreo ----------
 // Login/logout son publicos; el resto de /admin exige sesion.
-app.use('/admin', loginRouter);
+app.use('/admin', cabecerasSeguridad, loginRouter);
 app.use('/admin', requiereSesion, adminRouter);
 
 // ---------- Verificacion del webhook (Meta hace un GET) ----------

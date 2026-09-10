@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MALIBUBOT — Seguridad del panel</title>
+<style>
+  :root {
+    --tinta: #2c2f34; --tinta-2: #4a4e55; --oro: #b8873a; --oro-claro: #d9b978; --oro-profundo: #9c6f2b; --oro-suave: #f6eeda;
+    --arena: #faf7f0; --espuma: #ffffff; --linea: #ece6d8; --gris: #6b6f77; --gris-suave: #eeeae1; --alerta: #c05a3a; --alerta-suave: #f7e6de;
+    --verde: #2f8f5b; --verde-suave: #e4f2ea;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--arena); color: var(--tinta); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+  .cab { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .cab img { height: 44px; }
+  .cab h1 { font-size: 21px; margin: 0; }
+  .cab .sub { font-size: 12.5px; color: var(--gris); }
+  .volver { margin-left: auto; font-size: 13px; color: var(--tinta); text-decoration: none; border: 1px solid var(--linea); padding: 7px 13px; border-radius: 9px; background: var(--espuma); }
+  .tarjeta { background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 20px 22px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(44,47,52,.04), 0 10px 30px rgba(44,47,52,.06); }
+  .tarjeta h2 { font-size: 16px; margin: 0 0 10px; }
+  .estado { display: flex; flex-wrap: wrap; gap: 10px; }
+  .pill { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; background: var(--gris-suave); color: var(--gris); }
+  .pill.ok { background: var(--verde-suave); color: var(--verde); }
+  .pill.no { background: var(--alerta-suave); color: var(--alerta); }
+  ol { padding-left: 20px; line-height: 1.6; font-size: 14px; color: var(--tinta-2); }
+  .qr { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+  #qr { width: 180px; height: 180px; background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: 8px; }
+  .clave { font-family: ui-monospace, Consolas, monospace; font-size: 18px; letter-spacing: .12em; background: var(--oro-suave); color: var(--oro-profundo); padding: 10px 14px; border-radius: 10px; word-break: break-all; }
+  .btn { font-family: inherit; border: 1px solid var(--linea); background: var(--espuma); color: var(--tinta); padding: 9px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .btn.primario { background: var(--oro); color: #fff; border-color: var(--oro); }
+  code { background: var(--gris-suave); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--gris); padding: 8px 10px; border-bottom: 1px solid var(--linea); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--linea); }
+  .ok { color: var(--verde); font-weight: 700; } .fallo { color: var(--alerta); font-weight: 700; }
+  .nota { font-size: 12.5px; color: var(--gris); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cab">
+    <img src="__LOGO_DATA_URI__" alt="Hotel Malibú" />
+    <div><h1>Seguridad del panel</h1><div class="sub">MALIBUBOT · inicio de sesión</div></div>
+    <a class="volver" href="/admin">← Volver al panel</a>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Estado</h2>
+    <div class="estado" id="estado">Cargando…</div>
+    <p class="nota" style="margin:12px 0 0;">Protecciones activas siempre: bloqueo de 15 min tras 5 intentos fallidos desde una misma dirección, pausa tras cada fallo, sesión de 12 h que se cierra sola si cambias la contraseña, cookie protegida (HttpOnly, SameSite=Strict, Secure).</p>
+  </div>
+
+  <div class="tarjeta" id="tarjeta2fa">
+    <h2>Verificación en dos pasos (2FA)</h2>
+    <p class="nota" id="nota2fa">Con 2FA, además de la contraseña se pide un código de 6 dígitos que cambia cada 30 segundos en tu celular. Aunque alguien consiga la contraseña, no podrá entrar.</p>
+    <div id="pasos" style="display:none;">
+      <ol>
+        <li>Instala en tu celular <b>Google Authenticator</b> (o Microsoft Authenticator / Authy).</li>
+        <li>En la app toca <b>＋</b> y <b>escanea este código QR</b> (o elige "Introducir clave de configuración" y escribe la clave de abajo, con nombre "MALIBUBOT").</li>
+        <li>En Render → tu servicio → <b>Environment</b>, crea la variable <code>ADMIN_TOTP_SECRET</code> con la clave de abajo y guarda (el servicio se reinicia solo).</li>
+        <li>Desde ese momento el ingreso pedirá el código de la app. <b>Guarda la clave en un lugar seguro</b>: si pierdes el celular, con ella recuperas el acceso.</li>
+      </ol>
+      <div class="qr"><div id="qr"></div><div><div class="nota" style="margin-bottom:6px;">Clave (por si no puedes escanear):</div><div class="clave" id="clave"></div></div></div>
+      <p class="nota">Nadie puede activar ni cambiar el 2FA desde el panel: solo quien tenga acceso a Render. Si generas otra clave, la anterior deja de servir cuando la cambies en Render.</p>
+    </div>
+    <button class="btn primario" id="btnGenerar" onclick="generar()">Generar clave para activar 2FA</button>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Últimos intentos de ingreso</h2>
+    <div id="bloqueadas" class="nota"></div>
+    <table><thead><tr><th>Cuándo</th><th>Usuario</th><th>Dirección</th><th>Resultado</th></tr></thead><tbody id="intentos"></tbody></table>
+    <p class="nota" style="margin:10px 0 0;">Se conserva en memoria (se reinicia con cada despliegue).</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  async function cargar() {
+    const r = await fetch('/admin/api/seguridad'); const d = await r.json();
+    document.getElementById('estado').innerHTML =
+      `<span class="pill ${d.dosFactores ? 'ok' : 'no'}">${d.dosFactores ? '✓ 2FA activo' : '✗ 2FA no activo'}</span>` +
+      `<span class="pill ${d.usuarioFijo ? 'ok' : ''}">${d.usuarioFijo ? '✓ Usuario fijo (ADMIN_USUARIO)' : 'Usuario libre (recomendado: fijar ADMIN_USUARIO)'}</span>` +
+      `<span class="pill ${d.secretoPropio ? 'ok' : ''}">${d.secretoPropio ? '✓ Secreto de sesión propio' : 'Secreto derivado de la contraseña'}</span>` +
+      `<span class="pill">Sesión: ${esc(d.usuario)}</span>`;
+    if (d.dosFactores) {
+      document.getElementById('nota2fa').textContent = '2FA está activo: el ingreso pide el código de tu app. Si necesitas cambiar de celular, genera una clave nueva y actualízala en Render.';
+      document.getElementById('btnGenerar').textContent = 'Generar clave nueva (cambio de celular)';
+    }
+    document.getElementById('bloqueadas').textContent = d.bloqueadas.length
+      ? 'Bloqueadas ahora: ' + d.bloqueadas.map((b) => `${b.ip} (${Math.ceil(b.segundos / 60)} min)`).join(', ')
+      : 'No hay direcciones bloqueadas en este momento.';
+    document.getElementById('intentos').innerHTML = (d.intentos || []).map((i) =>
+      `<tr><td>${new Date(i.ts).toLocaleString('es-CO')}</td><td>${esc(i.usuario) || '—'}</td><td>${esc(i.ip)}</td><td class="${i.ok ? 'ok' : 'fallo'}">${i.ok ? 'Ingresó' : (i.motivo === 'codigo' ? 'Código incorrecto' : 'Clave incorrecta')}</td></tr>`
+    ).join('') || '<tr><td colspan="4" class="nota">Aún no hay intentos registrados desde el último despliegue.</td></tr>';
+  }
+  async function generar() {
+    const r = await fetch('/admin/api/seguridad/totp/nuevo'); const d = await r.json();
+    if (!d.ok) return alert('No se pudo generar.');
+    document.getElementById('pasos').style.display = 'block';
+    document.getElementById('clave').textContent = d.secreto;
+    const cont = document.getElementById('qr'); cont.innerHTML = '';
+    if (window.QRCode) new QRCode(cont, { text: d.uri, width: 164, height: 164, correctLevel: QRCode.CorrectLevel.M });
+    else cont.textContent = 'QR no disponible: usa la clave manual.';
+    document.getElementById('btnGenerar').style.display = 'none';
+  }
+  cargar();
+</script>
+</body>
+</html>

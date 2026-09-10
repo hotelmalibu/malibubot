@@ -124,6 +124,9 @@ export const config = {
     // Secreto para firmar la cookie de sesion. Si no se define, se deriva de
     // la contrasena (suficiente para este panel interno).
     secretoSesion: process.env.ADMIN_SESSION_SECRET || '',
+    // Segundo factor (2FA) opcional: secreto base32 de Google Authenticator.
+    // Se genera desde el panel en /admin/seguridad y se pega aqui (Render).
+    totpSecret: (process.env.ADMIN_TOTP_SECRET || '').replace(/[^A-Za-z2-7]/g, '').toUpperCase(),
   },
 };
 
