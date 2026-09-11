@@ -424,7 +424,10 @@
         <div id="chatContenido" style="display:none; flex:1; flex-direction:column; min-height:0;">
           <div class="chat-top">
             <div class="quien"><div class="n" id="chatNombre"></div><div class="num" id="chatNumero"></div></div>
-            <button class="btn" id="btnModo"></button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+              <button class="btn primario" id="btnConfirmar" onclick="abrirConfirmarDesdeChat()" title="Crea la reserva de este cliente y envía la confirmación (no necesita correo)">✅ Confirmar reserva</button>
+              <button class="btn" id="btnModo"></button>
+            </div>
           </div>
           <div class="mensajes" id="mensajes"></div>
           <div class="barra" id="barra"></div>
@@ -517,11 +520,12 @@
 
   <!-- Modal nueva reserva -->
   <dialog id="dlgReserva">
-    <div class="dlg-cab">Nueva reserva de habitación</div>
+    <div class="dlg-cab" id="dlgTitulo">Nueva reserva de habitación</div>
     <div class="dlg-cuerpo">
-      <div class="campo full"><label>Nombre del huésped</label><input type="text" id="rNombre" placeholder="Ej. María Gómez" /></div>
+      <div class="campo full"><label>Nombre completo del huésped</label><input type="text" id="rNombre" placeholder="Ej. María Gómez" /></div>
       <div class="campo"><label>Celular</label><input type="text" id="rCelular" placeholder="Ej. +57 300 123 4567" /></div>
       <div class="campo"><label>Personas</label><input type="number" id="rPersonas" min="1" placeholder="2" /></div>
+      <div class="campo full"><label>Correo (opcional)</label><input type="email" id="rEmail" placeholder="Si no tiene, déjalo vacío: se confirma por WhatsApp" /></div>
       <div class="campo full"><label>Tipo de habitación</label><select id="rTipo"></select></div>
       <div class="campo"><label>N° habitación (opcional)</label><input type="text" id="rHab" placeholder="Ej. 201" /></div>
       <div class="campo"><label>Estado del pago</label>
@@ -963,38 +967,69 @@
       <td><b>${c.reservaron}</b></td><td>${c.conversionPct == null ? '—' : `<b style="color:${c.conversionPct >= 10 ? 'var(--verde)' : 'var(--tinta)'}">${c.conversionPct}%</b>`}</td></tr>`).join('');
   }
 
-  function abrirDlgReserva() {
+  let reservaDesdeChat = null; // waId cuando el diálogo se abre desde el chat
+  function prepararDlgReserva() {
     document.getElementById('rNota').textContent = '';
-    ['rNombre','rCelular','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
+    ['rNombre','rCelular','rEmail','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
     document.getElementById('rEstado').value = 'pagado';
     const sel = document.getElementById('rTipo');
     sel.innerHTML = catalogoTipos.map((t) =>
       `<option value="${esc(t.nombre)}">${esc(t.nombre)}${t.precioDesde ? ' — desde ' + pesos(t.precioDesde) : ''}</option>`
     ).join('') || '<option value="">(sin catálogo)</option>';
+  }
+  function abrirDlgReserva() {
+    reservaDesdeChat = null;
+    prepararDlgReserva();
+    document.getElementById('dlgTitulo').textContent = 'Nueva reserva de habitación';
+    document.getElementById('rGuardar').textContent = 'Guardar reserva';
     document.getElementById('dlgReserva').showModal();
+  }
+  // Desde el chat: llena nombre y celular del cliente y, al guardar, confirma
+  // la reserva (correo a recepción + WhatsApp al cliente) aunque no tenga correo.
+  function abrirConfirmarDesdeChat() {
+    const c = convCache; if (!c) return;
+    reservaDesdeChat = c.waId;
+    prepararDlgReserva();
+    document.getElementById('dlgTitulo').textContent = 'Confirmar reserva de ' + (c.nombre || '+' + c.waId);
+    document.getElementById('rNombre').value = c.nombre || '';
+    document.getElementById('rCelular').value = '+' + c.waId;
+    document.getElementById('rEstado').value = 'pendiente_hotel';
+    document.getElementById('rPersonas').value = 2;
+    const hoy = new Date(), man = new Date(hoy); man.setDate(hoy.getDate() + 1);
+    document.getElementById('rIn').value = isoDe(hoy); document.getElementById('rOut').value = isoDe(man);
+    document.getElementById('rGuardar').textContent = '✅ Confirmar y avisar al cliente';
+    document.getElementById('dlgReserva').showModal();
+    document.getElementById('rNombre').focus();
   }
   async function guardarReserva() {
     const nota = document.getElementById('rNota'), btn = document.getElementById('rGuardar');
     const nombre = document.getElementById('rNombre').value.trim();
-    if (!nombre) { nota.textContent = 'Indica el nombre del huésped.'; return; }
+    if (!nombre) { nota.textContent = 'Indica el nombre completo del huésped.'; return; }
+    if (reservaDesdeChat && !document.getElementById('rIn').value) { nota.textContent = 'Indica la fecha de check-in.'; return; }
     btn.disabled = true; nota.textContent = '';
     try {
       const tipo = document.getElementById('rTipo').value;
       const num = document.getElementById('rHab').value.trim();
-      const r = await fetch('/admin/api/reservas', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre,
-          celular: document.getElementById('rCelular').value.trim(),
-          habitacion: tipo + (num ? ' · N° ' + num : ''),
-          personas: document.getElementById('rPersonas').value,
-          checkIn: document.getElementById('rIn').value,
-          checkOut: document.getElementById('rOut').value,
-          estado: document.getElementById('rEstado').value,
-        }),
-      });
+      const datos = {
+        nombre,
+        celular: document.getElementById('rCelular').value.trim(),
+        email: document.getElementById('rEmail').value.trim(),
+        habitacion: tipo + (num ? ' · N° ' + num : ''),
+        personas: document.getElementById('rPersonas').value,
+        checkIn: document.getElementById('rIn').value,
+        checkOut: document.getElementById('rOut').value,
+        estado: document.getElementById('rEstado').value,
+      };
+      const url = reservaDesdeChat
+        ? `/admin/api/conversaciones/${encodeURIComponent(reservaDesdeChat)}/confirmar-reserva`
+        : '/admin/api/reservas';
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       const d = await r.json();
-      if (d.ok) { document.getElementById('dlgReserva').close(); cargarReservas(); cargarEstadisticas(); cargarGrafico(); cargarMeta(); cargarEmbudo(); }
+      if (d.ok) {
+        document.getElementById('dlgReserva').close();
+        cargarReservas(); cargarEstadisticas(); cargarGrafico(); cargarMeta(); cargarEmbudo();
+        if (reservaDesdeChat) { await cargarConv(); await cargarLista(); }
+      }
       else nota.textContent = d.error || 'No se pudo guardar.';
     } catch (_) { nota.textContent = 'Error de red.'; }
     finally { btn.disabled = false; }
@@ -1174,8 +1209,12 @@
     const pegado = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 60;
     cont.innerHTML = c.mensajes.map(burbujaHTML).join('');
     if (pegado) cont.scrollTop = cont.scrollHeight;
-    pintarBarra();
+    // La barra de escritura SOLO se redibuja si cambió el chat o el modo: si
+    // no, el refresco automático (cada 4 s) borraba lo que estabas escribiendo.
+    const claveBarra = c.waId + '|' + c.modo;
+    if (barraPintada !== claveBarra) { barraPintada = claveBarra; pintarBarra(); }
   }
+  let barraPintada = '';
   function burbujaHTML(m) {
     const claseFila = m.autor === 'cliente' ? 'cliente' : 'salida ' + m.autor;
     const etiqueta = m.autor === 'bot' ? 'MALIBUBOT' : m.autor === 'humano' ? 'Tú (recepción)' : '';

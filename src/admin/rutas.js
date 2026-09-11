@@ -37,6 +37,7 @@ import {
   crearCheckoutDebug as crearCheckoutDebugRapyd,
 } from '../pagos/rapyd.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
+import { confirmarPago, confirmarReservaEnHotel } from '../pagos/confirmar.js';
 import { config } from '../config.js';
 import {
   validarCredenciales,
@@ -209,7 +210,9 @@ adminRouter.get('/api/reservas', (_req, res) => {
   // (Google Ads, Anuncio Facebook, Instagram...); las manuales, "Manual".
   const reservas = reservasStore.listar().map((r) => ({
     ...r,
-    canal: r.fuente === 'manual' ? 'Manual' : (store.obtener(r.waId)?.canal || 'Directo / Otro'),
+    canal: r.waId && store.obtener(r.waId)
+      ? (store.obtener(r.waId).canal || 'Directo / Otro')
+      : (r.fuente === 'manual' || r.fuente === 'humano' ? 'Manual' : 'Directo / Otro'),
     puedeRecordar: puedeRecordar(r), // recordatorio pre-llegada disponible (llega hoy o mañana)
   }));
   res.json({ ok: true, reservas });
@@ -364,6 +367,7 @@ adminRouter.post('/api/reservas', (req, res) => {
     waId: b.waId,
     celular: b.celular,
     nombre: b.nombre,
+    email: b.email,
     habitacion: b.habitacion,
     personas: b.personas,
     checkIn: b.checkIn,
@@ -433,6 +437,52 @@ adminRouter.post('/api/conversaciones/:waId/responder', async (req, res) => {
         '(el cliente no escribe hace mas de un dia).',
     });
   }
+});
+
+// Confirmar reserva DESDE EL CHAT (recepción, con control tomado): crea la
+// reserva ligada a la conversación y dispara lo mismo que el bot: correo a
+// recepción (y al cliente si dio correo) + WhatsApp de confirmación.
+// Sirve para clientes sin correo: basta nombre completo y celular.
+adminRouter.post('/api/conversaciones/:waId/confirmar-reserva', async (req, res) => {
+  const waId = req.params.waId;
+  const conv = store.obtener(waId);
+  if (!conv) return res.status(404).json({ ok: false, error: 'No existe esa conversación.' });
+  const b = req.body || {};
+  const nombre = String(b.nombre || '').trim();
+  const checkIn = String(b.checkIn || '').trim();
+  const checkOut = String(b.checkOut || '').trim();
+  if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe el nombre completo del huésped.' });
+  if (!checkIn) return res.status(400).json({ ok: false, error: 'Indica la fecha de check-in.' });
+  if (checkOut && checkOut <= checkIn) return res.status(400).json({ ok: false, error: 'El check-out debe ser después del check-in.' });
+  const estado = b.estado === 'pagado' ? 'pagado' : 'pendiente_hotel';
+
+  const habitacion = String(b.habitacion || '').trim();
+  const tipo = TIPOS_HABITACION.find((t) => habitacion.toLowerCase().startsWith(t.nombre.toLowerCase()));
+  const salida = checkOut || (() => { const d = new Date(checkIn + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  const noches = Math.max(1, Math.round((new Date(salida + 'T12:00:00Z') - new Date(checkIn + 'T12:00:00Z')) / 864e5));
+  const monto = b.monto ? Number(b.monto) : (tipo ? tipo.precioDesde * noches : null);
+
+  const reserva = reservasStore.crear({
+    waId,
+    celular: String(b.celular || '').trim() || waId,
+    nombre,
+    email: String(b.email || '').trim(),
+    habitacion: habitacion || (tipo ? tipo.nombre : ''),
+    personas: b.personas,
+    checkIn,
+    checkOut: salida,
+    monto,
+    estado: 'pendiente_hotel',
+    fuente: 'humano',
+  });
+  try {
+    if (estado === 'pagado') await confirmarPago(reserva);
+    else await confirmarReservaEnHotel(reserva);
+  } catch (err) {
+    console.error('[admin] Error confirmando reserva desde el chat:', err.message);
+  }
+  console.log(`[admin] Reserva ${reserva.id} confirmada desde el chat (${estado}) para ${nombre} · ${waId}`);
+  res.json({ ok: true, reserva: reservasStore.obtenerPorId(reserva.id), noches, sinCorreo: !reserva.email });
 });
 
 adminRouter.post('/api/conversaciones/:waId/modo', (req, res) => {

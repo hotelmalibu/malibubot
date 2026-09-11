@@ -19,7 +19,8 @@ export async function confirmarPago(reserva) {
   if (reserva.waId) {
     const msg =
       `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${reserva.habitacion}) quedó lista. ` +
-      `Te enviamos la confirmación${reserva.email ? ' a ' + reserva.email : ''}. ¡Te esperamos! 🌴`;
+      (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
+      `¡Te esperamos! 🌴`;
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });
   }
@@ -46,7 +47,8 @@ export async function confirmarReservaEnHotel(reserva) {
     const msg =
       `¡Tu reserva quedó confirmada! ✅ ${reserva.habitacion}${fechas}.\n` +
       `PAGO PENDIENTE: el valor${valor} se paga directamente en el hotel al llegar. ` +
-      `Te enviamos la confirmación${reserva.email ? ' a ' + reserva.email : ''}. ¡Te esperamos! 🌴`;
+      (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
+      `¡Te esperamos! 🌴`;
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });
   }
