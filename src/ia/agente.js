@@ -20,6 +20,7 @@ import { reservasStore } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
+import { cancelarReserva } from '../pagos/cancelar.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { telefonoBonito, enlaceLlamada } from '../whatsapp/llamadas.js';
 import { registrarUso } from './metricas.js';
@@ -153,6 +154,12 @@ function sistema() {
     `- En ambos casos la confirmación llega al correo del cliente y a recepción.`,
     `- No confirmes tú mismo un pago EN LÍNEA (eso es automático al aprobarse). El pago en el hotel sí lo confirma reservar_pago_en_hotel.`,
     ``,
+    `CANCELACIONES (si el cliente quiere cancelar una reserva):`,
+    `- Sé empático y NO discutas: primero ofrece UNA alternativa breve (cambiar la fecha en vez de cancelar). Si insiste, usa la herramienta cancelar_reserva de inmediato (puedes pasar el motivo si lo dijo).`,
+    `- La herramienta busca sus reservas vigentes por su número de WhatsApp. Si tiene varias, te las devuelve: pregúntale cuál (por fecha) y vuelve a llamarla con esa fecha de check-in.`,
+    `- Si no tiene reservas vigentes a ese número, díselo con amabilidad y pregúntale a nombre de quién o desde qué número se hizo; si no aparece, usa escalar_a_humano para que recepción lo revise.`,
+    `- La cancelación SOLO existe si usas la herramienta: ella avisa a recepción por correo y confirma al cliente. Nunca digas "ya quedó cancelada" sin haberla llamado.`,
+    ``,
     `FORMATO WhatsApp: nada de Markdown. Negrita con UN solo asterisco (*palabra*), nunca dobles. No empieces ni termines con asteriscos.`,
     ``,
     `REGLAS FIRMES:`,
@@ -211,6 +218,18 @@ const HERRAMIENTAS = [
         email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: si no tiene o no lo dio, omítelo y reserva igual con nombre y celular).' },
       },
       required: ['tipoHabitacion', 'checkIn', 'checkOut', 'nombre'],
+    },
+  },
+  {
+    name: 'cancelar_reserva',
+    description:
+      'Cancela una reserva VIGENTE del cliente (la busca por su número de WhatsApp). Úsala cuando el cliente pide cancelar. Avisa a recepción por correo y confirma al cliente por WhatsApp. Si el cliente tiene varias reservas, devuelve la lista para que preguntes cuál; entonces vuelve a llamarla con checkIn.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        motivo: { type: 'string', description: 'Motivo breve de la cancelación, si el cliente lo dijo (opcional).' },
+        checkIn: { type: 'string', description: 'Fecha de entrada AAAA-MM-DD de la reserva a cancelar (solo si el cliente tiene varias).' },
+      },
     },
   },
   {
@@ -359,6 +378,38 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
     } catch (err) {
       return { ok: false, error: 'No se pudo confirmar la reserva. Ofrece que recepción lo gestione.' };
     }
+  }
+
+  if (nombre === 'cancelar_reserva') {
+    const vigentes = reservasStore.vigentesDe(waId);
+    if (!vigentes.length) {
+      return {
+        ok: false,
+        error: 'Este número no tiene reservas vigentes. Pregunta a nombre de quién o desde qué número se hizo; si no aparece, escala a recepción.',
+      };
+    }
+    let objetivo = vigentes[0];
+    if (vigentes.length > 1) {
+      const pedida = (entrada?.checkIn || '').trim();
+      objetivo = pedida ? vigentes.find((r) => r.checkIn === pedida) : null;
+      if (!objetivo) {
+        return {
+          ok: false,
+          variasReservas: vigentes.map((r) => ({ checkIn: r.checkIn, checkOut: r.checkOut, habitacion: r.habitacion, estado: r.estado })),
+          instruccion: 'El cliente tiene varias reservas. Pregúntale cuál quiere cancelar (por fecha de entrada) y vuelve a llamar cancelar_reserva con ese checkIn.',
+        };
+      }
+    }
+    const r = await cancelarReserva(objetivo, { motivo: (entrada?.motivo || '').trim(), por: 'cliente' });
+    if (!r.ok) return { ok: false, error: r.error };
+    return {
+      ok: true,
+      reserva: { checkIn: objetivo.checkIn, checkOut: objetivo.checkOut, habitacion: objetivo.habitacion, estabaPagada: r.estadoPrevio === 'pagado' },
+      instruccion:
+        'La reserva quedó CANCELADA. Recepción ya recibió el aviso por correo y al cliente le llegó la confirmación por WhatsApp. Responde breve y cálido: confirma la cancelación' +
+        (r.estadoPrevio === 'pagado' ? ', dile que recepción revisará lo del pago y lo contactará,' : '') +
+        ' y déjale la puerta abierta para reservar de nuevo. No inventes políticas de devolución.',
+    };
   }
 
   if (nombre === 'escalar_a_humano') {

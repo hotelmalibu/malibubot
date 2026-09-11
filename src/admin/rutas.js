@@ -23,7 +23,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
-import { reservasStore, ESTADOS } from '../almacen/reservas.js';
+import { reservasStore, ESTADOS, ESTADOS_ANULADOS } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
@@ -38,6 +38,7 @@ import {
 } from '../pagos/rapyd.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { confirmarPago, confirmarReservaEnHotel } from '../pagos/confirmar.js';
+import { cancelarReserva } from '../pagos/cancelar.js';
 import { config } from '../config.js';
 import {
   validarCredenciales,
@@ -250,7 +251,7 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
   const anio = parseInt(req.query.anio || String(ahora.getUTCFullYear()), 10);
   const mesLimite =
     anio < ahora.getUTCFullYear() ? 11 : anio > ahora.getUTCFullYear() ? -1 : ahora.getUTCMonth();
-  const bot = reservasStore.listar().filter((r) => r.estado !== 'rechazado');
+  const bot = reservasStore.listar().filter((r) => !ESTADOS_ANULADOS.includes(r.estado));
 
   const meses = [];
   const tareas = [];
@@ -279,7 +280,7 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
 adminRouter.get('/api/reservas-anuales', (_req, res) => {
   const ahora = new Date();
   const anioActual = ahora.getUTCFullYear();
-  const bot = reservasStore.listar().filter((r) => r.estado !== 'rechazado');
+  const bot = reservasStore.listar().filter((r) => !ESTADOS_ANULADOS.includes(r.estado));
   const anios = [];
   for (let a = config.hotel.anioInicio; a <= anioActual + 1; a++) {
     const mesLimite = a < anioActual ? 11 : a === anioActual ? ahora.getUTCMonth() : -1;
@@ -354,7 +355,7 @@ adminRouter.get('/api/reservas-promedio', (_req, res) => {
 adminRouter.get('/api/metricas', (_req, res) => {
   const reservasBot = reservasStore
     .listar()
-    .filter((r) => r.fuente === 'bot' && r.estado !== 'rechazado').length;
+    .filter((r) => r.fuente === 'bot' && !ESTADOS_ANULADOS.includes(r.estado)).length;
   res.json(resumenMetricas(reservasBot));
 });
 
@@ -376,6 +377,18 @@ adminRouter.post('/api/reservas', (req, res) => {
     fuente: 'manual',
   });
   res.json({ ok: true, reserva });
+});
+
+// Cancelar desde el panel: marca cancelada, correo a recepción (y al cliente
+// si tiene), WhatsApp al cliente si la reserva vino de un chat.
+adminRouter.post('/api/reservas/:id/cancelar', async (req, res) => {
+  const reserva = reservasStore.obtenerPorId(req.params.id);
+  if (!reserva) return res.status(404).json({ ok: false, error: 'Reserva no encontrada.' });
+  const motivo = String(req.body?.motivo || '').trim().slice(0, 200);
+  const avisarCliente = req.body?.avisarCliente !== false;
+  const r = await cancelarReserva(reserva, { motivo, por: 'recepcion', avisarCliente });
+  if (!r.ok) return res.status(400).json(r);
+  res.json({ ok: true, reserva: reservasStore.obtenerPorId(reserva.id) });
 });
 
 adminRouter.post('/api/reservas/:id/estado', (req, res) => {

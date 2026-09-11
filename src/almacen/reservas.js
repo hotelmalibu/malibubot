@@ -23,8 +23,11 @@ import { dbActivo, dbGuardarReserva } from './db.js';
 //   'pagado'          -> pago en línea confirmado (ocupa habitación).
 //   'pendiente_hotel' -> reserva CONFIRMADA, el pago se cobra en el hotel (ocupa).
 //   'en_proceso'      -> pago en línea iniciado, aún sin confirmar.
-//   'rechazado'       -> pago rechazado/cancelado (no ocupa).
-export const ESTADOS = ['pagado', 'pendiente_hotel', 'en_proceso', 'rechazado'];
+//   'rechazado'       -> pago rechazado (no ocupa).
+//   'cancelado'       -> el cliente (o recepcion) cancelo una reserva ya hecha (no ocupa).
+export const ESTADOS = ['pagado', 'pendiente_hotel', 'en_proceso', 'rechazado', 'cancelado'];
+/** Estados que NO cuentan como reserva (ni ocupan ni suman). */
+export const ESTADOS_ANULADOS = ['rechazado', 'cancelado'];
 
 let secuencia = 1;
 /** @type {Array<object>} */
@@ -102,6 +105,17 @@ export const reservasStore = {
     return reservas.find((x) => x.id === Number(id)) || null;
   },
 
+  /**
+   * Reservas VIGENTES de un cliente (por wa_id): confirmadas o en proceso,
+   * cuya salida aun no paso. De la mas proxima a la mas lejana.
+   */
+  vigentesDe(waId, hoy = hoyISO()) {
+    if (!waId) return [];
+    return reservas
+      .filter((r) => r.waId === waId && !ESTADOS_ANULADOS.includes(r.estado) && (r.checkOut || r.checkIn || '9999') >= hoy)
+      .sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+  },
+
   actualizarEstado(id, estado) {
     if (!ESTADOS.includes(estado)) return null;
     const r = reservas.find((x) => x.id === Number(id));
@@ -136,17 +150,19 @@ export const reservasStore = {
     const pendienteHotel = enRango.filter((r) => r.estado === 'pendiente_hotel').length;
     const enProceso = enRango.filter((r) => r.estado === 'en_proceso').length;
     const rechazadas = enRango.filter((r) => r.estado === 'rechazado').length;
+    const canceladas = enRango.filter((r) => r.estado === 'cancelado').length;
 
     return {
       totalHabitaciones: total,
       ocupadas,
       disponibles,
-      // "reservas realizadas" = confirmadas + en proceso (excluye rechazadas)
+      // "reservas realizadas" = confirmadas + en proceso (excluye rechazadas y canceladas)
       reservasRealizadas: pagadas + pendienteHotel + enProceso,
       reservasPagadas: pagadas,
       reservasPendienteHotel: pendienteHotel,
       reservasEnProceso: enProceso,
       reservasRechazadas: rechazadas,
+      reservasCanceladas: canceladas,
     };
   },
 };

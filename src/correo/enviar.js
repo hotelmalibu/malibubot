@@ -141,6 +141,63 @@ export async function probarCorreo(to) {
   }
 }
 
+function plantillaCancelacion(reserva, motivo, paraRecepcion) {
+  const total = reserva.monto ? precioCOP(reserva.monto) : '';
+  const fila = (k, v) =>
+    v ? `<tr><td style="padding:6px 10px;color:#6b6f77">${k}</td><td style="padding:6px 10px;font-weight:600;color:#2c2f34">${v}</td></tr>` : '';
+  const titulo = paraRecepcion ? 'RESERVA CANCELADA' : 'Tu reserva fue cancelada';
+  const intro = paraRecepcion
+    ? `El huésped canceló su reserva por WhatsApp (MALIBUBOT). Libera la habitación en el Libro de Reservas${reserva.estado === 'pagado' ? ' y revisa si aplica devolución del pago' : ''}:`
+    : `Hola ${reserva.nombre || ''}, confirmamos que tu reserva en el Hotel Malibú quedó CANCELADA. Si cambias de planes, escríbenos por WhatsApp y con gusto te ayudamos de nuevo.`;
+  return `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2c2f34">
+    <div style="border-bottom:2px solid #c05a3a;padding-bottom:10px;margin-bottom:14px">
+      <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#9c6f2b;font-weight:700">Hotel y Centro de Eventos Malibú</div>
+      <h2 style="margin:6px 0 0;color:#c05a3a">${titulo}</h2>
+    </div>
+    <p style="font-size:15px;line-height:1.5">${intro}</p>
+    <div style="margin:14px 0;padding:10px 14px;background:#f7e6de;border:1px solid #ecc9bb;border-radius:10px;color:#c05a3a;font-size:14px;font-weight:700">CANCELADA${motivo ? ' — motivo: ' + motivo : ''}</div>
+    <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
+      ${fila('Reserva N°', reserva.id)}
+      ${fila('Huésped', reserva.nombre)}
+      ${fila('Celular', reserva.celular)}
+      ${fila('Correo', reserva.email)}
+      ${fila('Habitación', reserva.habitacion)}
+      ${fila('Personas', reserva.personas)}
+      ${fila('Check-in', reserva.checkIn)}
+      ${fila('Check-out', reserva.checkOut)}
+      ${fila(reserva.estado === 'pagado' ? 'Valor pagado' : 'Valor (no cobrado)', total)}
+      ${fila('Referencia de pago', reserva.referenciaPago)}
+    </table>
+    <p style="font-size:12px;color:#9aa0a8;margin-top:16px">Hotel y Centro de Eventos Malibú · Sincelejo, Sucre, Colombia</p>
+  </div>`;
+}
+
+/** Avisa la CANCELACION a recepcion (siempre) y al cliente (si dio correo). */
+export async function cancelarReservaPorCorreo(reserva, motivo = '') {
+  const tareas = [];
+  if (config.correo.recepcion) {
+    tareas.push(
+      enviarCorreo({
+        to: config.correo.recepcion,
+        subject: `CANCELACIÓN de reserva — ${reserva.nombre || reserva.celular || ''} · ${reserva.checkIn || ''}`,
+        html: plantillaCancelacion(reserva, motivo, true),
+      })
+    );
+  }
+  if (reserva.email) {
+    tareas.push(
+      enviarCorreo({
+        to: reserva.email,
+        subject: 'Reserva cancelada — Hotel Malibú',
+        html: plantillaCancelacion(reserva, motivo, false),
+      })
+    );
+  }
+  const res = await Promise.allSettled(tareas);
+  return res.some((r) => r.status === 'fulfilled' && r.value);
+}
+
 /** Envia la confirmacion de reserva al cliente y a recepcion. */
 export async function confirmarReservaPorCorreo(reserva) {
   const pendiente = reserva.estado === 'pendiente_hotel';

@@ -222,6 +222,7 @@
   .badge-estado.pendiente_hotel { background: var(--azul-suave); color: var(--azul); }
   .badge-estado.en_proceso { background: var(--oro-suave); color: var(--oro-profundo); }
   .badge-estado.rechazado { background: var(--gris-suave); color: var(--gris); text-decoration: line-through; }
+  .badge-estado.cancelado { background: var(--alerta-suave); color: var(--alerta); text-decoration: line-through; }
   .vacio-tabla { padding: 22px; text-align: center; color: var(--gris); font-size: 13.5px; }
 
   dialog#dlgReserva { border: none; border-radius: 18px; padding: 0; box-shadow: 0 30px 80px rgba(44,47,52,.3); width: min(470px, 94vw); font-family: var(--ui); }
@@ -829,7 +830,7 @@
     const cuerpo = document.getElementById('cuerpoReservas'), vacio = document.getElementById('vacioReservas');
     if (!rs.length) { cuerpo.innerHTML = ''; vacio.style.display = 'block'; return; }
     vacio.style.display = 'none';
-    const etiqueta = { pagado: 'Pagado', pendiente_hotel: 'Pago en hotel', en_proceso: 'En proceso', rechazado: 'Rechazado' };
+    const etiqueta = { pagado: 'Pagado', pendiente_hotel: 'Pago en hotel', en_proceso: 'En proceso', rechazado: 'Rechazado', cancelado: 'Cancelada' };
     cuerpo.innerHTML = rs.map((r) => `
       <tr>
         <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}</td>
@@ -843,7 +844,8 @@
         <td>${avisoLlegada(r)}</td>
         <td style="text-align:right;white-space:nowrap;">
           ${(r.estado === 'en_proceso' || r.estado === 'pendiente_hotel') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
-          ${r.estado !== 'rechazado' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button>` : ''}
+          ${r.estado === 'en_proceso' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button> ` : ''}
+          ${(r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso') ? `<button class="btn-mini" style="color:var(--alerta)" onclick="cancelarReservaPanel(${r.id}, '${esc(r.nombre || '')}')">Cancelar</button>` : ''}
         </td>
       </tr>`).join('');
   }
@@ -1033,6 +1035,19 @@
       else nota.textContent = d.error || 'No se pudo guardar.';
     } catch (_) { nota.textContent = 'Error de red.'; }
     finally { btn.disabled = false; }
+  }
+  // Cancelación desde el panel: avisa a recepción por correo y al cliente por WhatsApp.
+  async function cancelarReservaPanel(id, nombre) {
+    const motivo = prompt(`Cancelar la reserva de ${nombre || 'este huésped'}.\nSe avisará a recepción por correo y al cliente por WhatsApp.\n\nMotivo (opcional):`);
+    if (motivo === null) return;
+    try {
+      const r = await fetch(`/admin/api/reservas/${id}/cancelar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      const d = await r.json();
+      if (!d.ok) alert(d.error || 'No se pudo cancelar.');
+    } catch (_) { alert('Error de red.'); }
+    cargarReservas(); cargarEstadisticas(); cargarGrafico(); cargarMeta(); cargarEmbudo();
   }
   async function cambiarEstadoReserva(id, estado) {
     try {
