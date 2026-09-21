@@ -29,6 +29,7 @@ const estados = new Map();
 const enCurso = new Set();
 const simulados = new Set();
 const eventos = [];
+const estadosWA = []; // ultimos estados de entrega de WhatsApp (fallos y plantillas)
 
 function anotar(e) {
   eventos.unshift({ ts: Date.now(), ...e });
@@ -164,6 +165,19 @@ export async function probarPlantilla(telefono) {
   return { ok: true, destino, ...base };
 }
 
+/**
+ * Guarda un estado de entrega de WhatsApp. Se conservan los FALLOS y los de
+ * plantillas (categoria utility/marketing/authentication); los chats normales
+ * (categoria service) no interesan aqui.
+ */
+export function registrarEstadoWhatsApp(s) {
+  const importante = s.estado === 'failed' || (s.categoria && s.categoria !== 'service');
+  if (!importante) return;
+  if (s.estado === 'failed') console.warn(`[whatsapp] Entrega FALLIDA a ${s.destino}:`, JSON.stringify(s.errores));
+  estadosWA.unshift({ ts: Date.now(), ...s });
+  if (estadosWA.length > 40) estadosWA.length = 40;
+}
+
 /** Estado para el panel (/admin/api/vik/estado). */
 export function estadoVik() {
   return {
@@ -174,5 +188,6 @@ export function estadoVik() {
     plantilla: config.vik.plantilla,
     enviados: [...estados.values()].filter((e) => e.confirmada > 1).length,
     eventos,
+    estadosWhatsApp: estadosWA,
   };
 }

@@ -38,6 +38,35 @@ export function parsearMensajes(body) {
 }
 
 /**
+ * Extrae los ESTADOS de entrega de los mensajes enviados (sent / delivered / read /
+ * failed). Si Meta no puede entregar un mensaje (p. ej. sin metodo de pago en la
+ * cuenta de WhatsApp Business), lo avisa aqui con el motivo.
+ * @returns {Array<{id:string, estado:string, destino:string, categoria:string, errores:Array<{codigo:number, titulo:string, detalle:string}>}>}
+ */
+export function parsearEstados(body) {
+  const resultado = [];
+  if (!body || body.object !== 'whatsapp_business_account') return resultado;
+  for (const entry of body.entry || []) {
+    for (const change of entry.changes || []) {
+      for (const s of change.value?.statuses || []) {
+        resultado.push({
+          id: s.id || '',
+          estado: s.status || '',
+          destino: s.recipient_id || '',
+          categoria: s.pricing?.category || s.conversation?.origin?.type || '',
+          errores: (s.errors || []).map((e) => ({
+            codigo: e.code,
+            titulo: e.title || e.message || '',
+            detalle: e.error_data?.details || '',
+          })),
+        });
+      }
+    }
+  }
+  return resultado;
+}
+
+/**
  * Extrae los intentos de LLAMADA (campo "calls" del webhook, si Meta tiene
  * activadas las llamadas para el numero). Solo interesa event=connect
  * (alguien esta llamando); terminate y demas se ignoran.

@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
-import { parsearMensajes, parsearLlamadas } from './whatsapp/recibir.js';
+import { parsearMensajes, parsearLlamadas, parsearEstados } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { atenderLlamada, mensajeLlamada } from './whatsapp/llamadas.js';
 
@@ -27,7 +27,7 @@ const AVISO_NO_TEXTO_MS = 60 * 60 * 1000;
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos } from './almacen/db.js';
-import { hidratarVikAvisos, procesarConfirmacion, claveValida } from './vikbooking/confirmada.js';
+import { hidratarVikAvisos, procesarConfirmacion, claveValida, registrarEstadoWhatsApp } from './vikbooking/confirmada.js';
 import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
@@ -98,6 +98,9 @@ app.post('/webhook/whatsapp', async (req, res) => {
 
   // 3) Procesar.
   try {
+    // Estados de entrega (entregado / leido / FALLIDO con su motivo).
+    for (const s of parsearEstados(req.body)) registrarEstadoWhatsApp(s);
+
     // Intentos de LLAMADA: se rechazan y se le manda el numero para llamar.
     for (const ll of parsearLlamadas(req.body)) {
       console.log(`[llamada] ${ll.nombre || ll.from} intentó llamar (${ll.callId})`);
