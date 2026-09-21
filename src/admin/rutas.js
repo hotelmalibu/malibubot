@@ -30,6 +30,7 @@ import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
 import { resumenMetricas } from '../ia/metricas.js';
 import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
+import { estadoVik } from '../vikbooking/confirmada.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import {
   probarAuth as probarAuthRapyd,
@@ -404,6 +405,11 @@ adminRouter.post('/api/reservas/:id/estado', (req, res) => {
 // -------- Diagnostico de canales (primer mensaje -> canal detectado) --------
 adminRouter.get('/api/canales/diag', (_req, res) => {
   res.json({ ok: true, grupos: store.diagCanales() });
+});
+
+// -------- Aviso "Reserva confirmada" de la pagina web (Vik Booking) --------
+adminRouter.get('/api/vik/estado', (_req, res) => {
+  res.json({ ok: true, ...estadoVik() });
 });
 
 // -------- Conversaciones "calientes" (interes sin reserva) --------

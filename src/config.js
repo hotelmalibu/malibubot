@@ -2,6 +2,7 @@
 //  config.js — Carga y valida las variables de entorno.
 // ============================================================
 import dotenv from 'dotenv';
+import { PLANTILLA_CONFIRMADA } from './vikbooking/plantillas.js';
 
 dotenv.config();
 
@@ -73,6 +74,22 @@ export const config = {
     activo: (process.env.RECORDATORIO_ACTIVO || 'true') !== 'false',
     plantilla: (process.env.RECORDATORIO_PLANTILLA || '').trim(),
     idioma: (process.env.RECORDATORIO_IDIOMA || 'es').trim(),
+  },
+
+  // Aviso de "Reserva confirmada" por WhatsApp para las reservas hechas en la
+  // PAGINA WEB (Vik Booking). Vik Booking llama a POST /api/vik/confirmada en el
+  // instante en que una reserva pasa a CONFIRMADA (pago recibido). Seguro por
+  // defecto: apagado (VIK_ACTIVO) y, aun encendido, en MODO PRUEBA (solo anota lo
+  // que enviaria) hasta poner VIK_MODO_PRUEBA=false. Ver docs/AVISO-RESERVA-CONFIRMADA.md.
+  vik: {
+    activo: (process.env.VIK_ACTIVO || 'false') === 'true',
+    prueba: (process.env.VIK_MODO_PRUEBA || 'true') !== 'false',
+    // Clave compartida con Vik Booking (cabecera X-Malibubot-Key). Sin ella el endpoint queda cerrado.
+    key: (process.env.VIK_WEBHOOK_KEY || '').trim(),
+    plantilla: (process.env.VIK_PLANTILLA || PLANTILLA_CONFIRMADA.nombre).trim(),
+    idioma: (process.env.VIK_PLANTILLA_IDIOMA || 'es').trim(),
+    // Reservas que llegan por Booking/Expedia/etc. no tienen celular del huesped: por defecto no se avisan.
+    incluirOTA: (process.env.VIK_INCLUIR_OTA || 'false') === 'true',
   },
 
   // Meta semanal de reservas (valor inicial; se puede cambiar desde el panel).

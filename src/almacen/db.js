@@ -89,6 +89,15 @@ export async function iniciarDB() {
         valor       TEXT,
         actualizado BIGINT
       );
+      CREATE TABLE IF NOT EXISTS vik_avisos (
+        order_id    INTEGER PRIMARY KEY,
+        nueva       BIGINT DEFAULT 0,
+        confirmada  BIGINT DEFAULT 0,
+        rechazada   BIGINT DEFAULT 0,
+        resena      BIGINT DEFAULT 0,
+        estado_visto TEXT,
+        actualizado BIGINT
+      );
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
       ALTER TABLE reservas ADD COLUMN IF NOT EXISTS recordatorio_enviado BIGINT;
@@ -164,6 +173,30 @@ export async function dbGuardarReserva(r) {
       r.recordatorioEnviado || 0,
     ]
   );
+}
+
+/** Guarda los avisos ya enviados de una reserva de Vik Booking. Nunca "baja" una marca. */
+export async function dbGuardarVikAviso(a) {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO vik_avisos (order_id, nueva, confirmada, rechazada, resena, estado_visto, actualizado)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (order_id) DO UPDATE SET
+       nueva      = GREATEST(vik_avisos.nueva, EXCLUDED.nueva),
+       confirmada = GREATEST(vik_avisos.confirmada, EXCLUDED.confirmada),
+       rechazada  = GREATEST(vik_avisos.rechazada, EXCLUDED.rechazada),
+       resena     = GREATEST(vik_avisos.resena, EXCLUDED.resena),
+       estado_visto = COALESCE(vik_avisos.estado_visto, EXCLUDED.estado_visto),
+       actualizado = EXCLUDED.actualizado`,
+    [a.id, a.nueva || 0, a.confirmada || 0, a.rechazada || 0, a.resena || 0, a.estadoVisto || '', Date.now()]
+  );
+}
+
+/** Lee todos los avisos de Vik Booking (para hidratar al arrancar). */
+export async function dbCargarVikAvisos() {
+  if (!pool) return [];
+  const r = await pool.query('SELECT * FROM vik_avisos');
+  return r.rows;
 }
 
 /** Guarda un ajuste del panel (p. ej. la meta semanal). */

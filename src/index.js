@@ -26,7 +26,8 @@ const avisoNoTexto = new Map();
 const AVISO_NO_TEXTO_MS = 60 * 60 * 1000;
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
-import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes } from './almacen/db.js';
+import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos } from './almacen/db.js';
+import { hidratarVikAvisos, procesarConfirmacion, claveValida } from './vikbooking/confirmada.js';
 import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
@@ -152,6 +153,24 @@ app.post('/webhook/whatsapp', async (req, res) => {
   }
 });
 
+// ---------- Aviso "Reserva confirmada" de la pagina web (Vik Booking) ----------
+// Vik Booking llama aqui cuando una reserva pasa a CONFIRMADA (pago recibido).
+// Exige la cabecera X-Malibubot-Key (VIK_WEBHOOK_KEY). Ver docs/AVISO-RESERVA-CONFIRMADA.md.
+app.post('/api/vik/confirmada', async (req, res) => {
+  if (!config.vik.activo) return res.status(503).json({ ok: false, error: 'Avisos de Vik Booking apagados (VIK_ACTIVO).' });
+  if (!claveValida(req)) {
+    console.warn('[vik] Llamada con clave inválida. Rechazada.');
+    return res.sendStatus(403);
+  }
+  try {
+    const r = await procesarConfirmacion(req.body || {});
+    res.status(r.http || 200).json(r);
+  } catch (err) {
+    console.error('[vik] Error procesando la confirmación:', err);
+    res.status(500).json({ ok: false, estado: 'error', error: 'Error interno.' });
+  }
+});
+
 // ---------- Webhook de RAPYD (confirmacion de pago) ----------
 app.post('/webhook/rapyd', async (req, res) => {
   if (!verificarWebhookRapyd(req)) {
@@ -240,6 +259,7 @@ async function arrancar() {
       }
       hidratarMetricas(await dbCargarMetricas());
       hidratarAjustes(await dbCargarAjustes());
+      hidratarVikAvisos(await dbCargarVikAvisos());
     } catch (err) {
       console.error('[db] Error hidratando desde la base:', err.message);
     }
