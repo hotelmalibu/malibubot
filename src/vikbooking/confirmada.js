@@ -143,11 +143,33 @@ export async function procesarConfirmacion(datos = {}) {
   return { ok: true, estado: 'enviado' };
 }
 
+/**
+ * Envia la plantilla REAL a un celular con datos de ejemplo, para comprobar que
+ * Meta la acepta (nombre, idioma y variables) antes de activar el envio real.
+ * Solo la usa el panel (/admin/api/vik/probar?telefono=...), con sesion.
+ * @returns {Promise<{ok:boolean, destino?:string, plantilla:string, idioma:string, error?:string}>}
+ */
+export async function probarPlantilla(telefono) {
+  const base = { plantilla: config.vik.plantilla, idioma: config.vik.idioma };
+  const destino = destinoDe(telefono);
+  if (!destino) return { ok: false, ...base, error: 'Escribe un celular válido, por ejemplo ?telefono=3001234567' };
+  const params = ['Prueba', '0000', fechaBonita(diaColombia(Date.now() + 86400000)), fechaBonita(diaColombia(Date.now() + 2 * 86400000)), 'https://www.hotelmalibu.co'];
+  try {
+    await enviarPlantilla(destino, config.vik.plantilla, config.vik.idioma, params);
+  } catch (err) {
+    anotar({ reserva: 0, resultado: 'error', detalle: 'prueba de plantilla: ' + err.message });
+    return { ok: false, destino, ...base, error: err.message };
+  }
+  anotar({ reserva: 0, resultado: 'enviado', detalle: `prueba de plantilla a ${destino}`, texto: renderizar(params) });
+  return { ok: true, destino, ...base };
+}
+
 /** Estado para el panel (/admin/api/vik/estado). */
 export function estadoVik() {
   return {
     activo: config.vik.activo,
     prueba: config.vik.prueba,
+    idioma: config.vik.idioma,
     claveConfigurada: !!config.vik.key,
     plantilla: config.vik.plantilla,
     enviados: [...estados.values()].filter((e) => e.confirmada > 1).length,

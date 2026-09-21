@@ -27,7 +27,7 @@ const servidor = http.createServer((req, res) => {
 await new Promise((r) => servidor.listen(0, r));
 process.env.GRAPH_API_BASE = `http://127.0.0.1:${servidor.address().port}`;
 
-const { procesarConfirmacion, claveValida, destinoDe, estadoVik } = await import('../src/vikbooking/confirmada.js');
+const { procesarConfirmacion, claveValida, destinoDe, estadoVik, probarPlantilla } = await import('../src/vikbooking/confirmada.js');
 
 let fallos = 0;
 const ok = (n, c) => { console.log((c ? '✅ ' : '❌ ') + n); if (!c) fallos++; };
@@ -75,6 +75,16 @@ ok('si WhatsApp rechaza responde error 502', r.ok === false && r.http === 502);
 graphFalla = false;
 r = await procesarConfirmacion(reserva({ id: 506 }));
 ok('y al reintentar sí se envía', r.estado === 'enviado' && enviados.length === 3);
+
+// prueba de plantilla a un celular (ruta /admin/api/vik/probar)
+let pr = await probarPlantilla('3001234567');
+ok('probarPlantilla envía la plantilla con datos de ejemplo', pr.ok === true && enviados.at(-1).params[0] === 'Prueba' && enviados.length === 4);
+pr = await probarPlantilla('abc');
+ok('probarPlantilla rechaza un celular inválido', pr.ok === false);
+graphFalla = true;
+pr = await probarPlantilla('3001234567');
+ok('probarPlantilla devuelve el motivo de Meta', pr.ok === false && /template not approved/.test(pr.error));
+graphFalla = false;
 
 console.log('\nEstado:', JSON.stringify({ enviados: estadoVik().enviados }));
 servidor.close();

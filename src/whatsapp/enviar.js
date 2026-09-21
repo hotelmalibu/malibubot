@@ -21,7 +21,9 @@ async function llamarGraph(payload) {
   const datos = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     console.error('[enviar] Error de Graph API:', resp.status, JSON.stringify(datos));
-    throw new Error(`Graph API respondio ${resp.status}`);
+    // El motivo de Meta (p. ej. "plantilla no existe en ese idioma") ayuda a diagnosticar.
+    const motivo = datos?.error?.message ? `: ${datos.error.message}` : '';
+    throw new Error(`Graph API respondio ${resp.status}${motivo}`);
   }
   return datos;
 }
