@@ -572,7 +572,6 @@
           <button type="button" data-s="sensibilidad" onclick="finVer('sensibilidad')">Sensibilidad</button>
           <button type="button" data-s="supuestos" onclick="finVer('supuestos')">Supuestos y tarifas</button>
         </div>
-        <p class="nota" id="finFuente" style="margin:-4px 0 12px;text-align:left;"></p>
         <div id="finContenido"><div class="vacio-tabla">Cargando modelo financiero…</div></div>
       </div>
     </section>
@@ -1355,8 +1354,6 @@
       const m = d.modelo;
       const p = m.proyeccion?.anios || [];
       document.getElementById('finPeriodo').textContent = p.length ? `${p.find((a) => a >= 2026) || p[0]}–${p[p.length - 1]}` : '';
-      document.getElementById('finFuente').textContent =
-        `${m.empresa?.nombre || 'Hotel Malibú'}${m.empresa?.nit ? ' · NIT ' + m.empresa.nit : ''} · Fuente: ${m.archivo || 'modelo maestro'} · ${m.origen === 'panel' ? 'subido desde el panel' : 'versión del sistema'} · cifras en COP millones (MM)`;
       document.getElementById('finRestablecer').style.display = m.origen === 'panel' ? '' : 'none';
       finPintar();
     } catch (_) {}
@@ -1456,7 +1453,7 @@
     const aj = d.ajuste || {}, p = d.modelo.proyeccion, ex = p.excel;
     const i0 = p.anios.indexOf(aj.anioBase || 2026), ult = p.anios[p.anios.length - 1];
     if (!aj.activo) {
-      return `<div class="fin-alerta" style="margin-bottom:14px;">📐 <div><b>Proyección tal cual el Excel:</b> ${miles(p.series.noches?.[i0])} noches en ${p.anios[i0]} (ocupación ${pct(p.series.ocupacion?.[i0])}). <button class="btn-mini" onclick="finEditarAjuste()">Ajustar a lo real</button></div></div>`;
+      return `<div class="fin-alerta" style="margin-bottom:14px;"><div><b>Proyección tal cual el Excel:</b> ${miles(p.series.noches?.[i0])} noches en ${p.anios[i0]} (ocupación ${pct(p.series.ocupacion?.[i0])}). <button class="btn-mini" onclick="finEditarAjuste()">Ajustar a lo real</button></div></div>`;
     }
     const tramos = (aj.tramos || []);
     const descTramos = tramos.map((t, i) => {
@@ -1467,7 +1464,7 @@
     const iTope = aj.tope != null ? p.series.noches.findIndex((n, i) => i >= i0 && n >= aj.tope) : -1;
     const resumen = `<b>${miles(aj.noches2026)} noches</b> en ${p.anios[i0]} · ${descTramos}` + (aj.tope != null ? ` · tope <b>${miles(aj.tope)} noches</b>${iTope >= 0 ? ` (se alcanza en ${p.anios[iTope]})` : ''}` : '');
     const excelTxt = ex ? ` El Excel traía ${miles(ex.noches?.[i0])} noches (${pct(ex.ocupacion?.[i0])} de ocupación) y TIR ${pct(ex.tir, 1)}; con el ajuste la TIR es ${pct(p.tir, 1)} y ${p.anios[i0]} cierra en ${miles(p.series.noches?.[i0])} noches (${pct(p.series.ocupacion?.[i0])}).` : '';
-    return `<div class="fin-alerta verde" style="margin-bottom:14px;" id="finAjusteBox">📐 <div><b>Proyección ajustada a lo real:</b> ${resumen}.${compacto ? '' : excelTxt} <button class="btn-mini" onclick="finEditarAjuste()">Cambiar</button> <button class="btn-mini" onclick="finGuardarAjuste({ activo:false })">Usar el Excel tal cual</button></div></div>`;
+    return `<div class="fin-alerta verde" style="margin-bottom:14px;" id="finAjusteBox"><div><b>Proyección ajustada a lo real:</b> ${resumen}.${compacto ? '' : excelTxt} <button class="btn-mini" onclick="finEditarAjuste()">Cambiar</button> <button class="btn-mini" onclick="finGuardarAjuste({ activo:false })">Usar el Excel tal cual</button></div></div>`;
   }
   function finEditarAjuste() {
     const aj = finDatos?.ajuste || {}, p = finDatos.modelo.proyeccion, ult = p.anios[p.anios.length - 1];
@@ -1479,7 +1476,7 @@
         <div class="campo"><label>Tramo ${i + 1} · crecimiento anual (%)</label><input type="number" id="ajC${i}" min="-50" max="100" step="0.5" value="${Math.round(t.crecimiento * 1000) / 10}" style="width:120px;" /></div>
         <div class="campo"><label>Hasta el año (inclusive)</label><select id="ajH${i}">${anios(Math.min(t.hasta, ult))}</select></div>
       </div>`;
-    box.outerHTML = `<div class="fin-card" id="finAjusteBox" style="margin-bottom:14px;"><h3>📐 Ajustar la proyección a lo real</h3><div class="sub">Cada tramo aplica desde el año siguiente al tramo anterior hasta su año (inclusive). Se recalculan ingresos, EBITDA, utilidad, flujo de caja y TIR con la tarifa, los gastos y la deuda del Excel.</div>
+    box.outerHTML = `<div class="fin-card" id="finAjusteBox" style="margin-bottom:14px;"><h3>Ajustar la proyección a lo real</h3><div class="sub">Cada tramo aplica desde el año siguiente al tramo anterior hasta su año (inclusive). Se recalculan ingresos, EBITDA, utilidad, flujo de caja y TIR con la tarifa, los gastos y la deuda del Excel.</div>
       <div style="display:grid;gap:10px;">
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
           <div class="campo"><label>Noches vendidas en 2026</label><input type="number" id="ajNoches" min="1000" max="40000" step="100" value="${aj.noches2026 ?? 13000}" style="width:150px;" /></div>
