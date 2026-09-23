@@ -1458,27 +1458,46 @@
     if (!aj.activo) {
       return `<div class="fin-alerta" style="margin-bottom:14px;">📐 <div><b>Proyección tal cual el Excel:</b> ${miles(p.series.noches?.[i0])} noches en ${p.anios[i0]} (ocupación ${pct(p.series.ocupacion?.[i0])}). <button class="btn-mini" onclick="finEditarAjuste()">Ajustar a lo real</button></div></div>`;
     }
-    const resumen = `<b>${miles(aj.noches2026)} noches</b> en ${p.anios[i0]} · <b>+${pct(aj.crecimiento1)}</b> anual hasta ${aj.hastaAnio} · <b>+${pct(aj.crecimiento2)}</b> anual hasta ${ult}`;
+    const tramos = (aj.tramos || []);
+    const descTramos = tramos.map((t, i) => {
+      const desde = i === 0 ? p.anios[i0] + 1 : tramos[i - 1].hasta + 1;
+      const c = `<b>${t.crecimiento >= 0 ? '+' : ''}${pct(t.crecimiento)}</b>`;
+      return desde === t.hasta ? `${c} en ${t.hasta}` : `${c} anual ${desde}–${Math.min(t.hasta, ult)}`;
+    }).join(' · ');
+    const iTope = aj.tope != null ? p.series.noches.findIndex((n, i) => i >= i0 && n >= aj.tope) : -1;
+    const resumen = `<b>${miles(aj.noches2026)} noches</b> en ${p.anios[i0]} · ${descTramos}` + (aj.tope != null ? ` · tope <b>${miles(aj.tope)} noches</b>${iTope >= 0 ? ` (se alcanza en ${p.anios[iTope]})` : ''}` : '');
     const excelTxt = ex ? ` El Excel traía ${miles(ex.noches?.[i0])} noches (${pct(ex.ocupacion?.[i0])} de ocupación) y TIR ${pct(ex.tir, 1)}; con el ajuste la TIR es ${pct(p.tir, 1)} y ${p.anios[i0]} cierra en ${miles(p.series.noches?.[i0])} noches (${pct(p.series.ocupacion?.[i0])}).` : '';
     return `<div class="fin-alerta verde" style="margin-bottom:14px;" id="finAjusteBox">📐 <div><b>Proyección ajustada a lo real:</b> ${resumen}.${compacto ? '' : excelTxt} <button class="btn-mini" onclick="finEditarAjuste()">Cambiar</button> <button class="btn-mini" onclick="finGuardarAjuste({ activo:false })">Usar el Excel tal cual</button></div></div>`;
   }
   function finEditarAjuste() {
     const aj = finDatos?.ajuste || {}, p = finDatos.modelo.proyeccion, ult = p.anios[p.anios.length - 1];
     const box = document.getElementById('finAjusteBox') || document.querySelector('#finContenido .fin-alerta');
-    const anios = p.anios.filter((a) => a >= 2026 && a < ult).map((a) => `<option value="${a}" ${a === (aj.hastaAnio || 2030) ? 'selected' : ''}>${a}</option>`).join('');
-    box.outerHTML = `<div class="fin-card" id="finAjusteBox" style="margin-bottom:14px;"><h3>📐 Ajustar la proyección a lo real</h3><div class="sub">Se recalculan ingresos, EBITDA, utilidad, flujo de caja y TIR con la tarifa, los gastos y la deuda del Excel.</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-        <div class="campo"><label>Noches vendidas en 2026</label><input type="number" id="ajNoches" min="1000" max="40000" step="100" value="${aj.noches2026 ?? 13000}" style="width:150px;" /></div>
-        <div class="campo"><label>Crecimiento anual (%)</label><input type="number" id="ajC1" min="-50" max="100" step="0.5" value="${Math.round((aj.crecimiento1 ?? 0.05) * 1000) / 10}" style="width:110px;" /></div>
-        <div class="campo"><label>Hasta el año</label><select id="ajHasta">${anios}</select></div>
-        <div class="campo"><label>Luego, crecimiento anual (%) hasta ${ult}</label><input type="number" id="ajC2" min="-50" max="100" step="0.5" value="${Math.round((aj.crecimiento2 ?? 0.08) * 1000) / 10}" style="width:110px;" /></div>
-        <button class="btn primario" onclick="finGuardarAjuste({ activo:true, noches2026: document.getElementById('ajNoches').value, crecimiento1: document.getElementById('ajC1').value / 100, hastaAnio: document.getElementById('ajHasta').value, crecimiento2: document.getElementById('ajC2').value / 100 })">Guardar y recalcular</button>
-        <button class="btn" onclick="finPintar()">Cancelar</button>
+    const tramos = (aj.tramos && aj.tramos.length ? aj.tramos : [{ hasta: 2027, crecimiento: 0.10 }, { hasta: 2030, crecimiento: 0.05 }, { hasta: ult, crecimiento: 0.08 }]).slice(0, 3);
+    while (tramos.length < 3) tramos.push({ hasta: ult, crecimiento: tramos[tramos.length - 1]?.crecimiento ?? 0.05 });
+    const anios = (sel) => p.anios.filter((a) => a >= 2027 && a <= ult).map((a) => `<option value="${a}" ${a === sel ? 'selected' : ''}>${a}</option>`).join('');
+    const filaTramo = (t, i) => `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="campo"><label>Tramo ${i + 1} · crecimiento anual (%)</label><input type="number" id="ajC${i}" min="-50" max="100" step="0.5" value="${Math.round(t.crecimiento * 1000) / 10}" style="width:120px;" /></div>
+        <div class="campo"><label>Hasta el año (inclusive)</label><select id="ajH${i}">${anios(Math.min(t.hasta, ult))}</select></div>
+      </div>`;
+    box.outerHTML = `<div class="fin-card" id="finAjusteBox" style="margin-bottom:14px;"><h3>📐 Ajustar la proyección a lo real</h3><div class="sub">Cada tramo aplica desde el año siguiente al tramo anterior hasta su año (inclusive). Se recalculan ingresos, EBITDA, utilidad, flujo de caja y TIR con la tarifa, los gastos y la deuda del Excel.</div>
+      <div style="display:grid;gap:10px;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="campo"><label>Noches vendidas en 2026</label><input type="number" id="ajNoches" min="1000" max="40000" step="100" value="${aj.noches2026 ?? 13000}" style="width:150px;" /></div>
+          <div class="campo"><label>Tope máximo de noches por año (vacío = sin tope)</label><input type="number" id="ajTope" min="1000" max="40000" step="1" value="${aj.tope ?? ''}" placeholder="Ej. 20502" style="width:170px;" /></div>
+        </div>
+        ${tramos.map(filaTramo).join('')}
+        <div style="display:flex;gap:8px;">
+          <button class="btn primario" onclick="finGuardarAjuste({ activo:true, noches2026: document.getElementById('ajNoches').value, tope: document.getElementById('ajTope').value, tramos: [0,1,2].map((i) => ({ hasta: document.getElementById('ajH' + i).value, crecimiento: document.getElementById('ajC' + i).value / 100 })) })">Guardar y recalcular</button>
+          <button class="btn" onclick="finPintar()">Cancelar</button>
+        </div>
       </div></div>`;
   }
   async function finGuardarAjuste(a) {
     try {
-      const r = await fetch('/admin/api/finanzas/ajuste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(finDatos?.ajuste || {}), ...a }) });
+      const base = finDatos?.ajuste || {};
+      const cuerpo = { ...base, ...a };
+      if (!cuerpo.tramos || !cuerpo.tramos.length) cuerpo.tramos = [{ hasta: 2027, crecimiento: 0.10 }, { hasta: 2030, crecimiento: 0.05 }, { hasta: 2037, crecimiento: 0.08 }];
+      const r = await fetch('/admin/api/finanzas/ajuste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
       const d = await r.json();
       if (!d.ok) { alert(d.error || 'No se pudo guardar.'); return; }
     } catch (_) { alert('Error de red.'); return; }

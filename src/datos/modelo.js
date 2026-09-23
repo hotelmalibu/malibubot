@@ -323,27 +323,64 @@ export function restablecerModelo() {
 // hotel prefiere partir de las noches que de verdad espera vender y de un
 // crecimiento por tramos. Se recalcula la proyección con la MISMA lógica del
 // Excel (tarifa promedio, gastos, deuda, depreciación y CAPEX se conservan).
+// Tramos de crecimiento: cada uno aplica desde el año siguiente al tramo
+// anterior hasta su "hasta" (inclusive). "tope" = máximo de noches por año.
 const CLAVE_AJUSTE = 'modelo_ajuste';
-const AJUSTE_POR_DEFECTO = { activo: true, noches2026: 13000, crecimiento1: 0.05, hastaAnio: 2030, crecimiento2: 0.08 };
+const AJUSTE_POR_DEFECTO = {
+  activo: true,
+  noches2026: 13000,
+  tramos: [
+    { hasta: 2027, crecimiento: 0.10 },
+    { hasta: 2030, crecimiento: 0.05 },
+    { hasta: 2037, crecimiento: 0.08 },
+  ],
+  tope: 20502,
+};
+
+/** Normaliza (acepta el formato viejo crecimiento1/hastaAnio/crecimiento2). */
+function normalizarAjuste(a) {
+  if (!a || typeof a !== 'object') return { ...AJUSTE_POR_DEFECTO };
+  let tramos = Array.isArray(a.tramos) && a.tramos.length ? a.tramos : null;
+  if (!tramos && a.crecimiento1 != null) {
+    tramos = [{ hasta: a.hastaAnio || 2030, crecimiento: a.crecimiento1 }, { hasta: 2037, crecimiento: a.crecimiento2 ?? a.crecimiento1 }];
+  }
+  return {
+    activo: a.activo !== false,
+    noches2026: Number(a.noches2026) || AJUSTE_POR_DEFECTO.noches2026,
+    tramos: (tramos || AJUSTE_POR_DEFECTO.tramos).map((t) => ({ hasta: Number(t.hasta), crecimiento: Number(t.crecimiento) })),
+    tope: a.tope == null || a.tope === '' ? null : Number(a.tope),
+  };
+}
 
 export function ajusteActual() {
   try {
     const g = ajustesStore.obtener(CLAVE_AJUSTE, '');
-    if (g) return { ...AJUSTE_POR_DEFECTO, ...JSON.parse(g) };
+    if (g) return normalizarAjuste(JSON.parse(g));
   } catch { /* usa el de fabrica */ }
-  return { ...AJUSTE_POR_DEFECTO };
+  return normalizarAjuste(AJUSTE_POR_DEFECTO);
 }
 
 /** Guarda el ajuste (valida rangos). Devuelve null si algo no es válido. */
 export function fijarAjuste(a = {}) {
   const n = Math.round(Number(a.noches2026));
-  const c1 = Number(a.crecimiento1), c2 = Number(a.crecimiento2), h = Math.round(Number(a.hastaAnio));
   if (!Number.isFinite(n) || n < 1000 || n > 40000) return null;
-  if (![c1, c2].every((c) => Number.isFinite(c) && c >= -0.5 && c <= 1)) return null;
-  if (!Number.isInteger(h) || h < 2026 || h > 2037) return null;
-  const nuevo = { activo: a.activo !== false, noches2026: n, crecimiento1: c1, hastaAnio: h, crecimiento2: c2 };
+  const tramos = (Array.isArray(a.tramos) ? a.tramos : [])
+    .map((t) => ({ hasta: Math.round(Number(t.hasta)), crecimiento: Number(t.crecimiento) }))
+    .filter((t) => Number.isInteger(t.hasta) && Number.isFinite(t.crecimiento));
+  if (!tramos.length) return null;
+  if (!tramos.every((t) => t.hasta >= 2027 && t.hasta <= 2037 && t.crecimiento >= -0.5 && t.crecimiento <= 1)) return null;
+  tramos.sort((x, y) => x.hasta - y.hasta);
+  const tope = a.tope == null || a.tope === '' ? null : Math.round(Number(a.tope));
+  if (tope != null && (!Number.isFinite(tope) || tope < n || tope > 40000)) return null;
+  const nuevo = { activo: a.activo !== false, noches2026: n, tramos, tope };
   ajustesStore.poner(CLAVE_AJUSTE, JSON.stringify(nuevo));
   return nuevo;
+}
+
+/** Crecimiento que aplica a un año según los tramos (el último tramo se extiende si hace falta). */
+function crecimientoDe(ajuste, anio) {
+  const t = ajuste.tramos.find((x) => anio <= x.hasta) || ajuste.tramos[ajuste.tramos.length - 1];
+  return t ? t.crecimiento : 0;
 }
 
 /** TIR anual de una serie de flujos (el primero suele ser negativo). */
@@ -384,7 +421,8 @@ export function aplicarAjuste(modelo, ajuste = ajusteActual()) {
   let acum = 0, noches = ajuste.noches2026;
   for (let i = i0; i < n; i++) {
     const anio = p.anios[i];
-    if (i > i0) noches = noches * (1 + (anio <= ajuste.hastaAnio ? ajuste.crecimiento1 : ajuste.crecimiento2));
+    if (i > i0) noches = noches * (1 + crecimientoDe(ajuste, anio));
+    if (ajuste.tope != null && noches > ajuste.tope) noches = ajuste.tope; // tope máximo de noches/año
     const nochesR = Math.round(noches);
     const tarifa = s.noches[i] ? s.ingresos[i] / s.noches[i] : (s.tarifaPromedio?.[i] ?? 0); // COP MM por noche (del Excel)
     const dias = (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0 ? 366 : 365;
