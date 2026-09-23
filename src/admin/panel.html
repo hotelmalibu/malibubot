@@ -209,6 +209,39 @@
   .pill.sin { background: var(--gris-suave); color: var(--gris); }
   @media (max-width: 860px) { .embudo-grid { grid-template-columns: 1fr; } .etapa { grid-template-columns: 110px 1fr 56px; } }
 
+  /* Monitor financiero */
+  .fin-sub { margin-top: 6px; }
+  .fin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .fin-card { background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 16px 18px; box-shadow: var(--sombra); }
+  .fin-card h3 { font-family: var(--display); font-weight: 600; font-size: 16px; margin: 0 0 10px; }
+  .fin-card .sub { font-size: 12px; color: var(--gris); margin: -6px 0 10px; }
+  .fin-lista { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; font-size: 13.5px; }
+  .fin-lista dt { color: var(--tinta-2); }
+  .fin-lista dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .kpi .num.neg { color: var(--alerta); }
+  .kpi .num.pos { color: var(--verde); }
+  .fin-alerta { display: flex; gap: 10px; align-items: flex-start; background: var(--espuma); border: 1px solid var(--linea); border-left: 4px solid var(--oro); border-radius: 12px; padding: 12px 14px; font-size: 13.5px; }
+  .fin-alerta.roja { border-left-color: var(--alerta); }
+  .fin-alerta.verde { border-left-color: var(--verde); }
+  .fin-alertas { display: grid; gap: 10px; }
+  table.reservas td.n, table.reservas th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.reservas td.neg { color: var(--alerta); font-weight: 700; }
+  table.reservas td.pos { color: var(--verde); font-weight: 700; }
+  table.reservas tr.tot td { font-weight: 800; background: var(--espuma-2); }
+  table.reservas td.etq { font-weight: 600; white-space: nowrap; }
+  table.reservas td.calor { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12.5px; }
+  .chart .l0 { stroke: var(--oro); } .chart .l1 { stroke: var(--tinta); } .chart .l2 { stroke: var(--verde); } .chart .l3 { stroke: var(--alerta); } .chart .l4 { stroke: var(--azul); }
+  .chart .b0 { fill: var(--oro-claro); } .chart .b1 { fill: var(--gris-suave); } .chart .b2 { fill: var(--verde-suave); } .chart .b3 { fill: var(--alerta-suave); }
+  .chart .b0.neg { fill: var(--alerta-suave); }
+  .chart .cero { stroke: var(--tinta-2); stroke-width: 1.2; }
+  .chart .sep { stroke: var(--oro); stroke-dasharray: 4 4; stroke-width: 1.2; }
+  .chart .hoy { fill: var(--gris); font-family: var(--ui); font-size: 10.5px; font-weight: 700; }
+  .leyenda .sw.c0 { background: var(--oro); } .leyenda .sw.c1 { background: var(--tinta); } .leyenda .sw.c2 { background: var(--verde); } .leyenda .sw.c3 { background: var(--alerta); } .leyenda .sw.c4 { background: var(--azul); }
+  .leyenda .sw.bb0 { background: var(--oro-claro); } .leyenda .sw.bb1 { background: var(--gris-suave); border: 1px solid var(--linea); }
+  .fin-selector { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+  .fin-selector button { font-family: var(--ui); border: 1px solid var(--linea); background: var(--espuma); color: var(--gris); font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .fin-selector button.activo { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+
   /* Tablas */
   .barra-seccion { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .tabla-wrap { overflow-x: auto; background: var(--espuma); border: 1px solid var(--linea); border-radius: 14px; box-shadow: var(--sombra); }
@@ -335,6 +368,7 @@
       <button id="tabChats" onclick="mostrarVista('chats')">Conversaciones</button>
       <button id="tabMonitor" onclick="mostrarVista('monitor')">Monitor conversaciones</button>
       <button id="tabTokens" onclick="mostrarVista('tokens')">Monitor de tokens</button>
+      <button id="tabFinanzas" onclick="mostrarVista('finanzas')">Monitor financiero</button>
     </nav>
     <div class="acciones-top">
       <div class="estado"><span class="punto"></span> En vivo</div>
@@ -517,6 +551,31 @@
         </div>
       </div>
     </section>
+
+    <!-- ============ MONITOR FINANCIERO ============ -->
+    <section id="vistaFinanzas" class="vista pagina">
+      <div class="dash">
+        <div class="seccion-cab">
+          <div><div class="eyebrow">Finanzas · Modelo maestro <span id="finPeriodo"></span></div><h2>Monitor financiero</h2></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            <input type="file" id="finArchivo" accept=".xlsx,.xlsm" style="display:none;" onchange="subirModelo(this)" />
+            <button class="btn" onclick="document.getElementById('finArchivo').click()" title="Sube la versión nueva del Excel del modelo maestro">📥 Actualizar modelo (.xlsx)</button>
+            <button class="btn" id="finRestablecer" style="display:none;" onclick="restablecerModelo()" title="Vuelve al modelo que viene con el sistema">Restablecer</button>
+          </div>
+        </div>
+        <div class="anios fin-sub" id="finSub" aria-label="Sección del monitor financiero">
+          <button type="button" data-s="resumen" class="activo" onclick="finVer('resumen')">Resumen</button>
+          <button type="button" data-s="real" onclick="finVer('real')">Real vs. proyectado</button>
+          <button type="button" data-s="historico" onclick="finVer('historico')">Histórico 2015–2025</button>
+          <button type="button" data-s="proyeccion" onclick="finVer('proyeccion')">Proyección 2026–2037</button>
+          <button type="button" data-s="escenarios" onclick="finVer('escenarios')">Escenarios</button>
+          <button type="button" data-s="sensibilidad" onclick="finVer('sensibilidad')">Sensibilidad</button>
+          <button type="button" data-s="supuestos" onclick="finVer('supuestos')">Supuestos y tarifas</button>
+        </div>
+        <p class="nota" id="finFuente" style="margin:-4px 0 12px;text-align:left;"></p>
+        <div id="finContenido"><div class="vacio-tabla">Cargando modelo financiero…</div></div>
+      </div>
+    </section>
   </main>
 
   <!-- Modal nueva reserva -->
@@ -559,8 +618,8 @@
   const esc = (s) => (s || '').replace(/�/g, '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
   // ---------- Navegación ----------
-  const VISTAS = { dashboard: 'vistaDashboard', chats: 'vistaChats', monitor: 'vistaMonitor', tokens: 'vistaTokens' };
-  const TABS = { dashboard: 'tabDashboard', chats: 'tabChats', monitor: 'tabMonitor', tokens: 'tabTokens' };
+  const VISTAS = { dashboard: 'vistaDashboard', chats: 'vistaChats', monitor: 'vistaMonitor', tokens: 'vistaTokens', finanzas: 'vistaFinanzas' };
+  const TABS = { dashboard: 'tabDashboard', chats: 'tabChats', monitor: 'tabMonitor', tokens: 'tabTokens', finanzas: 'tabFinanzas' };
   function mostrarVista(v) {
     vistaActual = v;
     for (const k in VISTAS) {
@@ -570,6 +629,7 @@
     if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); }
     if (v === 'monitor') cargarMonitor();
     if (v === 'tokens') cargarMetricas();
+    if (v === 'finanzas') cargarFinanzas();
   }
 
   // ---------- Helpers de rango de fechas ----------
@@ -833,7 +893,7 @@
     const etiqueta = { pagado: 'Pagado', pendiente_hotel: 'Pago en hotel', en_proceso: 'En proceso', rechazado: 'Rechazado', cancelado: 'Cancelada' };
     cuerpo.innerHTML = rs.map((r) => `
       <tr>
-        <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}</td>
+        <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}${String(r.fuente || '').startsWith('vikbooking') ? `<div style="font-size:11px;color:var(--gris)">Vik Booking #${esc(String(r.referenciaPago || '').replace('vik:', ''))}</div>` : ''}</td>
         <td>${esc(r.celular) || '—'}</td>
         <td>${canalPill(r.canal)}</td>
         <td>${esc(r.habitacion) || '—'}</td>
@@ -843,9 +903,10 @@
         <td><span class="badge-estado ${r.estado}">${etiqueta[r.estado] || r.estado}</span></td>
         <td>${avisoLlegada(r)}</td>
         <td style="text-align:right;white-space:nowrap;">
-          ${(r.estado === 'en_proceso' || r.estado === 'pendiente_hotel') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
-          ${r.estado === 'en_proceso' ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button> ` : ''}
-          ${(r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso') ? `<button class="btn-mini" style="color:var(--alerta)" onclick="cancelarReservaPanel(${r.id}, '${esc(r.nombre || '')}')">Cancelar</button>` : ''}
+          ${String(r.fuente || '').startsWith('vikbooking') ? '<span style="font-size:11px;color:var(--gris)">Se gestiona en Vik Booking</span>' : ''}
+          ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'en_proceso' || r.estado === 'pendiente_hotel')) ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
+          ${(!String(r.fuente || '').startsWith('vikbooking') && r.estado === 'en_proceso') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button> ` : ''}
+          ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso')) ? `<button class="btn-mini" style="color:var(--alerta)" onclick="cancelarReservaPanel(${r.id}, '${esc(r.nombre || '')}')">Cancelar</button>` : ''}
         </td>
       </tr>`).join('');
   }
@@ -879,7 +940,7 @@
     document.getElementById('metaNota').textContent = `Semana del lunes ${fCorta(s.desde)} al domingo ${fCorta(s.hasta)} · día ${s.diaDeSemana} de 7`;
     const cumplida = s.reservas >= d.meta;
     const pieMeta = cumplida
-      ? `¡Meta cumplida! 🎉 ${s.bot} del bot · ${s.manual} manuales`
+      ? `¡Meta cumplida! 🎉 ${s.bot} del bot · ${s.web || 0} de la web · ${s.manual} manuales`
       : `faltan ${s.faltan} · ${s.diasRestantes === 0 ? 'hoy es el último día' : `quedan ${s.diasRestantes} día${s.diasRestantes === 1 ? '' : 's'}`}`;
     const metaCard = `<div class="kpi meta ${cumplida ? 'verde' : ''}"><div class="ico">🎯</div><div>
         <div class="lbl">Reservas esta semana</div>
@@ -1064,6 +1125,7 @@
     'Google Maps': ['📍', 'c-maps'], 'Instagram': ['📸', 'c-ig'], 'Facebook': ['📘', 'c-fb'],
     'Sitio web': ['🌐', 'c-web'], 'TikTok': ['🎵', 'c-tt'], 'QR físico': ['🔳', 'c-qr'], 'Directo / Otro': ['💬', 'c-dir'],
     'Manual': ['✍️', 'c-qr'],
+    'Página web': ['🌐', 'c-web'], 'OTA (Booking, Expedia…)': ['🏨', 'c-dir'],
   };
   // Pastilla compacta con icono + nombre del canal (tabla de reservas).
   function canalPill(c) {
@@ -1275,6 +1337,330 @@
     cargarLista();
   }));
 
+  // ---------- Monitor financiero ----------
+  let finDatos = null, finSeccion = 'resumen', finMetrica = 'utNeta';
+  const MESES_N = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  // Cifras del modelo en COP millones: "$4.811 MM" (negativos en rojo).
+  const mm = (v, dec = 0) => v == null ? '—' : (v < 0 ? '−' : '') + '$' + Math.abs(Number(v)).toLocaleString('es-CO', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + ' MM';
+  const pct = (v, dec = 0) => v == null ? '—' : (v * 100).toLocaleString('es-CO', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + '%';
+  const signo = (v) => v == null ? '' : v < 0 ? 'neg' : 'pos';
+  const celdaN = (v, dec = 0, colorear = false) => `<td class="n ${colorear ? signo(v) : ''}">${mm(v, dec)}</td>`;
+
+  async function cargarFinanzas(silencioso) {
+    try {
+      const r = await fetch('/admin/api/finanzas');
+      const d = await r.json();
+      if (!d.ok) { if (!silencioso) document.getElementById('finContenido').innerHTML = `<div class="vacio-tabla">${esc(d.error || 'Sin modelo.')}</div>`; return; }
+      finDatos = d;
+      const m = d.modelo;
+      const p = m.proyeccion?.anios || [];
+      document.getElementById('finPeriodo').textContent = p.length ? `${p.find((a) => a >= 2026) || p[0]}–${p[p.length - 1]}` : '';
+      document.getElementById('finFuente').textContent =
+        `${m.empresa?.nombre || 'Hotel Malibú'}${m.empresa?.nit ? ' · NIT ' + m.empresa.nit : ''} · Fuente: ${m.archivo || 'modelo maestro'} · ${m.origen === 'panel' ? 'subido desde el panel' : 'versión del sistema'} · cifras en COP millones (MM)`;
+      document.getElementById('finRestablecer').style.display = m.origen === 'panel' ? '' : 'none';
+      finPintar();
+    } catch (_) {}
+  }
+  function finVer(s) {
+    finSeccion = s;
+    document.querySelectorAll('#finSub button').forEach((b) => b.classList.toggle('activo', b.dataset.s === s));
+    finPintar();
+  }
+  function finPintar() {
+    if (!finDatos) return;
+    const cont = document.getElementById('finContenido');
+    const f = { resumen: finResumen, real: finReal, historico: finHistorico, proyeccion: finProyeccion, escenarios: finEscenarios, sensibilidad: finSensibilidad, supuestos: finSupuestos }[finSeccion];
+    try { cont.innerHTML = f(finDatos); } catch (e) { cont.innerHTML = `<div class="vacio-tabla">No pude dibujar esta sección: ${esc(e.message)}</div>`; }
+  }
+  async function subirModelo(input) {
+    const archivo = input.files && input.files[0]; if (!archivo) return;
+    if (!confirm(`Vas a reemplazar el modelo financiero con "${archivo.name}".\nSe leerán todas sus hojas y el monitor se actualizará al instante. ¿Continuar?`)) { input.value = ''; return; }
+    const lector = new FileReader();
+    lector.onload = async () => {
+      try {
+        const r = await fetch('/admin/api/finanzas/importar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: archivo.name, base64: lector.result }) });
+        const d = await r.json();
+        if (!d.ok) alert(d.error || 'No se pudo importar.');
+        else {
+          alert(`Modelo actualizado ✅\n${d.resumen.historico} años de histórico · ${d.resumen.proyeccion} años en el modelo · ${d.resumen.escenarios} escenarios · ${d.resumen.sensibilidad} tablas de sensibilidad` + (d.avisos?.length ? `\n\nAvisos: ${d.avisos.join(' | ')}` : ''));
+          cargarFinanzas();
+        }
+      } catch (_) { alert('Error de red al subir el archivo.'); }
+      input.value = '';
+    };
+    lector.readAsDataURL(archivo);
+  }
+  async function restablecerModelo() {
+    if (!confirm('¿Volver al modelo financiero que viene con el sistema? Se descarta el Excel subido desde el panel.')) return;
+    await fetch('/admin/api/finanzas/restablecer', { method: 'POST' });
+    cargarFinanzas();
+  }
+
+  // Gráfico genérico: barras y/o líneas por categoría, con eje que admite negativos.
+  // series: [{ nombre, valores, tipo:'bar'|'line', clase }]
+  function finGrafico({ categorias, series, alto = 300, formato = (v) => miles(Math.round(v)), sepEn = null, etiquetas = true, resaltar = -1 }) {
+    const W = 960, H = alto, padL = 70, padR = 16, padT = 22, padB = 44;
+    const cw = W - padL - padR, ch = H - padT - padB, n = Math.max(1, categorias.length), bw = cw / n;
+    const vals = series.flatMap((s) => s.valores).filter((v) => v != null);
+    let max = Math.max(0, ...vals), min = Math.min(0, ...vals);
+    if (max === min) max = min + 1;
+    const rango = max - min; max += rango * 0.12; if (min < 0) min -= rango * 0.08;
+    const y = (v) => padT + ch - ((v - min) / (max - min)) * ch;
+    let g = '';
+    const pasos = 4;
+    for (let i = 0; i <= pasos; i++) {
+      const v = min + ((max - min) * i) / pasos, yy = y(v);
+      g += `<line class="gl" x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ax" x="${padL - 8}" y="${yy + 4}" text-anchor="end">${formato(v)}</text>`;
+    }
+    if (min < 0) g += `<line class="cero" x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}"/>`;
+    const barras = series.filter((s) => s.tipo !== 'line'), lineas = series.filter((s) => s.tipo === 'line');
+    const nb = Math.max(1, barras.length), anchoB = (bw * 0.7) / nb;
+    barras.forEach((s, si) => {
+      s.valores.forEach((v, i) => {
+        if (v == null) return;
+        const x = padL + i * bw + bw * 0.15 + si * anchoB, y0 = y(0), y1 = y(v);
+        g += `<rect class="bar ${s.clase || 'b' + si}${v < 0 ? ' neg' : ''}${i === resaltar ? ' act' : ''}" x="${x}" y="${Math.min(y0, y1)}" width="${anchoB - 2}" height="${Math.max(1.5, Math.abs(y0 - y1))}" rx="3"><title>${esc(s.nombre)} ${esc(String(categorias[i]))}: ${formato(v)}</title></rect>`;
+        if (etiquetas && barras.length === 1 && n <= 14) g += `<text class="val" x="${x + (anchoB - 2) / 2}" y="${v >= 0 ? y1 - 5 : y1 + 12}" text-anchor="middle">${formato(v)}</text>`;
+      });
+    });
+    lineas.forEach((s, si) => {
+      const pts = s.valores.map((v, i) => (v == null ? null : [padL + i * bw + bw / 2, y(v)]));
+      let d = '', prev = false;
+      pts.forEach((p) => { if (!p) { prev = false; return; } d += (prev ? ' L' : ' M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); prev = true; });
+      g += `<path d="${d.trim()}" fill="none" class="${s.clase || 'l' + si}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" class="${s.clase || 'l' + si}" fill="#fff" stroke-width="2"><title>${esc(s.nombre)} ${esc(String(categorias[i]))}: ${formato(s.valores[i])}</title></circle>`; });
+    });
+    if (sepEn != null && sepEn > 0 && sepEn < n) {
+      const xs = padL + sepEn * bw;
+      g += `<line class="sep" x1="${xs}" x2="${xs}" y1="${padT}" y2="${padT + ch}"/><text class="hoy" x="${xs + 5}" y="${padT + 10}">proyección →</text>`;
+    }
+    categorias.forEach((c, i) => {
+      const paso = n > 14 ? 2 : 1;
+      if (i % paso === 0) g += `<text class="ax mes${i === resaltar ? ' act' : ''}" x="${padL + i * bw + bw / 2}" y="${H - padB + 18}" text-anchor="middle">${esc(String(c))}</text>`;
+    });
+    const ley = series.map((s, i) => `<span class="leyenda"><span class="sw ${s.tipo === 'line' ? 'c' + (s.clase ? s.clase.slice(1) : i) : 'b' + (s.clase ? 'b' + s.clase.slice(1) : 'b' + i)}"></span> ${esc(s.nombre)}</span>`).join('');
+    return `<div class="grafico-wrap"><div class="grafico-top">${ley}</div><svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${g}</svg></div>`;
+  }
+  function finTabla(cabeceras, filas, opciones = {}) {
+    const th = cabeceras.map((c, i) => `<th class="${i ? 'n' : ''}">${esc(String(c))}</th>`).join('');
+    return `<div class="tabla-wrap"${opciones.margen ? ' style="margin-top:14px;"' : ''}><table class="reservas" style="min-width:${opciones.minAncho || 640}px;"><thead><tr>${th}</tr></thead><tbody>${filas}</tbody></table></div>`;
+  }
+  function finFila(etiqueta, valores, opciones = {}) {
+    const { dec = 0, pctv = false, colorear = false, total = false } = opciones;
+    const celdas = valores.map((v) => pctv ? `<td class="n ${colorear ? signo(v) : ''}">${pct(v, dec)}</td>` : celdaN(v, dec, colorear)).join('');
+    return `<tr${total ? ' class="tot"' : ''}><td class="etq">${esc(etiqueta)}</td>${celdas}</tr>`;
+  }
+
+  // --- Resumen ---
+  function finResumen(d) {
+    const m = d.modelo, p = m.proyeccion, s = p.series, h = m.historico;
+    const i0 = p.anios.indexOf(2026) >= 0 ? p.anios.indexOf(2026) : p.anios.findIndex((a) => a >= new Date().getFullYear());
+    const a0 = p.anios[i0];
+    const v = (k) => s[k]?.[i0];
+    const kpi = (clase, ico, lbl, val, pie, num) => `<div class="kpi ${clase}"><div class="ico">${ico}</div><div><div class="lbl">${lbl}</div><div class="num ${num != null ? signo(num) : ''}" style="font-size:26px;">${val}</div>${pie ? `<div class="pie">${pie}</div>` : ''}</div></div>`;
+    let html = `<div class="kpis">` +
+      kpi('', '📈', 'TIR del proyecto', pct(p.tir, 1), `flujo de caja ${a0}–${p.anios[p.anios.length - 1]}`) +
+      kpi('verde', '💵', `Ingresos ${a0}`, mm(v('ingresos')), `${miles(v('noches'))} noches · ocupación ${pct(v('ocupacion'))}`) +
+      kpi('', '🏦', `EBITDA ${a0}`, mm(v('ebitda')), `margen ${pct(v('margenEbitda'))}`) +
+      kpi('azul', '🧾', `Utilidad operacional ${a0}`, mm(v('utOperacional')), `margen ${pct(v('margenOperacional'))}`) +
+      kpi('alerta', '💳', `Gastos financieros ${a0}`, mm(v('gFinancieros')), `deuda ${mm(v('deuda'))} · tasa ${pct(m.supuestos.tasaEfectiva)}`) +
+      kpi('verde', '✅', `Utilidad neta ${a0}`, mm(v('utNeta')), `margen ${pct(v('margenNeto'))}`, v('utNeta')) +
+      kpi('gris', '💧', `Flujo de caja libre ${a0}`, mm(v('fcf')), v('fcf') < 0 ? `incluye CAPEX ${mm(m.supuestos.capex)} de la Torre` : 'caja disponible', v('fcf')) +
+      `</div>`;
+    // Ingresos, gastos y utilidad neta: histórico + proyección en un solo gráfico.
+    const cats = p.anios, sep = p.anios.findIndex((a) => a >= (m.supuestos.anioInicioNuevas || 2026));
+    html += `<div class="seccion-cab"><div><div class="eyebrow">Trayectoria</div><h2>Ingresos, gastos y utilidad neta ${p.anios[0]}–${p.anios[p.anios.length - 1]}</h2></div><div class="nota">Barras: ingresos y gastos operacionales · línea: utilidad neta · COP millones</div></div>` +
+      finGrafico({ categorias: cats, series: [
+        { nombre: 'Ingresos', valores: s.ingresos, tipo: 'bar', clase: 'b0' }, { nombre: 'Gastos op.', valores: s.gastos, tipo: 'bar', clase: 'b1' },
+        { nombre: 'Utilidad neta', valores: s.utNeta, tipo: 'line', clase: 'l1' }, { nombre: 'EBITDA', valores: s.ebitda, tipo: 'line', clase: 'l2' },
+      ], sepEn: sep, etiquetas: false });
+    // Hitos y alertas automáticas.
+    const acum = s.fcfAcumulado || [], iEq = acum.findIndex((x, i) => x != null && x > 0 && p.anios[i] >= a0);
+    const iDeuda = (s.deuda || []).findIndex((x, i) => x === 0 && p.anios[i] >= a0);
+    const ultH = h ? h.anios.length - 1 : -1;
+    const crecIng = ultH >= 0 && h.series.ingresos?.[ultH] ? (v('ingresos') / h.series.ingresos[ultH] - 1) : null;
+    const alertas = [];
+    alertas.push(`<div class="fin-alerta ${iEq >= 0 ? 'verde' : 'roja'}">🎯 <div><b>Recuperación de la inversión:</b> ${iEq >= 0 ? `el flujo de caja acumulado se vuelve positivo en <b>${p.anios[iEq]}</b> (${mm(acum[iEq])}); ${a0}–${p.anios[iEq - 1] || a0} es la etapa de siembra.` : 'el flujo acumulado no llega a ser positivo en el horizonte del modelo.'}</div></div>`);
+    alertas.push(`<div class="fin-alerta ${iDeuda >= 0 ? 'verde' : ''}">🏦 <div><b>Deuda:</b> saldo inicial ${mm(m.supuestos.deudaInicial)} a ${pct(m.supuestos.tasaEfectiva)} (IBR ${pct(m.supuestos.ibr)} + ${pct(m.supuestos.spread)}), ${m.supuestos.plazoMeses} meses; ${iDeuda >= 0 ? `queda en cero en <b>${p.anios[iDeuda]}</b>.` : 'no se termina de pagar en el horizonte.'} Servicio de deuda ${a0}: ${mm(v('servicioDeuda'))}.</div></div>`);
+    if (crecIng != null) alertas.push(`<div class="fin-alerta">📊 <div><b>Salto de ingresos:</b> el modelo proyecta ${mm(v('ingresos'))} en ${a0}, un <b>${pct(crecIng)}</b> más que ${h.anios[ultH]} (${mm(h.series.ingresos[ultH])}), apoyado en las ${m.supuestos.habitacionesNuevas} habitaciones nuevas (${m.supuestos.totalHabitaciones} en total) con ocupación proyectada del ${pct(m.supuestos.ocupacionProyectada)}.</div></div>`);
+    if (v('fcf') < 0) alertas.push(`<div class="fin-alerta roja">⚠️ <div><b>Caja ${a0}:</b> el flujo de caja libre es negativo (${mm(v('fcf'))}) por el CAPEX de la ampliación (${mm(m.supuestos.capex)}) y la amortización (${mm(v('amortizacion'))}). Conviene asegurar financiación puente para ese año.</div></div>`);
+    if (v('margenNeto') != null && v('margenNeto') < 0.1) alertas.push(`<div class="fin-alerta">🔎 <div><b>Margen neto ${a0} de ${pct(v('margenNeto'))}:</b> los gastos financieros (${mm(v('gFinancieros'))}) se llevan ${pct(v('gFinancieros') / v('utOperacional'))} de la utilidad operacional. Cada punto de ocupación o de tarifa pesa mucho: revisa la pestaña Sensibilidad.</div></div>`);
+    html += `<div class="seccion-cab"><div><div class="eyebrow">Lectura rápida</div><h2>Hitos y alertas del modelo</h2></div></div><div class="fin-alertas">${alertas.join('')}</div>`;
+    // Escenarios 2026 en una fila.
+    if (m.escenarios?.length) {
+      html += `<div class="seccion-cab"><div><div class="eyebrow">Escenarios</div><h2>Utilidad neta ${m.escenarios[0].anios[0]} según escenario</h2></div><div class="nota">Ver detalle en la pestaña Escenarios</div></div><div class="kpis">` +
+        m.escenarios.map((e, i) => kpi(['alerta', '', 'azul', 'verde'][i] || '', ['🌧️', '☁️', '⛅', '☀️'][i] || '📌', e.nombre, mm(e.series.utNeta?.[0]), `${e.descripcion} · EBITDA ${mm(e.series.ebitda?.[0])}`, e.series.utNeta?.[0])).join('') + `</div>`;
+    }
+    return html;
+  }
+
+  // --- Real vs. proyectado (año en curso) ---
+  function finReal(d) {
+    const sg = d.seguimiento, m = d.modelo, vb = d.ventasBot;
+    if (!sg) return '<div class="vacio-tabla">El modelo no tiene proyección para el año en curso.</div>';
+    const a = sg.acumulado;
+    const kpi = (clase, ico, lbl, val, pie) => `<div class="kpi ${clase}"><div class="ico">${ico}</div><div><div class="lbl">${lbl}</div><div class="num" style="font-size:26px;">${val}</div>${pie ? `<div class="pie">${pie}</div>` : ''}</div></div>`;
+    const cumpl = a.cumplimientoPct;
+    let html = `<div class="kpis">` +
+      kpi(cumpl == null ? 'gris' : cumpl >= 100 ? 'verde' : cumpl >= 85 ? '' : 'alerta', '🎯', `Cumplimiento ${sg.anio}`, cumpl == null ? '—' : cumpl + '%', `noches reales vs. proyectadas · ${a.mesesCerradosConDato} meses cerrados`) +
+      kpi('', '🛏️', 'Noches reales (meses cerrados)', miles(a.nochesReales), `proyectadas: ${miles(a.nochesProyectadas)} · según el Libro de Reservas`) +
+      kpi('azul', '📊', 'Ocupación real', a.ocupacionReal == null ? '—' : a.ocupacionReal + '%', `el modelo supone ${pct(sg.ocupacionProyectada)} sobre ${m.supuestos.totalHabitaciones} habitaciones`) +
+      kpi('verde', '💵', 'Ingreso estimado (meses cerrados)', mm(a.ingresoEstimadoMM), `proyectado: ${mm(a.ingresoProyectadoMM)} · tarifa promedio del modelo $${miles(sg.tarifaPromedioCOP)}/noche`) +
+      kpi('', '🤖', `Ventas por WhatsApp ${vb.anio}`, pesos(vb.montoCOP), `${vb.reservas} reservas confirmadas por MALIBUBOT`) +
+      `</div>`;
+    html += `<div class="seccion-cab"><div><div class="eyebrow">Mes a mes</div><h2>Noches reales vs. proyectadas ${sg.anio}</h2></div><div class="nota">Real = noches reservadas del Libro (Google Sheet) · Proyectado = ${miles(sg.nochesAnioProyectadas)} noches/año prorrateadas por días del mes</div></div>` +
+      finGrafico({ categorias: MESES_N, series: [
+        { nombre: 'Noches proyectadas', valores: sg.meses.map((x) => x.nochesProyectadas), tipo: 'bar', clase: 'b1' },
+        { nombre: 'Noches reales', valores: sg.meses.map((x) => x.nochesReales), tipo: 'bar', clase: 'b0' },
+      ], alto: 260, resaltar: sg.mesActual - 1, etiquetas: false });
+    const filas = sg.meses.map((x, i) => {
+      const c = x.cumplimientoPct;
+      return `<tr><td class="etq">${MESES_N[i]}${x.enCurso ? ' <span style="color:var(--gris);font-size:11px">(en curso)</span>' : ''}</td><td class="n">${x.nochesReales != null ? miles(x.nochesReales) : '—'}</td><td class="n">${miles(x.nochesProyectadas)}</td><td class="n ${c == null ? '' : c >= 100 ? 'pos' : c < 85 ? 'neg' : ''}">${c == null ? '—' : c + '%'}</td>${celdaN(x.ingresoEstimadoMM, 1)}${celdaN(x.ingresoProyectadoMM, 1)}<td class="n">${vb.porMes[i].reservas ? `${vb.porMes[i].reservas} · ${pesos(vb.porMes[i].montoCOP)}` : '—'}</td></tr>`;
+    }).join('');
+    html += finTabla(['Mes', 'Noches reales', 'Noches proyectadas', 'Cumplimiento', 'Ingreso estimado', 'Ingreso proyectado', 'Reservas WhatsApp'], filas, { margen: true, minAncho: 760 });
+    html += `<p class="nota" style="margin:10px 0 0;">El ingreso estimado multiplica las noches reales por la tarifa promedio que usa el modelo para ${sg.anio}; es una aproximación, no la facturación contable. Los meses sin dato aún no están en caché del Libro.</p>`;
+    return html;
+  }
+
+  // --- Histórico ---
+  function finHistorico(d) {
+    const h = d.modelo.historico; if (!h) return '<div class="vacio-tabla">Sin histórico en el modelo.</div>';
+    const s = h.series, n = h.anios.length;
+    const tot = (arr) => (arr || []).reduce((x, y) => x + (y || 0), 0);
+    const prom = (arr) => { const v = (arr || []).filter((x) => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Estados financieros</div><h2>Histórico ${h.anios[0]}–${h.anios[n - 1]}</h2></div><div class="nota">COP millones · ${n} años · ingresos acumulados ${mm(tot(s.ingresos))}</div></div>` +
+      finGrafico({ categorias: h.anios, series: [
+        { nombre: 'Ingresos', valores: s.ingresos, tipo: 'bar', clase: 'b0' }, { nombre: 'Gastos op.', valores: s.gastos, tipo: 'bar', clase: 'b1' },
+        { nombre: 'EBITDA', valores: s.ebitda, tipo: 'line', clase: 'l2' }, { nombre: 'Utilidad neta', valores: s.utNeta, tipo: 'line', clase: 'l1' },
+      ], etiquetas: false });
+    const cab = ['Concepto', ...h.anios, 'Total / prom.'];
+    const filas =
+      finFila('Ingresos totales', [...s.ingresos, tot(s.ingresos)], { total: true }) +
+      finFila('Gastos operacionales', [...s.gastos, tot(s.gastos)]) +
+      finFila('EBITDA', [...s.ebitda, tot(s.ebitda)], { colorear: true }) +
+      finFila('Margen EBITDA', [...(s.margenEbitda || []), prom(s.margenEbitda)], { pctv: true }) +
+      finFila('Depreciación', [...(s.depreciacion || []), tot(s.depreciacion)]) +
+      finFila('Utilidad operacional', [...s.utOperacional, tot(s.utOperacional)], { colorear: true }) +
+      finFila('Gastos financieros', [...s.gFinancieros, tot(s.gFinancieros)]) +
+      finFila('Utilidad neta', [...s.utNeta, tot(s.utNeta)], { colorear: true, total: true }) +
+      finFila('Saldo de deuda', [...(s.deuda || []), null]) +
+      finFila('Flujo de caja (aprox.)', [...(s.fcf || []), tot(s.fcf)], { colorear: true });
+    html += finTabla(cab, filas, { margen: true, minAncho: 1100 });
+    // Deuda y gastos financieros.
+    html += `<div class="seccion-cab"><div><div class="eyebrow">Endeudamiento</div><h2>Saldo de deuda y gastos financieros</h2></div></div>` +
+      finGrafico({ categorias: h.anios, series: [{ nombre: 'Saldo de deuda', valores: s.deuda, tipo: 'bar', clase: 'b1' }, { nombre: 'Gastos financieros', valores: s.gFinancieros, tipo: 'line', clase: 'l3' }], alto: 240, etiquetas: false });
+    return html;
+  }
+
+  // --- Proyección ---
+  function finProyeccion(d) {
+    const m = d.modelo, p = m.proyeccion, s = p.series;
+    const ini = p.anios.findIndex((a) => a >= (m.supuestos.anioInicioNuevas || 2026));
+    const anios = p.anios.slice(ini), corte = (arr) => (arr || []).slice(ini);
+    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Modelo financiero</div><h2>Proyección ${anios[0]}–${anios[anios.length - 1]}</h2></div><div class="nota">Ocupación ${pct(s.ocupacion?.[ini])} · tarifa +${pct(m.supuestos.crecimientoTarifa)}/año · gastos +${pct(m.supuestos.crecimientoGastos)}/año · TIR ${pct(p.tir, 1)}</div></div>` +
+      finGrafico({ categorias: anios, series: [
+        { nombre: 'Ingresos', valores: corte(s.ingresos), tipo: 'bar', clase: 'b0' }, { nombre: 'Gastos op.', valores: corte(s.gastos), tipo: 'bar', clase: 'b1' },
+        { nombre: 'EBITDA', valores: corte(s.ebitda), tipo: 'line', clase: 'l2' }, { nombre: 'Utilidad neta', valores: corte(s.utNeta), tipo: 'line', clase: 'l1' },
+      ], etiquetas: false });
+    const cab = ['Concepto', ...anios];
+    const filas =
+      finFila('Ocupación proyectada', corte(s.ocupacion), { pctv: true }) +
+      `<tr><td class="etq">Noches vendidas</td>${corte(s.noches).map((v) => `<td class="n">${v != null ? miles(v) : '—'}</td>`).join('')}</tr>` +
+      `<tr><td class="etq">Tarifa promedio por noche (COP)</td>${anios.map((_, i) => { const ing = corte(s.ingresos)[i], noc = corte(s.noches)[i], tp = corte(s.tarifaPromedio)[i]; const v = ing && noc ? (ing / noc) * 1e6 : tp != null ? tp * 1e6 : null; return `<td class="n">${v != null ? '$' + miles(Math.round(v / 100) * 100) : '—'}</td>`; }).join('')}</tr>` +
+      finFila('Ingresos totales', corte(s.ingresos), { total: true }) +
+      finFila('Gastos operacionales', corte(s.gastos)) +
+      finFila('EBITDA', corte(s.ebitda), { colorear: true }) +
+      finFila('Margen EBITDA', corte(s.margenEbitda), { pctv: true }) +
+      finFila('Depreciación', corte(s.depreciacion)) +
+      finFila('Utilidad operacional', corte(s.utOperacional), { colorear: true }) +
+      finFila('Saldo de deuda (inicio de año)', corte(s.deuda)) +
+      finFila('Gastos financieros', corte(s.gFinancieros)) +
+      finFila('Amortización de capital', corte(s.amortizacion)) +
+      finFila('Servicio total de deuda', corte(s.servicioDeuda)) +
+      finFila('Utilidad neta', corte(s.utNeta), { colorear: true, total: true }) +
+      finFila('Margen neto', corte(s.margenNeto), { pctv: true }) +
+      finFila('Flujo de caja libre', corte(s.fcf), { colorear: true }) +
+      finFila('FCF acumulado', corte(s.fcfAcumulado), { colorear: true });
+    html += finTabla(cab, filas, { margen: true, minAncho: 1200 });
+    html += `<div class="seccion-cab"><div><div class="eyebrow">Caja y deuda</div><h2>Flujo de caja libre y saldo de deuda</h2></div><div class="nota">El FCF acumulado cruza a positivo cuando se recupera la inversión</div></div>` +
+      finGrafico({ categorias: anios, series: [{ nombre: 'FCF anual', valores: corte(s.fcf), tipo: 'bar', clase: 'b0' }, { nombre: 'FCF acumulado', valores: corte(s.fcfAcumulado), tipo: 'line', clase: 'l1' }, { nombre: 'Saldo de deuda', valores: corte(s.deuda), tipo: 'line', clase: 'l3' }], alto: 260, etiquetas: false });
+    if (p.porTipo?.length) {
+      const filasT = p.porTipo.map((t) => finFila(`${t.tipo}${t.cantidad ? ` (${t.cantidad} hab)` : ''}`, corte(t.valores))).join('') +
+        finFila('Total', anios.map((_, i) => p.porTipo.reduce((sum, t) => sum + (corte(t.valores)[i] || 0), 0)), { total: true });
+      html += `<div class="seccion-cab"><div><div class="eyebrow">Mezcla de ventas</div><h2>Ingresos por tipo de habitación</h2></div><div class="nota">COP millones · según tarifas rack y ocupación por temporada</div></div>` + finTabla(cab, filasT, { minAncho: 1100 });
+    }
+    return html;
+  }
+
+  // --- Escenarios ---
+  function finEscenarios(d) {
+    const es = d.modelo.escenarios || []; if (!es.length) return '<div class="vacio-tabla">Sin escenarios en el modelo.</div>';
+    const metricas = { ingresos: 'Ingresos', ebitda: 'EBITDA', utOperacional: 'Ut. operacional', gFinancieros: 'G. financieros', utNeta: 'Utilidad neta', fcf: 'Flujo de caja libre', margenEbitda: 'Margen EBITDA', margenNeto: 'Margen neto' };
+    const esPct = finMetrica.startsWith('margen');
+    const anios = es[0].anios;
+    const sel = Object.entries(metricas).map(([k, v]) => `<button type="button" class="${k === finMetrica ? 'activo' : ''}" onclick="finMetrica='${k}'; finPintar()">${v}</button>`).join('');
+    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Comparativo</div><h2>${metricas[finMetrica]} por escenario</h2></div><div class="nota">${es.map((e) => `<b>${esc(e.nombre)}</b>: ${esc(e.descripcion)}`).join(' · ')}</div></div><div class="fin-selector">${sel}</div>` +
+      finGrafico({ categorias: anios, series: es.map((e, i) => ({ nombre: e.nombre, valores: e.series[finMetrica], tipo: 'line', clase: ['l3', 'l0', 'l4', 'l2'][i] || 'l1' })), formato: esPct ? (v) => Math.round(v * 100) + '%' : (v) => miles(Math.round(v)), etiquetas: false });
+    const filas = es.map((e) => finFila(e.nombre, e.series[finMetrica] || [], esPct ? { pctv: true } : { colorear: true })).join('');
+    html += finTabla(['Escenario', ...anios], filas, { margen: true, minAncho: 1000 });
+    // Resumen del primer y último año por escenario.
+    const kpi = (clase, ico, lbl, val, pie) => `<div class="kpi ${clase}"><div class="ico">${ico}</div><div><div class="lbl">${lbl}</div><div class="num" style="font-size:22px;">${val}</div><div class="pie">${pie}</div></div></div>`;
+    html += `<div class="seccion-cab"><div><div class="eyebrow">De un vistazo</div><h2>Utilidad neta ${anios[0]} → ${anios[anios.length - 1]}</h2></div></div><div class="kpis">` +
+      es.map((e, i) => kpi(['alerta', '', 'azul', 'verde'][i] || '', ['🌧️', '☁️', '⛅', '☀️'][i] || '📌', e.nombre, `${mm(e.series.utNeta?.[0])} → ${mm(e.series.utNeta?.[anios.length - 1])}`, `FCF ${anios[0]}: ${mm(e.series.fcf?.[0])} · margen neto ${pct(e.series.margenNeto?.[0])} → ${pct(e.series.margenNeto?.[anios.length - 1])}`)).join('') + `</div>`;
+    return html;
+  }
+
+  // --- Sensibilidad (mapas de calor) ---
+  function finSensibilidad(d) {
+    const ts = d.modelo.sensibilidad || []; if (!ts.length) return '<div class="vacio-tabla">Sin tablas de sensibilidad en el modelo.</div>';
+    const color = (v, max, min, invertir) => {
+      if (v == null) return '';
+      const neg = invertir ? v > 0 : v < 0;
+      const t = Math.min(1, Math.abs(v) / (Math.max(Math.abs(max), Math.abs(min)) || 1));
+      return neg ? `background:rgba(192,90,58,${0.12 + t * 0.55});color:${t > 0.5 ? '#fff' : 'var(--tinta)'}` : `background:rgba(47,143,91,${0.08 + t * 0.6});color:${t > 0.55 ? '#fff' : 'var(--tinta)'}`;
+    };
+    return `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">¿Qué pasa si…?</div><h2>Análisis de sensibilidad</h2></div><div class="nota">Verde = favorable · rojo = desfavorable · la intensidad indica la magnitud · COP millones</div></div>` +
+      ts.map((t) => {
+        const vals = t.filas.flatMap((f) => f.valores).filter((v) => v != null);
+        const max = Math.max(...vals), min = Math.min(...vals);
+        const esCosto = /gastos financieros|costo/i.test(t.titulo);
+        const cab = `<th>${esc(t.ejeFilas)} ↓ / ${esc(t.ejeColumnas)} →</th>` + t.columnas.map((c) => `<th class="n">${esc(String(c))}</th>`).join('');
+        const filas = t.filas.map((f) => `<tr><td class="etq">${esc(String(f.etiqueta))}</td>${f.valores.map((v) => `<td class="calor" style="${color(v, max, min, esCosto)}">${v == null ? '—' : (v < 0 ? '−' : '') + miles(Math.abs(Math.round(v)))}</td>`).join('')}</tr>`).join('');
+        return `<div class="fin-card" style="margin-bottom:14px;padding:14px 16px;"><h3>${esc(t.titulo)}</h3><div class="tabla-wrap" style="box-shadow:none;"><table class="reservas" style="min-width:820px;"><thead><tr>${cab}</tr></thead><tbody>${filas}</tbody></table></div></div>`;
+      }).join('');
+  }
+
+  // --- Supuestos y tarifas ---
+  function finSupuestos(d) {
+    const m = d.modelo, s = m.supuestos;
+    const lista = (pares) => `<dl class="fin-lista">${pares.filter(([, v]) => v != null && v !== '—').map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+    const card = (t, sub, cuerpo) => `<div class="fin-card"><h3>${t}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}${cuerpo}</div>`;
+    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Panel de entrada</div><h2>Supuestos del modelo</h2></div><div class="nota">Son las variables que mueven toda la proyección · para cambiarlas edita el Excel y súbelo con "Actualizar modelo"</div></div><div class="fin-grid">` +
+      card('🏨 Habitaciones y ocupación', 'Torre original + ampliación', lista([
+        ['Habitaciones existentes', s.habitacionesExistentes], ['Habitaciones nuevas (Torre)', s.habitacionesNuevas], ['Total habitaciones', s.totalHabitaciones],
+        ['Año de inicio de las nuevas', s.anioInicioNuevas], ['Ocupación histórica 2015–2025', pct(s.ocupacionHistorica)], ['Ocupación proyectada (85 hab)', pct(s.ocupacionProyectada)], ['Ocupación rack real ponderada', pct(s.ocupacionRackReal, 1)],
+      ])) +
+      card('🌙 Noches por temporada', 'Distribución del año y ocupación por temporada', lista([
+        ['Noches alta temporada / año', s.nochesAlta], ['Noches baja (festivos + fines de semana)', s.nochesBaja], ['Noches regulares / año', s.nochesRegulares],
+        ['Ocupación en alta', pct(s.ocupacionAlta, 1)], ['Ocupación en regular', pct(s.ocupacionRegular, 1)], ['Ocupación en baja', pct(s.ocupacionBaja, 1)],
+      ])) +
+      card('💰 Tarifas y gastos', 'Crecimiento anual de precios y costos', lista([
+        ['Precio rack base / noche', s.precioRackBase != null ? '$' + miles(s.precioRackBase) : null], ['IPC anual estimado', pct(s.ipc)], ['Prima sobre IPC', pct(s.prima)], ['Crecimiento tarifa efectivo', pct(s.crecimientoTarifa)],
+        ['Gastos base 2025', mm(s.gastosBase2025)], ['Apalancamiento por nuevas habitaciones', s.apalancamiento != null ? '×' + s.apalancamiento : null], ['Crecimiento anual de gastos', pct(s.crecimientoGastos)], ['Gastos 2026 proyectados', mm(s.gastos2026)],
+      ])) +
+      card('🏦 Deuda e inversión', 'Estructura del crédito y CAPEX de la Torre', lista([
+        ['Saldo de deuda inicial 2026', mm(s.deudaInicial)], ['Tasa IBR', pct(s.ibr, 2)], ['Spread del crédito', pct(s.spread)], ['Tasa efectiva', pct(s.tasaEfectiva, 2)],
+        ['Plazo', s.plazoMeses != null ? `${s.plazoMeses} meses (${Math.round(s.plazoMeses / 12)} años)` : null], ['Amortización anual', mm(s.amortizacionAnual)], ['CAPEX ampliación (35 hab)', mm(s.capex)], ['Depreciación anual', mm(s.depreciacionAnual)],
+      ])) + `</div>`;
+    if (m.tarifas?.length) {
+      const filas = m.tarifas.map((t) => `<tr><td class="etq">${esc(t.tipo)}</td><td class="n">${t.cantidad ?? '—'}</td><td class="n">$${miles(t.alta)}</td><td class="n">$${miles(t.regular)}</td><td class="n">$${miles(t.baja)}</td></tr>`).join('') +
+        `<tr class="tot"><td class="etq">Total</td><td class="n">${m.tarifas.reduce((x, t) => x + (t.cantidad || 0), 0)}</td><td colspan="3"></td></tr>`;
+      html += `<div class="seccion-cab"><div><div class="eyebrow">Tarifas rack ${m.proyeccion?.anios?.find((a) => a >= 2026) || ''}</div><h2>Precio por noche según temporada</h2></div><div class="nota">COP por noche · alta = vacaciones y puentes largos · baja = festivos y fines de semana fuera de temporada</div></div>` +
+        finTabla(['Tipo de habitación', 'Cantidad', 'Rack alta', 'Rack regular', 'Rack baja'], filas, { minAncho: 600 });
+    }
+    return html;
+  }
+
   // Arranque + ciclos de actualización
   pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarLista();
   setInterval(() => {
@@ -1284,7 +1670,7 @@
     if (vistaActual === 'monitor') cargarMonitor();
     if (vistaActual === 'tokens') cargarMetricas();
   }, 4000);
-  setInterval(() => { if (vistaActual === 'dashboard') cargarGrafico(); }, 60000);
+  setInterval(() => { if (vistaActual === 'dashboard') cargarGrafico(); if (vistaActual === 'finanzas') cargarFinanzas(true); }, 60000);
 </script>
 </body>
 </html>

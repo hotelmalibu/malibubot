@@ -32,6 +32,7 @@ import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
+import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio } from '../datos/modelo.js';
 import {
   probarAuth as probarAuthRapyd,
   metodosPais as metodosPaisRapyd,
@@ -212,7 +213,9 @@ adminRouter.get('/api/reservas', (_req, res) => {
   // (Google Ads, Anuncio Facebook, Instagram...); las manuales, "Manual".
   const reservas = reservasStore.listar().map((r) => ({
     ...r,
-    canal: r.waId && store.obtener(r.waId)
+    canal: r.fuente === 'vikbooking' ? 'Página web'
+      : r.fuente === 'vikbooking-ota' ? 'OTA (Booking, Expedia…)'
+      : r.waId && store.obtener(r.waId)
       ? (store.obtener(r.waId).canal || 'Directo / Otro')
       : (r.fuente === 'manual' || r.fuente === 'humano' ? 'Manual' : 'Directo / Otro'),
     puedeRecordar: puedeRecordar(r), // recordatorio pre-llegada disponible (llega hoy o mañana)
@@ -350,6 +353,58 @@ adminRouter.get('/api/reservas-promedio', (_req, res) => {
     anios: [...aniosUsados].sort(),
     meses,
   });
+});
+
+// -------- Monitor financiero (modelo maestro 2026–2037) --------
+// Devuelve el modelo vigente + el seguimiento del año en curso (noches reales
+// del Libro vs. proyectadas) + las ventas reales cerradas por WhatsApp.
+adminRouter.get('/api/finanzas', (_req, res) => {
+  const modelo = modeloActual();
+  if (!modelo) return res.status(404).json({ ok: false, error: 'Aún no hay modelo financiero cargado. Sube el Excel desde el panel.' });
+  const anio = new Date().getUTCFullYear();
+  const confirmadas = reservasStore.listar().filter((r) => (r.estado === 'pagado' || r.estado === 'pendiente_hotel') && (r.checkIn || '').startsWith(`${anio}-`));
+  const ventasBot = {
+    anio,
+    reservas: confirmadas.length,
+    montoCOP: confirmadas.reduce((s, r) => s + (Number(r.monto) || 0), 0),
+    porMes: Array.from({ length: 12 }, (_, m) => {
+      const mm = `${anio}-${String(m + 1).padStart(2, '0')}`;
+      const del = confirmadas.filter((r) => (r.checkIn || '').startsWith(mm));
+      return { mes: m + 1, reservas: del.length, montoCOP: del.reduce((s, r) => s + (Number(r.monto) || 0), 0) };
+    }),
+  };
+  res.json({ ok: true, modelo, seguimiento: seguimientoAnio(modelo, ocupacionEnCache, anio), ventasBot });
+});
+
+// Sube un Excel nuevo del modelo (base64 desde el navegador) y lo deja como vigente.
+adminRouter.post('/api/finanzas/importar', async (req, res) => {
+  const nombre = String(req.body?.nombre || 'modelo.xlsx').slice(0, 120);
+  const base64 = String(req.body?.base64 || '').replace(/^data:[^;]+;base64,/, '');
+  if (!base64) return res.status(400).json({ ok: false, error: 'No llegó el archivo.' });
+  let modelo;
+  try {
+    modelo = await parsearModelo(Buffer.from(base64, 'base64'), { nombreArchivo: nombre });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: 'No pude leer el Excel: ' + err.message });
+  }
+  const faltan = [];
+  if (!modelo.proyeccion?.anios?.length) faltan.push('hoja "Modelo Financiero"');
+  if (!modelo.historico?.anios?.length) faltan.push('hoja "Histórico"');
+  if (faltan.length) {
+    return res.status(400).json({ ok: false, error: `El archivo no tiene la estructura del modelo maestro (falta ${faltan.join(' y ')}). No se cambió nada.`, avisos: modelo.errores });
+  }
+  guardarModelo(modelo);
+  console.log(`[finanzas] Modelo financiero actualizado desde el panel: ${nombre}`);
+  res.json({ ok: true, archivo: nombre, avisos: modelo.errores, resumen: {
+    historico: modelo.historico.anios.length, proyeccion: modelo.proyeccion.anios.length,
+    escenarios: modelo.escenarios.length, sensibilidad: modelo.sensibilidad.length,
+  } });
+});
+
+// Vuelve al modelo que viene con el código.
+adminRouter.post('/api/finanzas/restablecer', (_req, res) => {
+  const m = restablecerModelo();
+  res.json({ ok: !!m, archivo: m?.archivo || '' });
 });
 
 // -------- Monitor de tokens (uso y costo de la IA) --------

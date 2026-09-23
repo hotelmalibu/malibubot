@@ -44,6 +44,7 @@ const app = express();
 // Cuerpo crudo (rawBody) para verificar la firma de Meta.
 app.use(
   express.json({
+    limit: '8mb', // el panel sube el Excel del modelo financiero en base64
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
