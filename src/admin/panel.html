@@ -1451,6 +1451,40 @@
     return `<tr${total ? ' class="tot"' : ''}><td class="etq">${esc(etiqueta)}</td>${celdas}</tr>`;
   }
 
+  // --- Ajuste "a lo real" de la proyección (noches 2026 + crecimiento por tramos) ---
+  function finAjusteCard(d, compacto) {
+    const aj = d.ajuste || {}, p = d.modelo.proyeccion, ex = p.excel;
+    const i0 = p.anios.indexOf(aj.anioBase || 2026), ult = p.anios[p.anios.length - 1];
+    if (!aj.activo) {
+      return `<div class="fin-alerta" style="margin-bottom:14px;">📐 <div><b>Proyección tal cual el Excel:</b> ${miles(p.series.noches?.[i0])} noches en ${p.anios[i0]} (ocupación ${pct(p.series.ocupacion?.[i0])}). <button class="btn-mini" onclick="finEditarAjuste()">Ajustar a lo real</button></div></div>`;
+    }
+    const resumen = `<b>${miles(aj.noches2026)} noches</b> en ${p.anios[i0]} · <b>+${pct(aj.crecimiento1)}</b> anual hasta ${aj.hastaAnio} · <b>+${pct(aj.crecimiento2)}</b> anual hasta ${ult}`;
+    const excelTxt = ex ? ` El Excel traía ${miles(ex.noches?.[i0])} noches (${pct(ex.ocupacion?.[i0])} de ocupación) y TIR ${pct(ex.tir, 1)}; con el ajuste la TIR es ${pct(p.tir, 1)} y ${p.anios[i0]} cierra en ${miles(p.series.noches?.[i0])} noches (${pct(p.series.ocupacion?.[i0])}).` : '';
+    return `<div class="fin-alerta verde" style="margin-bottom:14px;" id="finAjusteBox">📐 <div><b>Proyección ajustada a lo real:</b> ${resumen}.${compacto ? '' : excelTxt} <button class="btn-mini" onclick="finEditarAjuste()">Cambiar</button> <button class="btn-mini" onclick="finGuardarAjuste({ activo:false })">Usar el Excel tal cual</button></div></div>`;
+  }
+  function finEditarAjuste() {
+    const aj = finDatos?.ajuste || {}, p = finDatos.modelo.proyeccion, ult = p.anios[p.anios.length - 1];
+    const box = document.getElementById('finAjusteBox') || document.querySelector('#finContenido .fin-alerta');
+    const anios = p.anios.filter((a) => a >= 2026 && a < ult).map((a) => `<option value="${a}" ${a === (aj.hastaAnio || 2030) ? 'selected' : ''}>${a}</option>`).join('');
+    box.outerHTML = `<div class="fin-card" id="finAjusteBox" style="margin-bottom:14px;"><h3>📐 Ajustar la proyección a lo real</h3><div class="sub">Se recalculan ingresos, EBITDA, utilidad, flujo de caja y TIR con la tarifa, los gastos y la deuda del Excel.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="campo"><label>Noches vendidas en 2026</label><input type="number" id="ajNoches" min="1000" max="40000" step="100" value="${aj.noches2026 ?? 13000}" style="width:150px;" /></div>
+        <div class="campo"><label>Crecimiento anual (%)</label><input type="number" id="ajC1" min="-50" max="100" step="0.5" value="${Math.round((aj.crecimiento1 ?? 0.05) * 1000) / 10}" style="width:110px;" /></div>
+        <div class="campo"><label>Hasta el año</label><select id="ajHasta">${anios}</select></div>
+        <div class="campo"><label>Luego, crecimiento anual (%) hasta ${ult}</label><input type="number" id="ajC2" min="-50" max="100" step="0.5" value="${Math.round((aj.crecimiento2 ?? 0.08) * 1000) / 10}" style="width:110px;" /></div>
+        <button class="btn primario" onclick="finGuardarAjuste({ activo:true, noches2026: document.getElementById('ajNoches').value, crecimiento1: document.getElementById('ajC1').value / 100, hastaAnio: document.getElementById('ajHasta').value, crecimiento2: document.getElementById('ajC2').value / 100 })">Guardar y recalcular</button>
+        <button class="btn" onclick="finPintar()">Cancelar</button>
+      </div></div>`;
+  }
+  async function finGuardarAjuste(a) {
+    try {
+      const r = await fetch('/admin/api/finanzas/ajuste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(finDatos?.ajuste || {}), ...a }) });
+      const d = await r.json();
+      if (!d.ok) { alert(d.error || 'No se pudo guardar.'); return; }
+    } catch (_) { alert('Error de red.'); return; }
+    cargarFinanzas();
+  }
+
   // --- Resumen ---
   function finResumen(d) {
     const m = d.modelo, p = m.proyeccion, s = p.series, h = m.historico;
@@ -1458,7 +1492,7 @@
     const a0 = p.anios[i0];
     const v = (k) => s[k]?.[i0];
     const kpi = (clase, ico, lbl, val, pie, num) => `<div class="kpi ${clase}"><div class="ico">${ico}</div><div><div class="lbl">${lbl}</div><div class="num ${num != null ? signo(num) : ''}" style="font-size:26px;">${val}</div>${pie ? `<div class="pie">${pie}</div>` : ''}</div></div>`;
-    let html = `<div class="kpis">` +
+    let html = finAjusteCard(d) + `<div class="kpis">` +
       kpi('', '📈', 'TIR del proyecto', pct(p.tir, 1), `flujo de caja ${a0}–${p.anios[p.anios.length - 1]}`) +
       kpi('verde', '💵', `Ingresos ${a0}`, mm(v('ingresos')), `${miles(v('noches'))} noches · ocupación ${pct(v('ocupacion'))}`) +
       kpi('', '🏦', `EBITDA ${a0}`, mm(v('ebitda')), `margen ${pct(v('margenEbitda'))}`) +
@@ -1481,10 +1515,17 @@
     const crecIng = ultH >= 0 && h.series.ingresos?.[ultH] ? (v('ingresos') / h.series.ingresos[ultH] - 1) : null;
     const alertas = [];
     alertas.push(`<div class="fin-alerta ${iEq >= 0 ? 'verde' : 'roja'}">🎯 <div><b>Recuperación de la inversión:</b> ${iEq >= 0 ? `el flujo de caja acumulado se vuelve positivo en <b>${p.anios[iEq]}</b> (${mm(acum[iEq])}); ${a0}–${p.anios[iEq - 1] || a0} es la etapa de siembra.` : 'el flujo acumulado no llega a ser positivo en el horizonte del modelo.'}</div></div>`);
+    const iUtil = (s.utNeta || []).findIndex((x, i) => x != null && x > 0 && p.anios[i] >= a0);
+    if (v('utNeta') < 0) alertas.push(`<div class="fin-alerta roja">📉 <div><b>Pérdida neta en ${a0}:</b> con ${miles(v('noches'))} noches (ocupación ${pct(v('ocupacion'))}) los ingresos (${mm(v('ingresos'))}) apenas cubren los gastos operacionales (${mm(v('gastos'))}) y no alcanzan para los intereses (${mm(v('gFinancieros'))}). ${iUtil >= 0 ? `La utilidad neta se vuelve positiva en <b>${p.anios[iUtil]}</b>.` : 'No hay utilidad neta positiva en el horizonte.'} Los años ${a0}–${p.anios[Math.max(iUtil - 1, i0)]} requieren caja adicional: ${mm((s.fcf || []).slice(i0, Math.max(iUtil, i0 + 1)).reduce((x, y) => x + (y < 0 ? y : 0), 0))} entre CAPEX, amortización y pérdidas.</div></div>`);
     alertas.push(`<div class="fin-alerta ${iDeuda >= 0 ? 'verde' : ''}">🏦 <div><b>Deuda:</b> saldo inicial ${mm(m.supuestos.deudaInicial)} a ${pct(m.supuestos.tasaEfectiva)} (IBR ${pct(m.supuestos.ibr)} + ${pct(m.supuestos.spread)}), ${m.supuestos.plazoMeses} meses; ${iDeuda >= 0 ? `queda en cero en <b>${p.anios[iDeuda]}</b>.` : 'no se termina de pagar en el horizonte.'} Servicio de deuda ${a0}: ${mm(v('servicioDeuda'))}.</div></div>`);
-    if (crecIng != null) alertas.push(`<div class="fin-alerta">📊 <div><b>Salto de ingresos:</b> el modelo proyecta ${mm(v('ingresos'))} en ${a0}, un <b>${pct(crecIng)}</b> más que ${h.anios[ultH]} (${mm(h.series.ingresos[ultH])}), apoyado en las ${m.supuestos.habitacionesNuevas} habitaciones nuevas (${m.supuestos.totalHabitaciones} en total) con ocupación proyectada del ${pct(m.supuestos.ocupacionProyectada)}.</div></div>`);
+    if (crecIng != null) alertas.push(`<div class="fin-alerta">📊 <div><b>Salto de ingresos:</b> el modelo proyecta ${mm(v('ingresos'))} en ${a0}, un <b>${pct(crecIng)}</b> más que ${h.anios[ultH]} (${mm(h.series.ingresos[ultH])}), apoyado en las ${m.supuestos.habitacionesNuevas} habitaciones nuevas (${m.supuestos.totalHabitaciones} en total) con ${miles(v('noches'))} noches vendidas (ocupación ${pct(v('ocupacion'))}).</div></div>`);
     if (v('fcf') < 0) alertas.push(`<div class="fin-alerta roja">⚠️ <div><b>Caja ${a0}:</b> el flujo de caja libre es negativo (${mm(v('fcf'))}) por el CAPEX de la ampliación (${mm(m.supuestos.capex)}) y la amortización (${mm(v('amortizacion'))}). Conviene asegurar financiación puente para ese año.</div></div>`);
-    if (v('margenNeto') != null && v('margenNeto') < 0.1) alertas.push(`<div class="fin-alerta">🔎 <div><b>Margen neto ${a0} de ${pct(v('margenNeto'))}:</b> los gastos financieros (${mm(v('gFinancieros'))}) se llevan ${pct(v('gFinancieros') / v('utOperacional'))} de la utilidad operacional. Cada punto de ocupación o de tarifa pesa mucho: revisa la pestaña Sensibilidad.</div></div>`);
+    if (v('margenNeto') != null && v('margenNeto') < 0.1) {
+      const peso = v('utOperacional') > 0 && v('gFinancieros') / v('utOperacional') <= 1.5
+        ? `se llevan ${pct(v('gFinancieros') / v('utOperacional'))} de la utilidad operacional (${mm(v('utOperacional'))})`
+        : `superan con creces la utilidad operacional (${mm(v('utOperacional'))})`;
+      alertas.push(`<div class="fin-alerta">🔎 <div><b>Margen neto ${a0} de ${pct(v('margenNeto'))}:</b> los gastos financieros (${mm(v('gFinancieros'))}) ${peso}. Cada punto de ocupación o de tarifa pesa mucho: revisa la pestaña Sensibilidad.</div></div>`);
+    }
     html += `<div class="seccion-cab"><div><div class="eyebrow">Lectura rápida</div><h2>Hitos y alertas del modelo</h2></div></div><div class="fin-alertas">${alertas.join('')}</div>`;
     // Escenarios 2026 en una fila.
     if (m.escenarios?.length) {
@@ -1504,7 +1545,7 @@
     let html = `<div class="kpis">` +
       kpi(cumpl == null ? 'gris' : cumpl >= 100 ? 'verde' : cumpl >= 85 ? '' : 'alerta', '🎯', `Cumplimiento ${sg.anio}`, cumpl == null ? '—' : cumpl + '%', `noches reales vs. proyectadas · ${a.mesesCerradosConDato} meses cerrados`) +
       kpi('', '🛏️', 'Noches reales (meses cerrados)', miles(a.nochesReales), `proyectadas: ${miles(a.nochesProyectadas)} · según el Libro de Reservas`) +
-      kpi('azul', '📊', 'Ocupación real', a.ocupacionReal == null ? '—' : a.ocupacionReal + '%', `el modelo supone ${pct(sg.ocupacionProyectada)} sobre ${m.supuestos.totalHabitaciones} habitaciones`) +
+      kpi('azul', '📊', 'Ocupación real', a.ocupacionReal == null ? '—' : a.ocupacionReal + '%', `la proyección supone ${pct(sg.ocupacionProyectada)} (${miles(sg.nochesAnioProyectadas)} noches) sobre ${m.supuestos.totalHabitaciones} habitaciones`) +
       kpi('verde', '💵', 'Ingreso estimado (meses cerrados)', mm(a.ingresoEstimadoMM), `proyectado: ${mm(a.ingresoProyectadoMM)} · tarifa promedio del modelo $${miles(sg.tarifaPromedioCOP)}/noche`) +
       kpi('', '🤖', `Ventas por WhatsApp ${vb.anio}`, pesos(vb.montoCOP), `${vb.reservas} reservas confirmadas por MALIBUBOT`) +
       `</div>`;
@@ -1557,7 +1598,7 @@
     const m = d.modelo, p = m.proyeccion, s = p.series;
     const ini = p.anios.findIndex((a) => a >= (m.supuestos.anioInicioNuevas || 2026));
     const anios = p.anios.slice(ini), corte = (arr) => (arr || []).slice(ini);
-    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Modelo financiero</div><h2>Proyección ${anios[0]}–${anios[anios.length - 1]}</h2></div><div class="nota">Ocupación ${pct(s.ocupacion?.[ini])} · tarifa +${pct(m.supuestos.crecimientoTarifa)}/año · gastos +${pct(m.supuestos.crecimientoGastos)}/año · TIR ${pct(p.tir, 1)}</div></div>` +
+    let html = finAjusteCard(d, true) + `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Modelo financiero</div><h2>Proyección ${anios[0]}–${anios[anios.length - 1]}</h2></div><div class="nota">Ocupación ${pct(s.ocupacion?.[ini])} → ${pct(s.ocupacion?.[s.ocupacion.length - 1])} · tarifa +${pct(m.supuestos.crecimientoTarifa)}/año · gastos +${pct(m.supuestos.crecimientoGastos)}/año · TIR ${pct(p.tir, 1)}</div></div>` +
       finGrafico({ categorias: anios, series: [
         { nombre: 'Ingresos', valores: corte(s.ingresos), tipo: 'bar', clase: 'b0' }, { nombre: 'Gastos op.', valores: corte(s.gastos), tipo: 'bar', clase: 'b1' },
         { nombre: 'EBITDA', valores: corte(s.ebitda), tipo: 'line', clase: 'l2' }, { nombre: 'Utilidad neta', valores: corte(s.utNeta), tipo: 'line', clase: 'l1' },
@@ -1582,6 +1623,17 @@
       finFila('Flujo de caja libre', corte(s.fcf), { colorear: true }) +
       finFila('FCF acumulado', corte(s.fcfAcumulado), { colorear: true });
     html += finTabla(cab, filas, { margen: true, minAncho: 1200 });
+    if (p.excel && p.ajuste?.activo) {
+      const ex = p.excel, corteX = (arr) => (arr || []).slice(ini);
+      html += `<div class="seccion-cab"><div><div class="eyebrow">Comparación</div><h2>Ajustado vs. Excel original</h2></div><div class="nota">Lo que traía el modelo con ocupación fija del ${pct(ex.ocupacion?.[ini])}</div></div>` +
+        finTabla(cab,
+          `<tr><td class="etq">Noches (ajustado)</td>${corte(s.noches).map((v) => `<td class="n">${miles(v)}</td>`).join('')}</tr>` +
+          `<tr><td class="etq">Noches (Excel)</td>${corteX(ex.noches).map((v) => `<td class="n">${miles(v)}</td>`).join('')}</tr>` +
+          finFila('Ingresos (ajustado)', corte(s.ingresos)) + finFila('Ingresos (Excel)', corteX(ex.ingresos)) +
+          finFila('Utilidad neta (ajustado)', corte(s.utNeta), { colorear: true }) + finFila('Utilidad neta (Excel)', corteX(ex.utNeta), { colorear: true }) +
+          finFila('FCF acumulado (ajustado)', corte(s.fcfAcumulado), { colorear: true }) + finFila('FCF acumulado (Excel)', corteX(ex.fcfAcumulado), { colorear: true }),
+          { minAncho: 1200 });
+    }
     html += `<div class="seccion-cab"><div><div class="eyebrow">Caja y deuda</div><h2>Flujo de caja libre y saldo de deuda</h2></div><div class="nota">El FCF acumulado cruza a positivo cuando se recupera la inversión</div></div>` +
       finGrafico({ categorias: anios, series: [{ nombre: 'FCF anual', valores: corte(s.fcf), tipo: 'bar', clase: 'b0' }, { nombre: 'FCF acumulado', valores: corte(s.fcfAcumulado), tipo: 'line', clase: 'l1' }, { nombre: 'Saldo de deuda', valores: corte(s.deuda), tipo: 'line', clase: 'l3' }], alto: 260, etiquetas: false });
     if (p.porTipo?.length) {
@@ -1599,7 +1651,7 @@
     const esPct = finMetrica.startsWith('margen');
     const anios = es[0].anios;
     const sel = Object.entries(metricas).map(([k, v]) => `<button type="button" class="${k === finMetrica ? 'activo' : ''}" onclick="finMetrica='${k}'; finPintar()">${v}</button>`).join('');
-    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Comparativo</div><h2>${metricas[finMetrica]} por escenario</h2></div><div class="nota">${es.map((e) => `<b>${esc(e.nombre)}</b>: ${esc(e.descripcion)}`).join(' · ')}</div></div><div class="fin-selector">${sel}</div>` +
+    let html = `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">Comparativo · escenarios del Excel</div><h2>${metricas[finMetrica]} por escenario</h2></div><div class="nota">${es.map((e) => `<b>${esc(e.nombre)}</b>: ${esc(e.descripcion)}`).join(' · ')} · no incluyen el ajuste a lo real</div></div><div class="fin-selector">${sel}</div>` +
       finGrafico({ categorias: anios, series: es.map((e, i) => ({ nombre: e.nombre, valores: e.series[finMetrica], tipo: 'line', clase: ['l3', 'l0', 'l4', 'l2'][i] || 'l1' })), formato: esPct ? (v) => Math.round(v * 100) + '%' : (v) => miles(Math.round(v)), etiquetas: false });
     const filas = es.map((e) => finFila(e.nombre, e.series[finMetrica] || [], esPct ? { pctv: true } : { colorear: true })).join('');
     html += finTabla(['Escenario', ...anios], filas, { margen: true, minAncho: 1000 });
@@ -1619,7 +1671,7 @@
       const t = Math.min(1, Math.abs(v) / (Math.max(Math.abs(max), Math.abs(min)) || 1));
       return neg ? `background:rgba(192,90,58,${0.12 + t * 0.55});color:${t > 0.5 ? '#fff' : 'var(--tinta)'}` : `background:rgba(47,143,91,${0.08 + t * 0.6});color:${t > 0.55 ? '#fff' : 'var(--tinta)'}`;
     };
-    return `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">¿Qué pasa si…?</div><h2>Análisis de sensibilidad</h2></div><div class="nota">Verde = favorable · rojo = desfavorable · la intensidad indica la magnitud · COP millones</div></div>` +
+    return `<div class="seccion-cab" style="margin-top:4px;"><div><div class="eyebrow">¿Qué pasa si…?</div><h2>Análisis de sensibilidad</h2></div><div class="nota">Tablas del Excel (no incluyen el ajuste a lo real) · verde = favorable · rojo = desfavorable · COP millones</div></div>` +
       ts.map((t) => {
         const vals = t.filas.flatMap((f) => f.valores).filter((v) => v != null);
         const max = Math.max(...vals), min = Math.min(...vals);

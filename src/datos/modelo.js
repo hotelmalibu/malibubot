@@ -318,6 +318,113 @@ export function restablecerModelo() {
   return modeloActual();
 }
 
+// ---------- Ajuste "a lo real" de la proyección ----------
+// El Excel proyecta con una ocupación fija (56 % = 17.374 noches/año). El
+// hotel prefiere partir de las noches que de verdad espera vender y de un
+// crecimiento por tramos. Se recalcula la proyección con la MISMA lógica del
+// Excel (tarifa promedio, gastos, deuda, depreciación y CAPEX se conservan).
+const CLAVE_AJUSTE = 'modelo_ajuste';
+const AJUSTE_POR_DEFECTO = { activo: true, noches2026: 13000, crecimiento1: 0.05, hastaAnio: 2030, crecimiento2: 0.08 };
+
+export function ajusteActual() {
+  try {
+    const g = ajustesStore.obtener(CLAVE_AJUSTE, '');
+    if (g) return { ...AJUSTE_POR_DEFECTO, ...JSON.parse(g) };
+  } catch { /* usa el de fabrica */ }
+  return { ...AJUSTE_POR_DEFECTO };
+}
+
+/** Guarda el ajuste (valida rangos). Devuelve null si algo no es válido. */
+export function fijarAjuste(a = {}) {
+  const n = Math.round(Number(a.noches2026));
+  const c1 = Number(a.crecimiento1), c2 = Number(a.crecimiento2), h = Math.round(Number(a.hastaAnio));
+  if (!Number.isFinite(n) || n < 1000 || n > 40000) return null;
+  if (![c1, c2].every((c) => Number.isFinite(c) && c >= -0.5 && c <= 1)) return null;
+  if (!Number.isInteger(h) || h < 2026 || h > 2037) return null;
+  const nuevo = { activo: a.activo !== false, noches2026: n, crecimiento1: c1, hastaAnio: h, crecimiento2: c2 };
+  ajustesStore.poner(CLAVE_AJUSTE, JSON.stringify(nuevo));
+  return nuevo;
+}
+
+/** TIR anual de una serie de flujos (el primero suele ser negativo). */
+export function tir(flujos) {
+  const f = (flujos || []).filter((x) => x != null);
+  if (f.length < 2 || !f.some((x) => x < 0) || !f.some((x) => x > 0)) return null;
+  const van = (r) => f.reduce((s, x, i) => s + x / Math.pow(1 + r, i), 0);
+  let lo = -0.99, hi = 10;
+  if (van(lo) * van(hi) > 0) return null;
+  for (let k = 0; k < 200; k++) {
+    const mid = (lo + hi) / 2;
+    if (van(lo) * van(mid) <= 0) hi = mid; else lo = mid;
+  }
+  return Math.round(((lo + hi) / 2) * 10000) / 10000;
+}
+
+/**
+ * Devuelve una copia del modelo con la proyección recalculada según el
+ * ajuste. Guarda la versión del Excel en proyeccion.excel para comparar.
+ */
+export function aplicarAjuste(modelo, ajuste = ajusteActual()) {
+  if (!modelo?.proyeccion || !ajuste?.activo) return modelo;
+  const p = modelo.proyeccion, s = p.series;
+  const anioBase = modelo.supuestos?.anioInicioNuevas || 2026;
+  const i0 = p.anios.indexOf(anioBase);
+  if (i0 < 0 || !s.noches || !s.ingresos) return modelo;
+  const r = (v) => (v == null ? null : Math.round(v * 100) / 100);
+  const totalHab = modelo.supuestos?.totalHabitaciones || 85;
+  const n = p.anios.length;
+  const copia = (arr) => (arr || []).slice();
+  const nuevo = {
+    noches: copia(s.noches), ocupacion: copia(s.ocupacion), tarifaPromedio: copia(s.tarifaPromedio), ingresos: copia(s.ingresos),
+    gastos: copia(s.gastos), ebitda: copia(s.ebitda), depreciacion: copia(s.depreciacion), utOperacional: copia(s.utOperacional),
+    deuda: copia(s.deuda), gFinancieros: copia(s.gFinancieros), amortizacion: copia(s.amortizacion), servicioDeuda: copia(s.servicioDeuda),
+    utNeta: copia(s.utNeta), fcf: copia(s.fcf), fcfAcumulado: copia(s.fcfAcumulado),
+    margenEbitda: copia(s.margenEbitda), margenOperacional: copia(s.margenOperacional), margenNeto: copia(s.margenNeto),
+  };
+  let acum = 0, noches = ajuste.noches2026;
+  for (let i = i0; i < n; i++) {
+    const anio = p.anios[i];
+    if (i > i0) noches = noches * (1 + (anio <= ajuste.hastaAnio ? ajuste.crecimiento1 : ajuste.crecimiento2));
+    const nochesR = Math.round(noches);
+    const tarifa = s.noches[i] ? s.ingresos[i] / s.noches[i] : (s.tarifaPromedio?.[i] ?? 0); // COP MM por noche (del Excel)
+    const dias = (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0 ? 366 : 365;
+    const ingresos = nochesR * tarifa;
+    const gastos = s.gastos?.[i] ?? 0, dep = s.depreciacion?.[i] ?? 0, gFin = s.gFinancieros?.[i] ?? 0, amort = s.amortizacion?.[i] ?? 0;
+    const ebitda = ingresos - gastos, utOper = ebitda - dep, utNeta = utOper - gFin;
+    // CAPEX implícito en el Excel de ese año: utNeta + dep - amort - fcf.
+    const capex = (s.utNeta?.[i] ?? 0) + dep - amort - (s.fcf?.[i] ?? 0);
+    const fcf = utNeta + dep - amort - capex;
+    acum += fcf;
+    nuevo.noches[i] = nochesR;
+    nuevo.ocupacion[i] = r(nochesR / (dias * totalHab));
+    nuevo.tarifaPromedio[i] = r(tarifa);
+    nuevo.ingresos[i] = r(ingresos);
+    nuevo.ebitda[i] = r(ebitda);
+    nuevo.utOperacional[i] = r(utOper);
+    nuevo.utNeta[i] = r(utNeta);
+    nuevo.fcf[i] = r(fcf);
+    nuevo.fcfAcumulado[i] = r(acum);
+    nuevo.margenEbitda[i] = ingresos ? r(ebitda / ingresos) : null;
+    nuevo.margenOperacional[i] = ingresos ? r(utOper / ingresos) : null;
+    nuevo.margenNeto[i] = ingresos ? r(utNeta / ingresos) : null;
+  }
+  const porTipo = (p.porTipo || []).map((t) => ({
+    ...t,
+    valores: t.valores.map((v, i) => (v == null || i < i0 || !s.noches[i] ? v : r((v * nuevo.noches[i]) / s.noches[i]))),
+  }));
+  return {
+    ...modelo,
+    proyeccion: {
+      ...p,
+      series: nuevo,
+      porTipo,
+      tir: tir(nuevo.fcf.slice(i0)),
+      ajuste: { ...ajuste, anioBase },
+      excel: { noches: s.noches, ocupacion: s.ocupacion, ingresos: s.ingresos, utNeta: s.utNeta, fcf: s.fcf, fcfAcumulado: s.fcfAcumulado, tir: p.tir },
+    },
+  };
+}
+
 /**
  * Seguimiento del año en curso: noches reales del Libro (caché) mes a mes
  * frente a las noches proyectadas (noches/año prorrateadas por días del mes),

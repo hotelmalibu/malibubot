@@ -32,7 +32,7 @@ import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
-import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio } from '../datos/modelo.js';
+import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
 import {
   probarAuth as probarAuthRapyd,
   metodosPais as metodosPaisRapyd,
@@ -359,8 +359,10 @@ adminRouter.get('/api/reservas-promedio', (_req, res) => {
 // Devuelve el modelo vigente + el seguimiento del año en curso (noches reales
 // del Libro vs. proyectadas) + las ventas reales cerradas por WhatsApp.
 adminRouter.get('/api/finanzas', (_req, res) => {
-  const modelo = modeloActual();
-  if (!modelo) return res.status(404).json({ ok: false, error: 'Aún no hay modelo financiero cargado. Sube el Excel desde el panel.' });
+  const base = modeloActual();
+  if (!base) return res.status(404).json({ ok: false, error: 'Aún no hay modelo financiero cargado. Sube el Excel desde el panel.' });
+  // Proyección ajustada "a lo real" (noches 2026 + crecimiento por tramos).
+  const modelo = aplicarAjuste(base, ajusteActual());
   const anio = new Date().getUTCFullYear();
   const confirmadas = reservasStore.listar().filter((r) => (r.estado === 'pagado' || r.estado === 'pendiente_hotel') && (r.checkIn || '').startsWith(`${anio}-`));
   const ventasBot = {
@@ -373,7 +375,15 @@ adminRouter.get('/api/finanzas', (_req, res) => {
       return { mes: m + 1, reservas: del.length, montoCOP: del.reduce((s, r) => s + (Number(r.monto) || 0), 0) };
     }),
   };
-  res.json({ ok: true, modelo, seguimiento: seguimientoAnio(modelo, ocupacionEnCache, anio), ventasBot });
+  res.json({ ok: true, modelo, ajuste: ajusteActual(), seguimiento: seguimientoAnio(modelo, ocupacionEnCache, anio), ventasBot });
+});
+
+// Cambia el ajuste de la proyección (noches del año base y crecimiento por tramos).
+adminRouter.post('/api/finanzas/ajuste', (req, res) => {
+  const a = fijarAjuste(req.body || {});
+  if (!a) return res.status(400).json({ ok: false, error: 'Revisa los valores: noches entre 1.000 y 40.000, crecimientos entre −50 % y 100 %, año de corte entre 2026 y 2037.' });
+  console.log('[finanzas] Ajuste de proyección:', JSON.stringify(a));
+  res.json({ ok: true, ajuste: a });
 });
 
 // Sube un Excel nuevo del modelo (base64 desde el navegador) y lo deja como vigente.
