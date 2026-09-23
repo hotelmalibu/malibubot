@@ -28,6 +28,7 @@ await new Promise((r) => servidor.listen(0, r));
 process.env.GRAPH_API_BASE = `http://127.0.0.1:${servidor.address().port}`;
 
 const { procesarConfirmacion, claveValida, destinoDe, estadoVik, probarPlantilla } = await import('../src/vikbooking/confirmada.js');
+const { reservasStore } = await import('../src/almacen/reservas.js');
 
 let fallos = 0;
 const ok = (n, c) => { console.log((c ? '✅ ' : '❌ ') + n); if (!c) fallos++; };
@@ -76,9 +77,34 @@ graphFalla = false;
 r = await procesarConfirmacion(reserva({ id: 506 }));
 ok('y al reintentar sí se envía', r.estado === 'enviado' && enviados.length === 3);
 
+// ---- integración con el panel (reservas de Vik Booking) ----
+const vik = (id) => reservasStore.buscarPorReferencia(`vik:${id}`);
+const detalle = { rooms: [{ name: 'Habitación Estándar (S)', adults: 2, children: 1 }], total: 309000, email: 'ana@correo.co' };
+const antesPanel = reservasStore.listar().length;
+r = await procesarConfirmacion(reserva({ id: 601, ...detalle }));
+let v = vik(601);
+ok('la reserva queda registrada en el panel con todos sus datos', !!v && v.estado === 'pagado' && v.fuente === 'vikbooking'
+  && v.nombre === 'ANA maría pérez' && v.habitacion === 'Habitación Estándar (S)' && v.personas === 3 && v.monto === 309000
+  && v.checkIn === '2026-10-02' && v.checkOut === '2026-10-03' && v.email === 'ana@correo.co' && v.waId === '573001234567');
+r = await procesarConfirmacion(reserva({ id: 601, ...detalle }));
+ok('repetir la llamada no duplica la reserva en el panel', reservasStore.listar().filter((x) => x.referenciaPago === 'vik:601').length === 1);
+const nAntes = enviados.length;
+r = await procesarConfirmacion(reserva({ id: 602, status: 'standby', ...detalle }));
+ok('reserva en espera: se registra "en proceso" y NO envía WhatsApp', r.estado === 'registrada' && vik(602)?.estado === 'en_proceso' && enviados.length === nAntes);
+r = await procesarConfirmacion(reserva({ id: 602, status: 'confirmed', ...detalle }));
+ok('al confirmarse la misma reserva pasa a pagado y sí envía', vik(602)?.estado === 'pagado' && r.estado === 'enviado' && enviados.length === nAntes + 1);
+r = await procesarConfirmacion(reserva({ id: 602, status: 'cancelled', ...detalle }));
+ok('al cancelarse en Vik queda cancelada en el panel', r.estado === 'cancelada' && vik(602)?.estado === 'cancelado');
+r = await procesarConfirmacion(reserva({ id: 603, ota: 'BK9', phone: '', ...detalle }));
+ok('reserva de OTA se registra como canal externo, sin WhatsApp', vik(603)?.fuente === 'vikbooking-ota' && r.estado === 'omitido');
+r = await procesarConfirmacion(reserva({ id: 604, phone: 'sin celular', ...detalle }));
+ok('sin celular igual queda en el panel', !!vik(604) && vik(604).celular === '' && r.estado === 'omitido');
+ok('el panel sumó solo las reservas nuevas de Vik', reservasStore.listar().length > antesPanel);
+
 // prueba de plantilla a un celular (ruta /admin/api/vik/probar)
+const nAntesPrueba = enviados.length;
 let pr = await probarPlantilla('3001234567');
-ok('probarPlantilla envía la plantilla con datos de ejemplo', pr.ok === true && enviados.at(-1).params[0] === 'Prueba' && enviados.length === 4);
+ok('probarPlantilla envía la plantilla con datos de ejemplo', pr.ok === true && enviados.at(-1).params[0] === 'Prueba' && enviados.length === nAntesPrueba + 1);
 pr = await probarPlantilla('abc');
 ok('probarPlantilla rechaza un celular inválido', pr.ok === false);
 graphFalla = true;

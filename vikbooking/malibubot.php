@@ -73,8 +73,9 @@ class VikSmsApi
 		$checkin = isset($o['checkin']) ? (int) $o['checkin'] : 0;
 		$checkout = isset($o['checkout']) ? (int) $o['checkout'] : 0;
 
-		// Nombre: linea "Nombre: ..." de los datos del cliente.
-		$name = '';
+		// Nombre y apellidos: lineas "Nombre: ..." y "Apellidos: ..." de los datos del cliente.
+		$first = '';
+		$last = '';
 		if (!empty($o['custdata'])) {
 			foreach (preg_split('/\r?\n/', (string) $o['custdata']) as $line) {
 				if (strpos($line, ':') === false) {
@@ -82,10 +83,36 @@ class VikSmsApi
 				}
 				$parts = array_map('trim', explode(':', $line, 2));
 				$label = strtolower($parts[0]);
-				if ($label === 'nombre' || $label === 'name') {
-					$name = $parts[1];
-					break;
+				if ($first === '' && ($label === 'nombre' || $label === 'name' || $label === 'first name')) {
+					$first = $parts[1];
 				}
+				if ($last === '' && ($label === 'apellidos' || $label === 'apellido' || $label === 'last name' || $label === 'surname')) {
+					$last = $parts[1];
+				}
+			}
+		}
+		$name = trim($first . ' ' . $last);
+
+		// Habitaciones y huespedes de la reserva (para el panel de MALIBUBOT). Si algo falla,
+		// se envian solo los datos basicos: nunca debe romper el aviso.
+		$rooms = array();
+		$oid = isset($o['id']) ? (int) $o['id'] : 0;
+		if ($oid > 0 && class_exists('JFactory')) {
+			try {
+				$dbo = JFactory::getDbo();
+				$dbo->setQuery('SELECT r.name, orr.adults, orr.children FROM #__vikbooking_ordersrooms AS orr LEFT JOIN #__vikbooking_rooms AS r ON r.id = orr.idroom WHERE orr.idorder = ' . $oid);
+				$rows = $dbo->loadAssocList();
+				if (is_array($rows)) {
+					foreach ($rows as $row) {
+						$rooms[] = array(
+							'name'     => (string) $row['name'],
+							'adults'   => (int) $row['adults'],
+							'children' => (int) $row['children'],
+						);
+					}
+				}
+			} catch (\Throwable $e) {
+				$rooms = array();
 			}
 		}
 
@@ -100,6 +127,11 @@ class VikSmsApi
 			'checkin_ts'  => $checkin,
 			'checkout_ts' => $checkout,
 			'ota'         => isset($o['idorderota']) ? (string) $o['idorderota'] : '',
+			'channel'     => isset($o['channel']) ? (string) $o['channel'] : '',
+			'status'      => isset($o['status']) ? (string) $o['status'] : 'confirmed',
+			'email'       => isset($o['custmail']) ? (string) $o['custmail'] : '',
+			'total'       => isset($o['total']) ? (float) $o['total'] : 0,
+			'rooms'       => $rooms,
 		);
 
 		$ch = curl_init($url);

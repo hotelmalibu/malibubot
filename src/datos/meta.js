@@ -53,7 +53,9 @@ function resumenSemana(lunes, meta, reservados) {
     desde: lunes,
     hasta: domingo,
     reservas: conf.length,
-    bot: conf.filter((r) => r.fuente !== 'manual').length,
+    // "bot" = reservas por WhatsApp (bot / humano); "web" = las de Vik Booking (pagina web y OTA).
+    bot: conf.filter((r) => r.fuente !== 'manual' && !String(r.fuente).startsWith('vikbooking')).length,
+    web: conf.filter((r) => String(r.fuente).startsWith('vikbooking')).length,
     manual: conf.filter((r) => r.fuente === 'manual').length,
     enProceso: rs.filter((r) => r.estado === 'en_proceso').length,
     chats: emb.etapas.total,

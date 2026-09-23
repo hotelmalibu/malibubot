@@ -82,6 +82,24 @@ export const reservasStore = {
     return r;
   },
 
+  /** Busca una reserva por su referencia (p. ej. "vik:4408" para Vik Booking). */
+  buscarPorReferencia(ref) {
+    if (!ref) return null;
+    return reservas.find((x) => x.referenciaPago === ref) || null;
+  },
+
+  /** Actualiza campos de una reserva (ignora los vacios) y la guarda. */
+  actualizar(id, campos = {}) {
+    const r = reservas.find((x) => x.id === Number(id));
+    if (!r) return null;
+    for (const k of ['waId', 'celular', 'nombre', 'email', 'habitacion', 'personas', 'checkIn', 'checkOut', 'monto']) {
+      if (campos[k] !== undefined && campos[k] !== null && campos[k] !== '') r[k] = campos[k];
+    }
+    if (campos.estado && ESTADOS.includes(campos.estado)) r.estado = campos.estado;
+    persistirReserva(r);
+    return r;
+  },
+
   /** Marca que ya se envio el recordatorio pre-llegada (uno solo por reserva). */
   marcarRecordatorio(id) {
     const r = reservas.find((x) => x.id === Number(id));

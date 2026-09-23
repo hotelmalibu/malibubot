@@ -22,6 +22,7 @@ import { enviarPlantilla } from '../whatsapp/enviar.js';
 import { store } from '../almacen/conversaciones.js';
 import { dbActivo, dbGuardarVikAviso } from '../almacen/db.js';
 import { diaColombia, fechaBonita } from '../util/fechas.js';
+import { reservasStore } from '../almacen/reservas.js';
 import { renderizar } from './plantillas.js';
 
 /** order_id -> { id, confirmada: 0 pendiente | 1 omitido | timestamp de envio } */
@@ -75,15 +76,68 @@ function isoDe(texto, ts) {
 
 const limpiar = (t) => String(t ?? '').replace(/[\n\r\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
 
+/** Fuentes de las reservas que vienen de Vik Booking (pagina web y canales externos). */
+const FUENTE_WEB = 'vikbooking';
+const FUENTE_OTA = 'vikbooking-ota';
+
 /**
- * Procesa la llamada de Vik Booking.
- * datos: { id, sid, ts, phone, name, checkin, checkout, checkin_ts, checkout_ts, ota }
+ * Deja la reserva de Vik Booking en el PANEL de MALIBUBOT (idempotente: la
+ * referencia "vik:<id>" evita duplicados; si ya existe, la actualiza).
+ */
+function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
+  const ref = `vik:${id}`;
+  const habitaciones = [...new Set((d.rooms || []).map((r) => limpiar(r.name)).filter(Boolean))];
+  const personas = (d.rooms || []).reduce((s, r) => s + (Number(r.adults) || 0) + (Number(r.children) || 0), 0);
+  const estado = status === 'cancelled' ? 'cancelado' : status === 'standby' ? 'en_proceso' : 'pagado';
+  const campos = {
+    waId: destino,
+    celular: destino || String(d.phone || '').replace(/\D/g, ''),
+    nombre: limpiar(d.name),
+    email: limpiar(d.email),
+    habitacion: habitaciones.join(' + '),
+    personas: personas || null,
+    checkIn: ingreso,
+    checkOut: salida,
+    monto: Number(d.total) > 0 ? Number(d.total) : null,
+    estado,
+    fuente: d.ota ? FUENTE_OTA : FUENTE_WEB,
+    referenciaPago: ref,
+  };
+  const existente = reservasStore.buscarPorReferencia(ref);
+  if (!existente) {
+    const r = reservasStore.crear(campos);
+    console.log(`[vik] Reserva ${id} registrada en el panel (${estado}).`);
+    return r;
+  }
+  reservasStore.actualizar(existente.id, campos);
+  return existente;
+}
+
+/**
+ * Procesa la llamada de Vik Booking (reserva confirmada, y opcionalmente en
+ * espera o cancelada). Siempre deja la reserva en el panel; el WhatsApp de
+ * "Reserva confirmada" solo sale cuando esta confirmada.
+ * datos: { id, sid, ts, phone, name, email, total, rooms:[{name,adults,children}],
+ *          checkin, checkout, checkin_ts, checkout_ts, ota, status }
  * @returns {Promise<{ok:boolean, estado:string, http?:number, error?:string}>}
  */
 export async function procesarConfirmacion(datos = {}) {
   const id = parseInt(datos.id, 10);
   if (!Number.isInteger(id) || id <= 0) return { ok: false, estado: 'invalido', http: 400, error: 'Falta el número de reserva.' };
 
+  const ingreso = isoDe(datos.checkin, datos.checkin_ts);
+  const salida = isoDe(datos.checkout, datos.checkout_ts);
+  if (!ingreso || !salida) return { ok: false, estado: 'invalido', http: 400, error: 'Faltan las fechas de ingreso y salida.' };
+
+  const status = String(datos.status || 'confirmed').toLowerCase();
+  const destino = destinoDe(datos.phone);
+
+  // 1) Panel: la reserva queda registrada (aunque el WhatsApp no aplique).
+  registrarReservaPanel(datos, { id, status, destino, ingreso, salida });
+  if (status === 'cancelled') return { ok: true, estado: 'cancelada' };
+  if (status !== 'confirmed') return { ok: true, estado: 'registrada' };
+
+  // 2) WhatsApp "Reserva confirmada".
   if (datos.ota && !config.vik.incluirOTA) {
     anotar({ reserva: id, resultado: 'omitido', detalle: 'reserva de un canal externo (OTA)' });
     return { ok: true, estado: 'omitido' };
@@ -96,17 +150,12 @@ export async function procesarConfirmacion(datos = {}) {
   }
   if (est.confirmada) return { ok: true, estado: 'duplicado' }; // ya se avisó (o se omitió)
 
-  const destino = destinoDe(datos.phone);
   if (!destino) {
     est.confirmada = 1;
     persistir(est);
     anotar({ reserva: id, resultado: 'omitido', detalle: 'sin celular válido' });
     return { ok: true, estado: 'omitido', error: 'La reserva no tiene un celular válido.' };
   }
-
-  const ingreso = isoDe(datos.checkin, datos.checkin_ts);
-  const salida = isoDe(datos.checkout, datos.checkout_ts);
-  if (!ingreso || !salida) return { ok: false, estado: 'invalido', http: 400, error: 'Faltan las fechas de ingreso y salida.' };
 
   const sid = String(datos.sid || '').trim();
   const link = sid && datos.ts
