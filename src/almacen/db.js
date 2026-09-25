@@ -98,6 +98,17 @@ export async function iniciarDB() {
         estado_visto TEXT,
         actualizado BIGINT
       );
+      CREATE TABLE IF NOT EXISTS correos (
+        id          BIGSERIAL PRIMARY KEY,
+        ts          BIGINT,
+        destinatario TEXT,
+        asunto      TEXT,
+        ok          BOOLEAN,
+        status      INTEGER,
+        error       TEXT,
+        resend_id   TEXT,
+        reserva_id  INTEGER
+      );
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
       ALTER TABLE reservas ADD COLUMN IF NOT EXISTS recordatorio_enviado BIGINT;
@@ -196,6 +207,23 @@ export async function dbGuardarVikAviso(a) {
 export async function dbCargarVikAvisos() {
   if (!pool) return [];
   const r = await pool.query('SELECT * FROM vik_avisos');
+  return r.rows;
+}
+
+/** Guarda un intento de correo (bitácora persistente). */
+export async function dbGuardarCorreo(c) {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO correos (ts, destinatario, asunto, ok, status, error, resend_id, reserva_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [c.ts, c.to || '', c.subject || '', !!c.ok, c.status ?? null, c.error || '', c.id || '', c.reservaId ?? null]
+  );
+}
+
+/** Últimos intentos de correo (para hidratar la bitácora al arrancar). */
+export async function dbCargarCorreos(limite = 60) {
+  if (!pool) return [];
+  const r = await pool.query('SELECT * FROM correos ORDER BY ts DESC LIMIT $1', [limite]);
   return r.rows;
 }
 

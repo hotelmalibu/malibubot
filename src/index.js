@@ -26,7 +26,8 @@ const avisoNoTexto = new Map();
 const AVISO_NO_TEXTO_MS = 60 * 60 * 1000;
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
-import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos } from './almacen/db.js';
+import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos, dbCargarCorreos } from './almacen/db.js';
+import { hidratarCorreos } from './correo/enviar.js';
 import { hidratarVikAvisos, procesarConfirmacion, claveValida, registrarEstadoWhatsApp } from './vikbooking/confirmada.js';
 import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
@@ -263,6 +264,7 @@ async function arrancar() {
       }
       hidratarMetricas(await dbCargarMetricas());
       hidratarAjustes(await dbCargarAjustes());
+      hidratarCorreos(await dbCargarCorreos());
       hidratarVikAvisos(await dbCargarVikAvisos());
     } catch (err) {
       console.error('[db] Error hidratando desde la base:', err.message);

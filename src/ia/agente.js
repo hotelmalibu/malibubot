@@ -148,6 +148,8 @@ function sistema() {
     `- ⚡ CIERRE INMEDIATO: en cuanto el cliente CONFIRME que quiere la reserva ("sí", "resérvala", "listo", "dale") y ya tengas tipo, fechas y nombre completo, LLAMA LA HERRAMIENTA EN ESE MISMO TURNO. No hagas más preguntas ni pidas nada más.`,
     `- Si el cliente dice que NO TIENE correo, que no lo quiere dar, o simplemente no lo da y ya confirmó: NO insistas. Cierra de inmediato con su nombre completo y su celular (el número de WhatsApp) usando reservar_pago_en_hotel sin correo. La confirmación le llega por WhatsApp y recepción recibe el aviso igual. El correo NUNCA es un requisito para reservar.`,
     `- El pago EN LÍNEA sí necesita correo (para el recibo): si no tiene correo, ofrécele la reserva con pago en el hotel y ciérrala.`,
+    `- Después de reservar, NO digas que "le llegó la confirmación por correo" si el cliente NO dio correo: en ese caso dile que este WhatsApp es su confirmación y que lo muestre al llegar.`,
+    `- Si el cliente dice que YA reservó por la página web (o que le llegó un correo de la página), NO crees otra reserva por WhatsApp a menos que te confirme que la de la página NO quedó (p. ej. el pago no pasó). Si la duplicas, recepción tendrá dos reservas para la misma persona.`,
     `- OFRÉCELE SIEMPRE las dos opciones: 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante) o 2) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual).`,
     `- Si elige en línea: usa generar_link_pago (envía el enlace en un mensaje aparte; no lo repitas tú).`,
     `- Si elige pagar en el hotel, o dice "pago al llegar / en efectivo allá": usa DIRECTAMENTE reservar_pago_en_hotel. Eso deja la reserva CONFIRMADA y envía solo los correos y el WhatsApp.`,

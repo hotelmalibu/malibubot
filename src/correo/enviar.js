@@ -1,60 +1,112 @@
 // ============================================================
 //  enviar.js — Envio de correos con Resend.
 //  Se usa para confirmar la reserva al cliente y a recepcion cuando
-//  RAPYD confirma el pago.
+//  RAPYD confirma el pago, y para avisar cancelaciones.
+//
+//  - Cada intento queda en una bitacora en memoria Y en PostgreSQL (tabla
+//    correos), asi sobrevive a los redespliegues y se puede revisar en el
+//    panel (/admin/correo).
+//  - Si Resend falla (red, 5xx, 429) se reintenta hasta 3 veces.
+//  - Con el id que devuelve Resend se puede consultar el estado REAL de
+//    entrega (delivered / bounced / complained...) en estadoEnResend().
 // ============================================================
 import { config } from '../config.js';
 import { precioCOP } from '../datos/habitaciones.js';
+import { dbActivo, dbGuardarCorreo } from '../almacen/db.js';
 
 function activo() {
   return !!config.correo.resendApiKey;
 }
 
-// Bitácora en memoria de los últimos intentos de correo (para diagnóstico).
+// Bitácora de los últimos intentos de correo (memoria + base de datos).
 const ultimos = [];
 function registrar(entrada) {
-  ultimos.unshift({ cuando: new Date().toISOString(), ...entrada });
-  if (ultimos.length > 25) ultimos.length = 25;
+  const e = { ts: Date.now(), cuando: new Date().toISOString(), ...entrada };
+  ultimos.unshift(e);
+  if (ultimos.length > 60) ultimos.length = 60;
+  if (dbActivo()) dbGuardarCorreo(e).catch((err) => console.error('[correo] db:', err.message));
+}
+export function hidratarCorreos(filas = []) {
+  for (const f of filas) {
+    ultimos.push({
+      ts: Number(f.ts) || 0, cuando: new Date(Number(f.ts) || 0).toISOString(), to: f.destinatario, subject: f.asunto,
+      ok: !!f.ok, status: f.status ?? undefined, error: f.error || undefined, id: f.resend_id || null, reservaId: f.reserva_id ?? undefined,
+    });
+  }
+  ultimos.sort((a, b) => b.ts - a.ts);
+  if (ultimos.length > 60) ultimos.length = 60;
+  return filas.length;
 }
 export function ultimosEnviosCorreo() {
-  return { hayApiKey: activo(), remitente: config.correo.remitente, recepcion: config.correo.recepcion, ultimos };
+  return { hayApiKey: activo(), remitente: config.correo.remitente, recepcion: config.correo.recepcion, copia: config.correo.copia, ultimos };
 }
 
-async function enviarCorreo({ to, subject, html }) {
+/** Destinatarios de recepción: el buzón principal + las copias configuradas. */
+function destinosRecepcion() {
+  const set = new Set([config.correo.recepcion, ...config.correo.copia].filter(Boolean));
+  return [...set];
+}
+
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function enviarCorreo({ to, subject, html, reservaId }) {
   if (!activo()) {
     console.warn('[correo] Sin RESEND_API_KEY; no se envia:', subject, '->', to);
-    registrar({ to, subject, ok: false, error: 'Falta RESEND_API_KEY' });
+    registrar({ to, subject, ok: false, error: 'Falta RESEND_API_KEY', reservaId });
     return false;
   }
-  try {
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.correo.resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: config.correo.remitente,
-        to,
-        subject,
-        html,
-        ...(config.correo.responder ? { reply_to: config.correo.responder } : {}),
-      }),
-    });
-    if (!resp.ok) {
+  const destinos = Array.isArray(to) ? to : [to];
+  let ultimoError = '', ultimoStatus = null;
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.correo.resendApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: config.correo.remitente,
+          to: destinos,
+          subject,
+          html,
+          ...(config.correo.responder ? { reply_to: config.correo.responder } : {}),
+        }),
+      });
+      if (resp.ok) {
+        const info = await resp.json().catch(() => ({}));
+        console.log('[correo] Enviado OK ->', destinos.join(', '), '| id:', info.id || '?', '| asunto:', subject);
+        registrar({ to: destinos.join(', '), subject, ok: true, status: resp.status, id: info.id || null, reservaId, intentos: intento });
+        return true;
+      }
       const d = await resp.text().catch(() => '');
-      console.error('[correo] Error Resend:', resp.status, d.slice(0, 200), '| para:', to, '| asunto:', subject);
-      registrar({ to, subject, ok: false, status: resp.status, error: d.slice(0, 300) });
-      return false;
+      ultimoError = d.slice(0, 300); ultimoStatus = resp.status;
+      console.error('[correo] Error Resend:', resp.status, d.slice(0, 200), '| para:', destinos.join(', '), '| asunto:', subject, `| intento ${intento}`);
+      // 4xx (llave invalida, dominio no verificado, datos malos) no mejora reintentando; 429/5xx si.
+      if (resp.status < 500 && resp.status !== 429) break;
+    } catch (err) {
+      ultimoError = err.message; ultimoStatus = null;
+      console.error('[correo] Error enviando:', err.message, `| intento ${intento}`);
     }
-    const info = await resp.json().catch(() => ({}));
-    console.log('[correo] Enviado OK ->', to, '| id:', info.id || '?', '| asunto:', subject);
-    registrar({ to, subject, ok: true, status: resp.status, id: info.id || null });
-    return true;
+    if (intento < 3) await espera(1500 * intento);
+  }
+  registrar({ to: destinos.join(', '), subject, ok: false, status: ultimoStatus, error: ultimoError, reservaId });
+  return false;
+}
+
+/**
+ * Consulta en Resend el estado real de entrega de un correo enviado.
+ * @returns {Promise<{estado:string, detalle?:string}|null>}
+ */
+export async function estadoEnResend(id) {
+  if (!activo() || !id) return null;
+  try {
+    const resp = await fetch(`https://api.resend.com/emails/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${config.correo.resendApiKey}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { estado: 'desconocido', detalle: d.message || `HTTP ${resp.status}` };
+    return { estado: d.last_event || 'sent', detalle: d.created_at || '' };
   } catch (err) {
-    console.error('[correo] Error enviando:', err.message);
-    registrar({ to, subject, ok: false, error: err.message });
-    return false;
+    return { estado: 'desconocido', detalle: err.message };
   }
 }
 
@@ -90,6 +142,7 @@ function plantilla(reserva, paraRecepcion) {
     <p style="font-size:15px;line-height:1.5">${intro}</p>
     ${avisoPago}
     <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
+      ${fila('Reserva N°', reserva.id)}
       ${fila('Huésped', reserva.nombre)}
       ${fila('Celular', reserva.celular)}
       ${fila('Correo', reserva.email)}
@@ -128,6 +181,7 @@ export async function probarCorreo(to) {
     const texto = await resp.text();
     let respuesta;
     try { respuesta = JSON.parse(texto); } catch { respuesta = texto; }
+    registrar({ to: destino, subject: 'Prueba MALIBUBOT ✅', ok: resp.ok, status: resp.status, id: respuesta?.id || null, error: resp.ok ? '' : texto.slice(0, 300) });
     return {
       ok: resp.ok,
       status: resp.status,
@@ -137,6 +191,7 @@ export async function probarCorreo(to) {
       respuesta,
     };
   } catch (err) {
+    registrar({ to: destino, subject: 'Prueba MALIBUBOT ✅', ok: false, error: err.message });
     return { ok: false, error: err.message };
   }
 }
@@ -176,12 +231,14 @@ function plantillaCancelacion(reserva, motivo, paraRecepcion) {
 /** Avisa la CANCELACION a recepcion (siempre) y al cliente (si dio correo). */
 export async function cancelarReservaPorCorreo(reserva, motivo = '') {
   const tareas = [];
-  if (config.correo.recepcion) {
+  const recepcion = destinosRecepcion();
+  if (recepcion.length) {
     tareas.push(
       enviarCorreo({
-        to: config.correo.recepcion,
+        to: recepcion,
         subject: `CANCELACIÓN de reserva — ${reserva.nombre || reserva.celular || ''} · ${reserva.checkIn || ''}`,
         html: plantillaCancelacion(reserva, motivo, true),
+        reservaId: reserva.id,
       })
     );
   }
@@ -191,6 +248,7 @@ export async function cancelarReservaPorCorreo(reserva, motivo = '') {
         to: reserva.email,
         subject: 'Reserva cancelada — Hotel Malibú',
         html: plantillaCancelacion(reserva, motivo, false),
+        reservaId: reserva.id,
       })
     );
   }
@@ -210,20 +268,23 @@ export async function confirmarReservaPorCorreo(reserva) {
           ? 'Reserva confirmada (pago pendiente en el hotel) — Hotel Malibú'
           : 'Reserva confirmada — Hotel Malibú',
         html: plantilla(reserva, false),
+        reservaId: reserva.id,
       })
     );
   } else {
     console.warn('[correo] Reserva', reserva.id, 'SIN correo del cliente; no se envía al cliente.');
-    registrar({ to: '(cliente sin correo)', subject: 'reserva ' + (reserva.id || ''), ok: false, error: 'La reserva no capturó el correo del cliente' });
+    registrar({ to: '(cliente sin correo)', subject: 'reserva ' + (reserva.id || ''), ok: false, error: 'La reserva no capturó el correo del cliente', reservaId: reserva.id });
   }
-  if (config.correo.recepcion) {
+  const recepcion = destinosRecepcion();
+  if (recepcion.length) {
     tareas.push(
       enviarCorreo({
-        to: config.correo.recepcion,
+        to: recepcion,
         subject: pendiente
           ? `Nueva reserva PAGO PENDIENTE (cobro en hotel) — ${reserva.nombre || reserva.celular || ''}`
           : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`,
         html: plantilla(reserva, true),
+        reservaId: reserva.id,
       })
     );
   }

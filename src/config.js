@@ -129,6 +129,9 @@ export const config = {
     remitente: process.env.CORREO_REMITENTE || 'Reservas Hotel Malibú <reservas@hotelmalibu.co>',
     // A quien le llega el aviso de nueva reserva (recepcion).
     recepcion: process.env.CORREO_RECEPCION || 'reservas@hotelmalibu.co',
+    // Copias adicionales de los avisos a recepcion (separadas por coma), p. ej.
+    // el correo personal del gerente, por si el buzon del hotel filtra.
+    copia: (process.env.CORREO_COPIA || '').split(',').map((s) => s.trim()).filter(Boolean),
     // A donde van las RESPUESTAS del cliente (reply-to): el buzon real.
     responder: process.env.CORREO_RESPONDER || 'reservas@hotelmalibu.co',
   },
