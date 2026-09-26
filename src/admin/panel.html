@@ -209,6 +209,15 @@
   .pill.sin { background: var(--gris-suave); color: var(--gris); }
   @media (max-width: 860px) { .embudo-grid { grid-template-columns: 1fr; } .etapa { grid-template-columns: 110px 1fr 56px; } }
 
+  /* Reservas por canal (Dashboard) */
+  .orig-detalle { margin-top: 12px; }
+  .orig-detalle summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--oro-profundo); }
+  .orig-aviso { margin-top: 12px; padding: 11px 14px; border-radius: 12px; background: var(--oro-suave); border: 1px solid var(--oro-claro); font-size: 13px; color: var(--tinta-2); }
+  .orig-bar { display: block; }
+  .sw-o { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .o-whatsapp { fill: var(--oro-profundo); } .o-web { fill: var(--verde); } .o-booking { fill: var(--azul); } .o-expedia { fill: #e0a100; } .o-otros { fill: #b9b4a6; }
+  .sw-o.o-whatsapp { background: var(--oro-profundo); } .sw-o.o-web { background: var(--verde); } .sw-o.o-booking { background: var(--azul); } .sw-o.o-expedia { background: #e0a100; } .sw-o.o-otros { background: #b9b4a6; }
+
   /* Monitor financiero */
   .fin-sub { margin-top: 6px; }
   .fin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
@@ -418,6 +427,26 @@
         </div>
 
         <div class="seccion-cab">
+          <div><div class="eyebrow">Origen de las reservas</div><h2>Reservas por canal de venta</h2></div>
+          <div class="nota" id="origNota">Según la fecha en que se hizo la reserva · sigue el rango de fechas de arriba</div>
+        </div>
+        <div class="kpis" id="kpisOrigen"><div class="vacio-tabla">Cargando…</div></div>
+        <div class="grafico-wrap" style="margin-top:14px;">
+          <div class="grafico-top" id="origLeyenda"></div>
+          <div id="graficoOrigen"></div>
+        </div>
+        <div id="origAviso"></div>
+        <details class="orig-detalle">
+          <summary>Ver detalle por canal</summary>
+          <div class="tabla-wrap" style="margin-top:10px;">
+            <table class="reservas" style="min-width:680px;">
+              <thead><tr><th>Canal</th><th class="n">Reservas</th><th class="n">% reservas</th><th class="n">Noches</th><th class="n">Ingresos</th><th class="n">Ticket promedio</th><th class="n">En proceso</th><th class="n">Canceladas</th></tr></thead>
+              <tbody id="cuerpoOrigen"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="seccion-cab">
           <div><div class="eyebrow">Ventas</div><h2>Reservas de habitaciones</h2></div>
           <button class="btn primario" onclick="abrirDlgReserva()">+ Nueva reserva</button>
         </div>
@@ -625,7 +654,7 @@
       document.getElementById(VISTAS[k]).classList.toggle('activa', k === v);
       document.getElementById(TABS[k]).classList.toggle('activo', k === v);
     }
-    if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); }
+    if (v === 'dashboard') { cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarOrigenes(); }
     if (v === 'monitor') cargarMonitor();
     if (v === 'tokens') cargarMetricas();
     if (v === 'finanzas') cargarFinanzas();
@@ -652,8 +681,72 @@
 
   // ---------- Dashboard ----------
   function rango() { return rangoDe('fDesde', 'fHasta'); }
-  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); }
-  function buscar() { cargarEstadisticas(); cargarReservas(); }
+  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); cargarOrigenes(); }
+  function buscar() { cargarEstadisticas(); cargarReservas(); cargarOrigenes(); }
+
+  // ---------- Reservas por canal de venta ----------
+  const ORIG_ICO = { whatsapp: ['🤖', 'azul'], web: ['🌐', 'verde'], booking: ['🏨', ''], expedia: ['🧭', 'alerta'], otros: ['📌', 'gris'] };
+  async function cargarOrigenes() {
+    try {
+      const anio = typeof anioSel === 'number' ? anioSel : new Date().getFullYear();
+      const q = rango();
+      const r = await fetch('/admin/api/origenes' + q + (q ? '&' : '?') + 'anio=' + anio);
+      if (!r.ok) return;
+      pintarOrigenes(await r.json());
+    } catch (_) {}
+  }
+  function pintarOrigenes(d) {
+    const rg = d.rango || {};
+    document.getElementById('origNota').textContent = (rg.desde || rg.hasta)
+      ? `Reservas hechas del ${rg.desde || '…'} al ${rg.hasta || '…'} · barras: año ${d.anio}`
+      : `Todas las reservas registradas · barras: año ${d.anio}`;
+    const principales = d.origenes.filter((o) => o.id !== 'otros' || o.reservas || o.enProceso || o.canceladas);
+    document.getElementById('kpisOrigen').innerHTML = principales.map((o) => {
+      const [ico, clase] = ORIG_ICO[o.id] || ['📌', 'gris'];
+      const pie = o.reservas
+        ? `${o.pctReservas}% del total · ${miles(o.noches)} noche${o.noches === 1 ? '' : 's'}${o.montoCOP ? ' · ' + pesos(o.montoCOP) : ''}`
+        : (o.id === 'booking' || o.id === 'expedia' ? 'aún sin reservas registradas' : 'sin reservas en el rango');
+      return tarjeta(clase, ico, o.nombre, o.reservas, pie);
+    }).join('');
+
+    // Barras apiladas por mes.
+    const ids = d.origenes.map((o) => o.id);
+    document.getElementById('origLeyenda').innerHTML = d.origenes
+      .filter((o) => o.id !== 'otros' || d.meses.some((m) => m.otros))
+      .map((o) => `<span class="leyenda"><span class="sw-o o-${o.id}"></span> ${esc(o.corto)}</span>`).join('') +
+      `<div class="grafico-tot"><div>Total del rango <b>${d.total}</b></div></div>`;
+    const W = 960, H = 240, padL = 40, padR = 14, padT = 24, padB = 34;
+    const cw = W - padL - padR, ch = H - padT - padB, bw = cw / 12;
+    const tot = d.meses.map((m) => ids.reduce((s, id) => s + (m[id] || 0), 0));
+    const max = Math.max(4, ...tot);
+    let g = '';
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + ch - (ch * i) / 4;
+      g += `<line class="gl" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text class="ax" x="${padL - 8}" y="${y + 4}" text-anchor="end">${Math.round((max * i) / 4)}</text>`;
+    }
+    const hoy = new Date().getFullYear() === d.anio ? new Date().getMonth() : -1;
+    d.meses.forEach((m, i) => {
+      const x = padL + i * bw + bw * 0.2, w = bw * 0.6;
+      let base = padT + ch;
+      ids.forEach((id) => {
+        const v = m[id] || 0; if (!v) return;
+        const h = (ch * v) / max;
+        base -= h;
+        g += `<rect class="o-${id}" x="${x}" y="${base}" width="${w}" height="${h}" rx="2"><title>${MESES_N[i]}: ${v} · ${esc((d.origenes.find((o) => o.id === id) || {}).corto || id)}</title></rect>`;
+      });
+      if (tot[i]) g += `<text class="val" x="${x + w / 2}" y="${base - 5}" text-anchor="middle">${tot[i]}</text>`;
+      g += `<text class="ax mes${i === hoy ? ' act' : ''}" x="${x + w / 2}" y="${H - padB + 18}" text-anchor="middle">${MESES_N[i]}</text>`;
+    });
+    document.getElementById('graficoOrigen').innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Reservas por mes y canal">${g}</svg>`;
+
+    document.getElementById('cuerpoOrigen').innerHTML = d.origenes.map((o) =>
+      `<tr><td><span class="sw-o o-${o.id}"></span> ${esc(o.nombre)}</td><td class="n"><b>${o.reservas}</b></td><td class="n">${o.pctReservas}%</td><td class="n">${miles(o.noches)}</td><td class="n">${o.montoCOP ? pesos(o.montoCOP) : '—'}</td><td class="n">${o.ticketCOP ? pesos(o.ticketCOP) : '—'}</td><td class="n">${o.enProceso}</td><td class="n">${o.canceladas}</td></tr>`
+    ).join('');
+
+    document.getElementById('origAviso').innerHTML = d.sinIdentificar
+      ? `<div class="orig-aviso">ℹ️ ${d.sinIdentificar} reserva${d.sinIdentificar === 1 ? '' : 's'} de canales externos que no son Booking ni Expedia (Airbnb, otros) o que Vik Booking no identificó; aparecen en «Otros». Si esperabas que fueran de Booking o Expedia, confirma que Vik tenga instalado el archivo <code>malibubot.php</code> más reciente.</div>`
+      : '';
+  }
 
   async function cargarEstadisticas() {
     try {
@@ -706,7 +799,7 @@
   function elegirAnio(y) {
     anioSel = y; pintarAniosTabs();
     document.getElementById('graficoMeses').innerHTML = '<div class="vacio-tabla">Cargando ' + (y === 'resumen' ? 'resumen año a año' : y === 'promedio' ? 'promedio mensual' : y) + '…</div>';
-    cargarGrafico();
+    cargarGrafico(); cargarOrigenes();
   }
   async function cargarGrafico() {
     const pedido = anioSel;
@@ -1125,6 +1218,7 @@
     'Sitio web': ['🌐', 'c-web'], 'TikTok': ['🎵', 'c-tt'], 'QR físico': ['🔳', 'c-qr'], 'Directo / Otro': ['💬', 'c-dir'],
     'Manual': ['✍️', 'c-qr'],
     'Página web': ['🌐', 'c-web'], 'OTA (Booking, Expedia…)': ['🏨', 'c-dir'],
+    'Booking.com': ['🏨', 'c-fb'], 'Expedia': ['🧭', 'c-gads'], 'OTA (otro canal)': ['🏨', 'c-dir'],
   };
   // Pastilla compacta con icono + nombre del canal (tabla de reservas).
   function canalPill(c) {
@@ -1328,8 +1422,8 @@
   }
 
   document.getElementById('filtro').addEventListener('input', pintarLista);
-  document.getElementById('fDesde').addEventListener('change', cargarEstadisticas);
-  document.getElementById('fHasta').addEventListener('change', cargarEstadisticas);
+  document.getElementById('fDesde').addEventListener('change', () => { cargarEstadisticas(); cargarOrigenes(); });
+  document.getElementById('fHasta').addEventListener('change', () => { cargarEstadisticas(); cargarOrigenes(); });
   ['mDesde', 'mHasta'].forEach((id) => document.getElementById(id).addEventListener('change', cargarMonitor));
   ['cDesde', 'cHasta'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
     document.querySelectorAll('.presets-conv button').forEach((b) => b.classList.remove('activo'));
@@ -1730,7 +1824,7 @@
   }
 
   // Arranque + ciclos de actualización
-  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarLista();
+  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarOrigenes(); cargarLista();
   setInterval(() => {
     cargarLista();
     if (vistaActual === 'chats' && seleccion) cargarConv();
@@ -1738,7 +1832,7 @@
     if (vistaActual === 'monitor') cargarMonitor();
     if (vistaActual === 'tokens') cargarMetricas();
   }, 4000);
-  setInterval(() => { if (vistaActual === 'dashboard') cargarGrafico(); if (vistaActual === 'finanzas') cargarFinanzas(true); }, 60000);
+  setInterval(() => { if (vistaActual === 'dashboard') { cargarGrafico(); cargarOrigenes(); } if (vistaActual === 'finanzas') cargarFinanzas(true); }, 60000);
 </script>
 </body>
 </html>

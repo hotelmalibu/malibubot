@@ -23,7 +23,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
-import { reservasStore, ESTADOS, ESTADOS_ANULADOS } from '../almacen/reservas.js';
+import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
@@ -32,6 +32,7 @@ import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
+import { resumenOrigenes } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
 import {
   probarAuth as probarAuthRapyd,
@@ -214,7 +215,9 @@ adminRouter.get('/api/reservas', (_req, res) => {
   const reservas = reservasStore.listar().map((r) => ({
     ...r,
     canal: r.fuente === 'vikbooking' ? 'Página web'
-      : r.fuente === 'vikbooking-ota' ? 'OTA (Booking, Expedia…)'
+      : r.fuente === 'vikbooking-booking' ? 'Booking.com'
+      : r.fuente === 'vikbooking-expedia' ? 'Expedia'
+      : r.fuente === 'vikbooking-ota' ? 'OTA (otro canal)'
       : r.waId && store.obtener(r.waId)
       ? (store.obtener(r.waId).canal || 'Directo / Otro')
       : (r.fuente === 'manual' || r.fuente === 'humano' ? 'Manual' : 'Directo / Otro'),
@@ -236,6 +239,14 @@ adminRouter.get('/api/embudo', (req, res) => {
   res.json({ ok: true, rango: { desde, hasta }, ...store.embudo({ desde, hasta, reservados: waIdsConReserva() }) });
 });
 
+// -------- Reservas por origen (WhatsApp, web directa, Booking, Expedia) --------
+adminRouter.get('/api/origenes', (req, res) => {
+  const desde = (req.query.desde || '').trim() || null;
+  const hasta = (req.query.hasta || '').trim() || null;
+  const anio = parseInt(req.query.anio, 10) || new Date().getUTCFullYear();
+  res.json(resumenOrigenes({ desde, hasta, anio }));
+});
+
 // -------- Meta semanal de reservas y tasa de conversión --------
 adminRouter.get('/api/meta-semanal', (_req, res) => {
   res.json(resumenMeta());
@@ -255,7 +266,7 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
   const anio = parseInt(req.query.anio || String(ahora.getUTCFullYear()), 10);
   const mesLimite =
     anio < ahora.getUTCFullYear() ? 11 : anio > ahora.getUTCFullYear() ? -1 : ahora.getUTCMonth();
-  const bot = reservasStore.listar().filter((r) => !ESTADOS_ANULADOS.includes(r.estado));
+  const bot = reservasStore.listar().filter((r) => esReservaBot(r) && !ESTADOS_ANULADOS.includes(r.estado));
 
   const meses = [];
   const tareas = [];
@@ -284,7 +295,7 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
 adminRouter.get('/api/reservas-anuales', (_req, res) => {
   const ahora = new Date();
   const anioActual = ahora.getUTCFullYear();
-  const bot = reservasStore.listar().filter((r) => !ESTADOS_ANULADOS.includes(r.estado));
+  const bot = reservasStore.listar().filter((r) => esReservaBot(r) && !ESTADOS_ANULADOS.includes(r.estado));
   const anios = [];
   for (let a = config.hotel.anioInicio; a <= anioActual + 1; a++) {
     const mesLimite = a < anioActual ? 11 : a === anioActual ? ahora.getUTCMonth() : -1;

@@ -43,6 +43,11 @@ function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Reserva cerrada por MALIBUBOT: la creo el bot o recepcion desde el chat de WhatsApp. */
+export function esReservaBot(r) {
+  return r.fuente === 'bot' || r.fuente === 'humano' || r.fuente === 'rapyd';
+}
+
 /** Ocupan habitacion las reservas confirmadas: pagadas o con pago pendiente
  *  en el hotel (check-in <= fecha < check-out). */
 function ocupaEn(r, fechaISO) {
@@ -92,7 +97,7 @@ export const reservasStore = {
   actualizar(id, campos = {}) {
     const r = reservas.find((x) => x.id === Number(id));
     if (!r) return null;
-    for (const k of ['waId', 'celular', 'nombre', 'email', 'habitacion', 'personas', 'checkIn', 'checkOut', 'monto']) {
+    for (const k of ['waId', 'celular', 'nombre', 'email', 'habitacion', 'personas', 'checkIn', 'checkOut', 'monto', 'fuente']) {
       if (campos[k] !== undefined && campos[k] !== null && campos[k] !== '') r[k] = campos[k];
     }
     if (campos.estado && ESTADOS.includes(campos.estado)) r.estado = campos.estado;
@@ -153,7 +158,11 @@ export const reservasStore = {
     const total = config.hotel.habitaciones;
     const hoy = hoyISO();
 
+    // Las tarjetas "del bot" cuentan SOLO lo cerrado por MALIBUBOT (WhatsApp);
+    // las de la web, Booking, Expedia y las manuales tienen su propio conteo
+    // en "Reservas por canal de venta".
     const enRango = reservas.filter((r) => {
+      if (!esReservaBot(r)) return false;
       const dia = new Date(r.creado).toISOString().slice(0, 10);
       if (desde && dia < desde) return false;
       if (hasta && dia > hasta) return false;

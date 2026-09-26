@@ -78,7 +78,36 @@ const limpiar = (t) => String(t ?? '').replace(/[\n\r\t]+/g, ' ').replace(/ {2,}
 
 /** Fuentes de las reservas que vienen de Vik Booking (pagina web y canales externos). */
 const FUENTE_WEB = 'vikbooking';
-const FUENTE_OTA = 'vikbooking-ota';
+const FUENTE_OTA = 'vikbooking-ota';            // canal externo sin identificar
+const FUENTE_BOOKING = 'vikbooking-booking';
+const FUENTE_EXPEDIA = 'vikbooking-expedia';
+
+const sinTildes = (t) => String(t ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/**
+ * Canal externo de una reserva de Vik Booking: 'booking', 'expedia' o ''.
+ * Vik manda el nombre del canal en `channel` (p. ej. "booking.com", "expedia");
+ * como respaldo se mira el correo del huesped, que en las OTA es un correo
+ * enmascarado del propio canal (@guest.booking.com, @m.expediapartnercentral.com).
+ */
+export function canalOtaDe(d = {}) {
+  const t = sinTildes(`${d.channel || ''} ${d.email || ''}`);
+  if (/booking/.test(t)) return 'booking';
+  if (/expedia|hotels\.com|hoteles\.com|vrbo/.test(t)) return 'expedia';
+  return '';
+}
+
+/** ¿La reserva vino de un canal externo (Booking, Expedia, Airbnb...)? */
+function esOta(d = {}) {
+  return !!d.ota || !!canalOtaDe(d) || (!!d.channel && !/^(web|website|vikbooking)?$/i.test(String(d.channel).trim()));
+}
+
+function fuenteDe(d) {
+  const c = canalOtaDe(d);
+  if (c === 'booking') return FUENTE_BOOKING;
+  if (c === 'expedia') return FUENTE_EXPEDIA;
+  return esOta(d) ? FUENTE_OTA : FUENTE_WEB;
+}
 
 /**
  * Deja la reserva de Vik Booking en el PANEL de MALIBUBOT (idempotente: la
@@ -100,7 +129,7 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
     checkOut: salida,
     monto: Number(d.total) > 0 ? Number(d.total) : null,
     estado,
-    fuente: d.ota ? FUENTE_OTA : FUENTE_WEB,
+    fuente: fuenteDe(d),
     referenciaPago: ref,
   };
   const existente = reservasStore.buscarPorReferencia(ref);
@@ -138,7 +167,7 @@ export async function procesarConfirmacion(datos = {}) {
   if (status !== 'confirmed') return { ok: true, estado: 'registrada' };
 
   // 2) WhatsApp "Reserva confirmada".
-  if (datos.ota && !config.vik.incluirOTA) {
+  if (esOta(datos) && !config.vik.incluirOTA) {
     anotar({ reserva: id, resultado: 'omitido', detalle: 'reserva de un canal externo (OTA)' });
     return { ok: true, estado: 'omitido' };
   }
