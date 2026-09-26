@@ -32,7 +32,7 @@ import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
-import { resumenOrigenes } from '../datos/origenes.js';
+import { resumenOrigenes, origenDe } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
 import {
   probarAuth as probarAuthRapyd,
@@ -263,10 +263,16 @@ adminRouter.post('/api/meta-semanal', (req, res) => {
 // + reservas creadas por el bot por mes (según check-in).
 adminRouter.get('/api/reservas-mensuales', async (req, res) => {
   const ahora = new Date();
-  const anio = parseInt(req.query.anio || String(ahora.getUTCFullYear()), 10);
-  const mesLimite =
-    anio < ahora.getUTCFullYear() ? 11 : anio > ahora.getUTCFullYear() ? -1 : ahora.getUTCMonth();
+  const anioActual = ahora.getUTCFullYear();
+  const anio = parseInt(req.query.anio || String(anioActual), 10);
   const bot = reservasStore.listar().filter((r) => esReservaBot(r) && !ESTADOS_ANULADOS.includes(r.estado));
+  const confirmadas = reservasStore.listar().filter((r) => r.estado === 'pagado' || r.estado === 'pendiente_hotel');
+
+  // Los 12 meses del año en curso (incluye los meses POR VENIR: ahí el Libro ya
+  // trae lo reservado a hoy) y de los años pasados. Un año futuro se lee solo de
+  // la caché (no espera a la hoja; si falta, la pide en segundo plano).
+  const futuro = anio > anioActual;
+  const habilitado = anio >= config.hotel.anioInicio && anio <= anioActual + 1;
 
   const meses = [];
   const tareas = [];
@@ -276,17 +282,38 @@ adminRouter.get('/api/reservas-mensuales', async (req, res) => {
     const ult = new Date(Date.UTC(anio, m + 1, 0)).getUTCDate();
     const hasta = `${anio}-${mm}-${String(ult).padStart(2, '0')}`;
     const reservasBot = bot.filter((r) => (r.checkIn || '').startsWith(`${anio}-${mm}`)).length;
-    meses.push({ mes: m + 1, desde, hasta, reservasBot, nochesLibro: null });
-    if (m <= mesLimite) {
-      tareas.push(
-        ocupacionDelLibro(desde, desde, hasta)
-          .then((d) => ({ m, noches: d ? (d.nochesReservadasRango ?? d.nochesReservadasMes ?? null) : null }))
-          .catch(() => ({ m, noches: null }))
-      );
-    }
+    // Llegadas del mes (por fecha de check-in) según el canal de venta.
+    const llegadas = { whatsapp: 0, web: 0, booking: 0, expedia: 0, otros: 0 };
+    for (const r of confirmadas) if ((r.checkIn || '').startsWith(`${anio}-${mm}`)) llegadas[origenDe(r)]++;
+    meses.push({ mes: m + 1, desde, hasta, dias: ult, reservasBot, llegadas, nochesLibro: null, nochesProyectadas: null });
+    if (!habilitado) continue;
+    const lectura = futuro
+      ? Promise.resolve(ocupacionEnCache(desde, desde, hasta))
+      : ocupacionDelLibro(desde, desde, hasta);
+    tareas.push(
+      lectura
+        .then((d) => ({ m, noches: d ? (d.nochesReservadasRango ?? d.nochesReservadasMes ?? null) : null }))
+        .catch(() => ({ m, noches: null }))
+    );
   }
-  for (const r of await Promise.all(tareas)) meses[r.m].nochesLibro = r.noches;
-  res.json({ ok: true, anio, anioInicio: config.hotel.anioInicio, mesActual: ahora.getUTCMonth() + 1, meses });
+  for (const t of await Promise.all(tareas)) meses[t.m].nochesLibro = t.noches;
+
+  // Meta del año (proyección ajustada a lo real), prorrateada por los días de cada mes.
+  let tarifaPromedioCOP = null;
+  try {
+    const base = modeloActual();
+    const inicio = base?.supuestos?.anioInicioNuevas || 2026;
+    if (base && anio >= inicio) {
+      const seg = seguimientoAnio(aplicarAjuste(base, ajusteActual()), ocupacionEnCache, anio);
+      if (seg) {
+        tarifaPromedioCOP = seg.tarifaPromedioCOP;
+        seg.meses.forEach((s, i) => { meses[i].nochesProyectadas = s.nochesProyectadas; });
+      }
+    }
+  } catch (_) { /* sin meta: la tabla muestra solo lo real */ }
+
+  const habitaciones = anio < 2026 ? 50 : config.hotel.habitaciones;
+  res.json({ ok: true, anio, anioInicio: config.hotel.anioInicio, mesActual: ahora.getUTCMonth() + 1, anioActual, habitaciones, tarifaPromedioCOP, meses });
 });
 
 // -------- Resumen año a año (pestaña "Resumen" del seguimiento anual) --------

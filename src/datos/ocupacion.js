@@ -188,8 +188,8 @@ function vistasFijas() {
     return { fecha: desde, desde, hasta, ...extra };
   };
   const anio = hoy.getUTCFullYear();
-  // Cada mes del año en curso hasta el mes actual (se refrescan siempre).
-  for (let m = 0; m <= hoy.getUTCMonth(); m++) vistas.push(mes(anio, m));
+  // Los 12 meses del año en curso (se refrescan siempre): los por venir muestran lo reservado a hoy.
+  for (let m = 0; m <= 11; m++) vistas.push(mes(anio, m)); // incluye los meses por venir
   // Años anteriores (desde config.hotel.anioInicio, p. ej. 2018): solo se
   // consultan si aún no están en caché (esos libros ya no cambian y la caché
   // persiste en Postgres), para las pestañas por año del seguimiento anual.

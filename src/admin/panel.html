@@ -209,6 +209,16 @@
   .pill.sin { background: var(--gris-suave); color: var(--gris); }
   @media (max-width: 860px) { .embudo-grid { grid-template-columns: 1fr; } .etapa { grid-template-columns: 110px 1fr 56px; } }
 
+  /* Seguimiento mensual: meses por venir y meta */
+  .chart .bar.prox { fill: var(--oro-claro); opacity: .85; }
+  .chart .meta-tick { stroke: var(--tinta); stroke-width: 2.5; stroke-linecap: round; }
+  .leyenda .sw.prox { background: var(--oro-claro); }
+  .sw-tick { width: 14px; height: 0; border-top: 3px solid var(--tinta); border-radius: 2px; display: inline-block; }
+  .leg-extra { display: contents; } .leg-extra[hidden] { display: none; }
+  .seg-tabla { margin-top: 14px; }
+  .seg-tabla .pill { white-space: nowrap; display: inline-block; }
+  .nota-seg { font-size: 12px; color: var(--gris); margin: 10px 0 4px; max-width: 78ch; }
+
   /* Reservas por canal (Dashboard) */
   .orig-detalle { margin-top: 12px; }
   .orig-detalle summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--oro-profundo); }
@@ -417,6 +427,10 @@
             <span class="leyenda"><span class="sw"></span> Noches reservadas</span>
             <span class="leyenda"><span class="sw act"></span> <span id="lblActual">Mes actual</span></span>
             <span class="leyenda"><span class="sw bot"></span> 🤖 Reservas del bot</span>
+            <span id="legExtra" class="leg-extra">
+              <span class="leyenda"><span class="sw prox"></span> Por venir (reservado a hoy)</span>
+              <span class="leyenda"><span class="sw-tick"></span> Meta del mes</span>
+            </span>
             <div class="grafico-tot">
               <div><span id="lblTot">Noches en el año</span> <b id="totNoches">—</b></div>
               <div><span id="lblMejor">Mejor mes</span> <b id="mejorMes">—</b></div>
@@ -819,6 +833,7 @@
   // Promedio mensual de todos los años cargados; encima, una marca con el año actual.
   function pintarPromedio(d) {
     const cont = document.getElementById('graficoMeses'); if (!cont) return;
+    document.getElementById('legExtra').hidden = true;
     const meses = d.meses || [];
     const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     const vals = meses.flatMap((m) => [m.promedio, m.actual]).filter((v) => v != null);
@@ -874,6 +889,7 @@
   }
   function pintarResumenAnual(d) {
     const cont = document.getElementById('graficoMeses'); if (!cont) return;
+    document.getElementById('legExtra').hidden = true;
     const anios = d.anios || [];
     const vals = anios.map((a) => a.noches).filter((v) => v != null);
     const max = Math.max(4, ...vals);
@@ -925,13 +941,51 @@
     document.getElementById('mejorMes').textContent = mejor ? `${mejor.anio} · ${miles(mejor.v)}` : '—';
     document.getElementById('totBot').textContent = miles(totBot);
   }
+  // Tabla de seguimiento mensual: lo reservado (real y por venir) contra la meta y las llegadas por canal.
+  function tablaSeguimiento(d, esAnioActual, actual) {
+    const nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const anioHoy = new Date().getFullYear(), hab = d.habitaciones || 85, tarifa = d.tarifaPromedioCOP;
+    const estado = (i) => esAnioActual ? (i < actual ? 'cerrado' : i === actual ? 'encurso' : 'porvenir') : (Number(d.anio) < anioHoy ? 'cerrado' : 'porvenir');
+    const pill = { cerrado: '<span class="pill fuera">Cerrado</span>', encurso: '<span class="pill ok">En curso</span>', porvenir: '<span class="pill canal">Por venir</span>' };
+    const cel = (v) => `<td class="n">${v ? miles(v) : '<span style="color:var(--gris)">·</span>'}</td>`;
+    let sN = 0, sP = 0, sD = 0, sIng = 0, hayN = false;
+    const sL = { whatsapp: 0, web: 0, booking: 0, expedia: 0, otros: 0 };
+    const filas = (d.meses || []).map((m, i) => {
+      const est = estado(i), n = m.nochesLibro, p = m.nochesProyectadas;
+      const avance = n != null && p ? Math.round((n / p) * 100) : null;
+      const ocup = n != null ? Math.round((n / (m.dias * hab)) * 100) : null;
+      const ing = n != null && tarifa ? n * tarifa : null;
+      if (n != null) { sN += n; sD += m.dias; hayN = true; }
+      if (p != null) sP += p;
+      if (ing != null) sIng += ing;
+      for (const k in sL) sL[k] += (m.llegadas || {})[k] || 0;
+      const clase = est === 'porvenir' || avance == null ? '' : avance >= 100 ? 'pos' : avance < 85 ? 'neg' : '';
+      const l = m.llegadas || {};
+      return `<tr${est === 'encurso' ? ' style="background:var(--oro-suave)"' : ''}><td>${nombres[i]}</td><td>${pill[est]}</td>
+        <td class="n"><b>${n != null ? miles(n) : '—'}</b></td><td class="n">${p != null ? miles(p) : '—'}</td>
+        <td class="n ${clase}">${avance != null ? avance + '%' : '—'}</td><td class="n">${ocup != null ? ocup + '%' : '—'}</td>
+        ${cel(l.whatsapp)}${cel(l.web)}${cel(l.booking)}${cel(l.expedia)}${cel(l.otros)}
+        <td class="n">${ing != null ? '$' + (ing / 1e6).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' MM' : '—'}</td></tr>`;
+    }).join('');
+    const avT = hayN && sP ? Math.round((sN / sP) * 100) : null;
+    const ocT = hayN && sD ? Math.round((sN / (sD * hab)) * 100) : null;
+    const total = `<tr class="tot"><td>Total ${d.anio}</td><td></td><td class="n">${hayN ? miles(sN) : '—'}</td><td class="n">${sP ? miles(sP) : '—'}</td><td class="n">${avT != null ? avT + '%' : '—'}</td><td class="n">${ocT != null ? ocT + '%' : '—'}</td>
+      <td class="n">${miles(sL.whatsapp)}</td><td class="n">${miles(sL.web)}</td><td class="n">${miles(sL.booking)}</td><td class="n">${miles(sL.expedia)}</td><td class="n">${miles(sL.otros)}</td>
+      <td class="n">${sIng ? '$' + (sIng / 1e6).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' MM' : '—'}</td></tr>`;
+    return `<div class="seg-tabla"><div class="tabla-wrap"><table class="reservas" style="min-width:960px;">
+      <thead><tr><th>Mes</th><th>Estado</th><th class="n">Noches reservadas</th><th class="n">Meta del mes</th><th class="n">Avance</th><th class="n">Ocupación</th>
+      <th class="n" title="Llegadas (check-in) del mes por canal">🤖 WhatsApp</th><th class="n">Web</th><th class="n">Booking</th><th class="n">Expedia</th><th class="n">Otros</th><th class="n">Ingreso estimado</th></tr></thead>
+      <tbody>${filas}${total}</tbody></table></div>
+      <p class="nota-seg">Noches reservadas: lo que hay en el Libro de Reservas. En los meses por venir es lo ya reservado a hoy y se actualiza solo. Meta del mes: la proyección anual prorrateada por días. Llegadas por canal: reservas confirmadas según su fecha de check-in. Ingreso estimado: noches por la tarifa promedio del modelo, no es facturación.</p></div>`;
+  }
   function pintarGrafico(d) {
     const cont = document.getElementById('graficoMeses'); if (!cont) return;
     const meses = d.meses || [];
     const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const vals = meses.map((m) => m.nochesLibro).filter((v) => v != null);
+    const vals = meses.flatMap((m) => [m.nochesLibro, m.nochesProyectadas]).filter((v) => v != null);
     // Escala mínima de 4 para que el eje no repita valores cuando aún no hay datos.
     const max = Math.max(4, ...vals);
+    document.getElementById('legExtra').hidden = false;
     const W = 960, H = 280, padL = 48, padR = 14, padT = 26, padB = 52;
     const cw = W - padL - padR, ch = H - padT - padB, bw = cw / 12;
     // Solo se resalta "mes actual" cuando se mira el año en curso.
@@ -949,16 +1003,22 @@
         totNoches += m.nochesLibro;
         if (!mejor || m.nochesLibro > mejor.v) mejor = { v: m.nochesLibro, i };
         const h = Math.max(2, ch * (m.nochesLibro / max)), y = padT + ch - h;
-        g += `<rect class="bar${i === actual ? ' act' : ''}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>`;
+        const porVenir = esAnioActual ? i > actual : Number(d.anio) > new Date().getFullYear();
+        g += `<rect class="bar${i === actual ? ' act' : ''}${porVenir ? ' prox' : ''}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"><title>${nombres[i]} ${d.anio}: ${miles(m.nochesLibro)} noches reservadas${porVenir ? ' a hoy' : ''}</title></rect>`;
         g += `<text class="val" x="${cx}" y="${y - 7}" text-anchor="middle">${miles(m.nochesLibro)}</text>`;
       } else {
         g += `<rect class="bar fut" x="${x}" y="${padT + ch - 5}" width="${w}" height="5" rx="2.5"/>`;
+      }
+      // Meta del mes (proyección prorrateada): marca sobre la barra.
+      if (m.nochesProyectadas != null) {
+        const ym = padT + ch - ch * (m.nochesProyectadas / max);
+        g += `<line class="meta-tick" x1="${x - 4}" x2="${x + w + 4}" y1="${ym}" y2="${ym}"><title>Meta ${nombres[i]}: ${miles(m.nochesProyectadas)} noches</title></line>`;
       }
       totBot += m.reservasBot || 0;
       g += `<text class="ax mes${i === actual ? ' act' : ''}" x="${cx}" y="${H - padB + 20}" text-anchor="middle">${nombres[i]}</text>`;
       if (m.reservasBot) g += `<text class="bot" x="${cx}" y="${H - padB + 38}" text-anchor="middle">🤖 ${m.reservasBot}</text>`;
     });
-    cont.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Noches reservadas por mes ${d.anio}">${g}</svg>`;
+    cont.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Noches reservadas por mes ${d.anio}">${g}</svg>` + tablaSeguimiento(d, esAnioActual, actual);
     document.getElementById('tituloGrafico').textContent = 'Reservas mensuales';
     document.getElementById('anioGrafico').textContent = d.anio;
     document.getElementById('lblActual').textContent = 'Mes actual';
