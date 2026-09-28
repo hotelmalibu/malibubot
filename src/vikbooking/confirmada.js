@@ -24,6 +24,7 @@ import { dbActivo, dbGuardarVikAviso } from '../almacen/db.js';
 import { diaColombia, fechaBonita } from '../util/fechas.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { renderizar } from './plantillas.js';
+import { confirmarReservaPorCorreo } from '../correo/enviar.js';
 
 /** order_id -> { id, confirmada: 0 pendiente | 1 omitido | timestamp de envio } */
 const estados = new Map();
@@ -133,13 +134,23 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
     referenciaPago: ref,
   };
   const existente = reservasStore.buscarPorReferencia(ref);
+  const estadoPrevio = existente ? existente.estado : null;
+  let registro;
   if (!existente) {
-    const r = reservasStore.crear(campos);
+    registro = reservasStore.crear(campos);
     console.log(`[vik] Reserva ${id} registrada en el panel (${estado}).`);
-    return r;
+  } else {
+    reservasStore.actualizar(existente.id, campos);
+    registro = existente;
   }
-  reservasStore.actualizar(existente.id, campos);
-  return existente;
+  // Recien confirmada (nueva o que pasa de en_proceso/otro a pagado): avisa a
+  // recepcion por correo, con el canal (web, Booking, Expedia...) incluido.
+  if (estado === 'pagado' && estadoPrevio !== 'pagado') {
+    confirmarReservaPorCorreo(registro, { soloRecepcion: campos.fuente !== FUENTE_WEB }).catch((e) =>
+      console.error('[vik] correo:', e.message)
+    );
+  }
+  return registro;
 }
 
 /**

@@ -110,9 +110,24 @@ export async function estadoEnResend(id) {
   }
 }
 
+/** Nombre legible del canal de una reserva, para el correo a recepción. */
+function nombreCanal(fuente) {
+  const m = {
+    'vikbooking': 'Página web',
+    'vikbooking-booking': 'Booking.com',
+    'vikbooking-expedia': 'Expedia',
+    'vikbooking-ota': 'OTA (canal externo)',
+    'bot': 'WhatsApp (bot)',
+    'humano': 'WhatsApp (recepción)',
+    'manual': 'Manual',
+  };
+  return m[fuente] || '';
+}
+
 function plantilla(reserva, paraRecepcion) {
   const total = reserva.monto ? precioCOP(reserva.monto) : '';
   const pendiente = reserva.estado === 'pendiente_hotel';
+  const canal = paraRecepcion ? nombreCanal(reserva.fuente) : '';
 
   const titulo = paraRecepcion
     ? (pendiente ? 'Nueva reserva — PAGO PENDIENTE (cobro en el hotel)' : 'Nueva reserva PAGADA')
@@ -143,6 +158,7 @@ function plantilla(reserva, paraRecepcion) {
     ${avisoPago}
     <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
       ${fila('Reserva N°', reserva.id)}
+      ${fila('Canal', canal)}
       ${fila('Huésped', reserva.nombre)}
       ${fila('Celular', reserva.celular)}
       ${fila('Correo', reserva.email)}
@@ -256,11 +272,15 @@ export async function cancelarReservaPorCorreo(reserva, motivo = '') {
   return res.some((r) => r.status === 'fulfilled' && r.value);
 }
 
-/** Envia la confirmacion de reserva al cliente y a recepcion. */
-export async function confirmarReservaPorCorreo(reserva) {
+/**
+ * Envia la confirmacion de reserva al cliente y a recepcion.
+ * Con `soloRecepcion: true` (reservas de OTA) no se le escribe al cliente:
+ * su correo es el proxy enmascarado de Booking/Expedia, que ya le avisaron.
+ */
+export async function confirmarReservaPorCorreo(reserva, { soloRecepcion = false } = {}) {
   const pendiente = reserva.estado === 'pendiente_hotel';
   const tareas = [];
-  if (reserva.email) {
+  if (reserva.email && !soloRecepcion) {
     tareas.push(
       enviarCorreo({
         to: reserva.email,
@@ -271,18 +291,22 @@ export async function confirmarReservaPorCorreo(reserva) {
         reservaId: reserva.id,
       })
     );
+  } else if (soloRecepcion) {
+    console.log('[correo] Reserva', reserva.id, 'es de OTA; no se le escribe al cliente (correo proxy).');
   } else {
     console.warn('[correo] Reserva', reserva.id, 'SIN correo del cliente; no se envía al cliente.');
     registrar({ to: '(cliente sin correo)', subject: 'reserva ' + (reserva.id || ''), ok: false, error: 'La reserva no capturó el correo del cliente', reservaId: reserva.id });
   }
   const recepcion = destinosRecepcion();
   if (recepcion.length) {
+    const canalTag = nombreCanal(reserva.fuente);
+    const sufijoCanal = canalTag ? ` [${canalTag}]` : '';
     tareas.push(
       enviarCorreo({
         to: recepcion,
-        subject: pendiente
+        subject: (pendiente
           ? `Nueva reserva PAGO PENDIENTE (cobro en hotel) — ${reserva.nombre || reserva.celular || ''}`
-          : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`,
+          : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`) + sufijoCanal,
         html: plantilla(reserva, true),
         reservaId: reserva.id,
       })
