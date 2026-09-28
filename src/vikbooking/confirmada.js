@@ -111,6 +111,38 @@ function fuenteDe(d) {
 }
 
 /**
+ * Tarifa base (por noche, COP) de nuestros propios tipos de habitacion, en el
+ * orden en que hay que probarlas (las mas especificas primero). Los canales
+ * externos (Booking, Expedia) mandan el `total` de Vik ya con la comision
+ * descontada, asi que para esas reservas el valor a mostrar en el correo se
+ * calcula con esta tarifa (la que nosotros publicamos), no con `d.total`.
+ */
+const TARIFAS_POR_TIPO = [
+  { patron: /ubique/, valor: 290550 },
+  { patron: /(junior.*king|king.*junior)/, valor: 357000 },
+  { patron: /(junior.*triple|triple.*junior)/, valor: 464100 },
+  { patron: /(suite.*(lujo|deluxe|presidencial)|(lujo|deluxe|presidencial).*suite)/, valor: 535000 },
+  { patron: /estandar/, valor: 309000 },
+];
+
+function tarifaPorNombre(nombre) {
+  const t = sinTildes(nombre);
+  const match = TARIFAS_POR_TIPO.find(({ patron }) => patron.test(t));
+  return match ? match.valor : 309000;
+}
+
+function nochesEntre(ingreso, salida) {
+  const ms = Date.parse(salida) - Date.parse(ingreso);
+  return Number.isFinite(ms) && ms > 0 ? Math.round(ms / 86400000) : 1;
+}
+
+/** Valor COMPLETO (lo que paga el huesped + la comision del canal) de una reserva OTA. */
+function montoCompletoOta(d, ingreso, salida) {
+  const noches = nochesEntre(ingreso, salida);
+  return (d.rooms || []).reduce((s, r) => s + tarifaPorNombre(r.name) * noches, 0);
+}
+
+/**
  * Deja la reserva de Vik Booking en el PANEL de MALIBUBOT (idempotente: la
  * referencia "vik:<id>" evita duplicados; si ya existe, la actualiza).
  */
@@ -118,7 +150,14 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
   const ref = `vik:${id}`;
   const habitaciones = [...new Set((d.rooms || []).map((r) => limpiar(r.name)).filter(Boolean))];
   const personas = (d.rooms || []).reduce((s, r) => s + (Number(r.adults) || 0) + (Number(r.children) || 0), 0);
-  const estado = status === 'cancelled' ? 'cancelado' : status === 'standby' ? 'en_proceso' : 'pagado';
+  const fuente = fuenteDe(d);
+  const esWeb = fuente === FUENTE_WEB;
+  // Las reservas de canales externos (Booking, Expedia...) se cobran en el
+  // hotel al llegar (el canal solo retiene su comision), asi que quedan
+  // "pendiente_hotel" en vez de "pagado".
+  const estado = status === 'cancelled' ? 'cancelado' : status === 'standby' ? 'en_proceso' : esWeb ? 'pagado' : 'pendiente_hotel';
+  const montoOta = !esWeb ? montoCompletoOta(d, ingreso, salida) : 0;
+  const monto = montoOta > 0 ? montoOta : Number(d.total) > 0 ? Number(d.total) : null;
   const campos = {
     waId: destino,
     celular: destino || String(d.phone || '').replace(/\D/g, ''),
@@ -128,9 +167,9 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
     personas: personas || null,
     checkIn: ingreso,
     checkOut: salida,
-    monto: Number(d.total) > 0 ? Number(d.total) : null,
+    monto,
     estado,
-    fuente: fuenteDe(d),
+    fuente,
     referenciaPago: ref,
   };
   const existente = reservasStore.buscarPorReferencia(ref);
@@ -143,10 +182,11 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
     reservasStore.actualizar(existente.id, campos);
     registro = existente;
   }
-  // Recien confirmada (nueva o que pasa de en_proceso/otro a pagado): avisa a
-  // recepcion por correo, con el canal (web, Booking, Expedia...) incluido.
-  if (estado === 'pagado' && estadoPrevio !== 'pagado') {
-    confirmarReservaPorCorreo(registro, { soloRecepcion: campos.fuente !== FUENTE_WEB }).catch((e) =>
+  // Recien confirmada (nueva o que pasa de en_proceso/otro a pagado/pendiente
+  // de pago): avisa a recepcion por correo, con el canal incluido.
+  const confirmada = (e) => e === 'pagado' || e === 'pendiente_hotel';
+  if (confirmada(estado) && !confirmada(estadoPrevio)) {
+    confirmarReservaPorCorreo(registro, { soloRecepcion: !esWeb }).catch((e) =>
       console.error('[vik] correo:', e.message)
     );
   }
