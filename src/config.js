@@ -90,6 +90,11 @@ export const config = {
     idioma: (process.env.VIK_PLANTILLA_IDIOMA || 'es').trim(),
     // Reservas que llegan por Booking/Expedia/etc. no tienen celular del huesped: por defecto no se avisan.
     incluirOTA: (process.env.VIK_INCLUIR_OTA || 'false') === 'true',
+    // Sincronizacion directa: MALIBUBOT LEE las reservas de Vik Booking (incluidas
+    // las de Booking y Expedia que Vik no avisa) llamando al archivo
+    // malibubot-sync.php instalado en la web. Vacio = apagado.
+    syncUrl: (process.env.VIK_SYNC_URL || '').trim(),
+    syncMinutos: Math.max(5, parseInt(process.env.VIK_SYNC_MIN || '15', 10) || 15),
   },
 
   // Meta semanal de reservas (valor inicial; se puede cambiar desde el panel).

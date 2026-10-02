@@ -31,6 +31,7 @@ import { resumenMetricas } from '../ia/metricas.js';
 import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
+import { estadoSync, sincronizarConVik } from '../vikbooking/sincronizar.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import { resumenOrigenes, origenDe } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
@@ -512,7 +513,18 @@ adminRouter.get('/api/canales/diag', (_req, res) => {
 
 // -------- Aviso "Reserva confirmada" de la pagina web (Vik Booking) --------
 adminRouter.get('/api/vik/estado', (_req, res) => {
-  res.json({ ok: true, ...estadoVik() });
+  res.json({ ok: true, ...estadoVik(), sincronizacion: estadoSync() });
+});
+// Lee AHORA las reservas directamente de Vik Booking (Booking, Expedia, web) y las deja en el panel.
+adminRouter.get('/api/vik/sync-estado', (_req, res) => {
+  res.json({ ok: true, ...estadoSync() });
+});
+adminRouter.post('/api/vik/sincronizar', async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await sincronizarConVik()) });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message, ...estadoSync() });
+  }
 });
 // Envia la plantilla real con datos de ejemplo a UN celular (el tuyo) para probar Meta antes de activar.
 adminRouter.get('/api/vik/probar', async (req, res) => {

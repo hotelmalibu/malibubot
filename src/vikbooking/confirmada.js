@@ -146,7 +146,7 @@ function montoCompletoOta(d, ingreso, salida) {
  * Deja la reserva de Vik Booking en el PANEL de MALIBUBOT (idempotente: la
  * referencia "vik:<id>" evita duplicados; si ya existe, la actualiza).
  */
-function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
+function registrarReservaPanel(d, { id, status, destino, ingreso, salida, avisarCorreo = true }) {
   const ref = `vik:${id}`;
   const habitaciones = [...new Set((d.rooms || []).map((r) => limpiar(r.name)).filter(Boolean))];
   const personas = (d.rooms || []).reduce((s, r) => s + (Number(r.adults) || 0) + (Number(r.children) || 0), 0);
@@ -176,7 +176,9 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
   const estadoPrevio = existente ? existente.estado : null;
   let registro;
   if (!existente) {
-    registro = reservasStore.crear(campos);
+    // La reserva conserva la fecha en que se hizo en Vik (no la de hoy): asi las estadisticas por periodo salen bien.
+    const ts = Number(d.ts) > 0 ? Number(d.ts) * 1000 : 0;
+    registro = reservasStore.crear({ ...campos, creado: ts && ts <= Date.now() ? ts : 0 });
     console.log(`[vik] Reserva ${id} registrada en el panel (${estado}).`);
   } else {
     reservasStore.actualizar(existente.id, campos);
@@ -185,12 +187,30 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida }) {
   // Recien confirmada (nueva o que pasa de en_proceso/otro a pagado/pendiente
   // de pago): avisa a recepcion por correo, con el canal incluido.
   const confirmada = (e) => e === 'pagado' || e === 'pendiente_hotel';
-  if (confirmada(estado) && !confirmada(estadoPrevio)) {
+  if (avisarCorreo && confirmada(estado) && !confirmada(estadoPrevio)) {
     confirmarReservaPorCorreo(registro, { soloRecepcion: !esWeb }).catch((e) =>
       console.error('[vik] correo:', e.message)
     );
   }
-  return registro;
+  return { registro, nuevo: !existente, estadoPrevio, estado };
+}
+
+/**
+ * Registra en el panel una reserva leida DIRECTAMENTE de Vik Booking (sincronizacion).
+ * No manda WhatsApp. Al correo de recepcion solo avisa si la reserva es NUEVA y se hizo
+ * hace menos de 36 h (las viejas son historia: no se inunda la bandeja).
+ * @returns {{ok:boolean, nuevo?:boolean, estado?:string, estadoPrevio?:string|null, error?:string}}
+ */
+export function registrarDesdeSync(datos = {}) {
+  const id = parseInt(datos.id, 10);
+  if (!Number.isInteger(id) || id <= 0) return { ok: false, error: 'sin id' };
+  const ingreso = isoDe(datos.checkin, datos.checkin_ts);
+  const salida = isoDe(datos.checkout, datos.checkout_ts);
+  if (!ingreso || !salida) return { ok: false, error: 'sin fechas' };
+  const status = String(datos.status || 'confirmed').toLowerCase();
+  const reciente = Number(datos.ts) > 0 && Date.now() - Number(datos.ts) * 1000 < 36 * 3600 * 1000;
+  const r = registrarReservaPanel(datos, { id, status, destino: destinoDe(datos.phone), ingreso, salida, avisarCorreo: reciente });
+  return { ok: true, nuevo: r.nuevo, estado: r.estado, estadoPrevio: r.estadoPrevio };
 }
 
 /**

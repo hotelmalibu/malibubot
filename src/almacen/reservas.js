@@ -80,7 +80,7 @@ export const reservasStore = {
       referenciaPago: datos.referenciaPago || '',
       checkoutId: datos.checkoutId || '',
       recordatorioEnviado: 0,                   // ts del recordatorio pre-llegada (0 = aun no)
-      creado: Date.now(),
+      creado: Number(datos.creado) > 0 ? Number(datos.creado) : Date.now(),
     };
     reservas.push(r);
     persistirReserva(r);

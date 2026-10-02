@@ -29,6 +29,7 @@ import { reservasStore, hidratarReservas } from './almacen/reservas.js';
 import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos, dbCargarCorreos } from './almacen/db.js';
 import { hidratarCorreos } from './correo/enviar.js';
 import { hidratarVikAvisos, procesarConfirmacion, claveValida, registrarEstadoWhatsApp } from './vikbooking/confirmada.js';
+import { programarSync } from './vikbooking/sincronizar.js';
 import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
@@ -288,6 +289,9 @@ async function arrancar() {
 
   // 4) Recordatorio pre-llegada (anti no-show): el día antes del check-in,
   //    un solo mensaje por reserva confirmada (9 a. m. – 8 p. m. Colombia).
+  // Lectura directa de las reservas de Vik Booking (Booking, Expedia, web), si hay VIK_SYNC_URL.
+  programarSync();
+
   const recordar = () => enviarRecordatorios().catch((e) => console.error('[recordatorio]', e.message));
   setTimeout(recordar, 3 * 60 * 1000);
   setInterval(recordar, 30 * 60 * 1000);

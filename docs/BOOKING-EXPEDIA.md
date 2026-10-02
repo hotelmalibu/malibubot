@@ -58,5 +58,30 @@ Cada vez que una reserva se confirma (o se cancela) en Vik Booking, el archivo
 ## Qué mide el Dashboard
 
 *Reservas por canal de venta*: por cada origen, reservas confirmadas, noches, ingresos,
-ticket promedio, en proceso y canceladas, según la fecha en que se **hizo** la reserva. Sigue
-el rango de fechas del Dashboard; las barras son los meses del año elegido.
+ticket promedio, en proceso y canceladas, según la fecha en que se **hizo** la reserva. Tiene
+su propio selector de periodo (por defecto, todos los tiempos); las barras son los meses del año elegido.
+
+## Si las reservas de Booking o Expedia no aparecen en el panel
+
+La pasarela `malibubot.php` solo avisa cuando Vik Booking la llama, y Vik no siempre lo
+hace con las reservas que llegan de Booking.com o Expedia. Para no depender de ese aviso,
+MALIBUBOT puede **leer las reservas directamente de Vik Booking** cada 15 minutos.
+
+Instalación (una sola vez):
+
+1. Sube `vikbooking/malibubot-sync.php` a la **raíz de la web** (la misma carpeta donde está
+   `configuration.php` de Joomla), por el administrador de archivos del hosting o FTP.
+2. Abre el archivo y cambia `PEGAR_AQUI_LA_CLAVE` por la misma clave `VIK_WEBHOOK_KEY` de Render.
+3. En Render → Environment agrega `VIK_SYNC_URL` = `https://www.hotelmalibu.co/malibubot-sync.php`
+   (opcional: `VIK_SYNC_MIN` = minutos entre lecturas, 15 por defecto).
+4. En el Dashboard → *Reservas por canal de venta*, pulsa **Sincronizar con Vik ahora**.
+
+Cómo funciona:
+
+- Trae TODAS las reservas de Vik (web, Booking, Expedia), con su fecha original, y las
+  canceladas también. Una reserva repetida no se duplica.
+- No manda WhatsApp. Solo avisa por correo a recepción de las reservas NUEVAS de las últimas
+  36 horas; lo anterior se registra en silencio.
+- El archivo es de solo lectura, no devuelve datos de pago y solo responde con la clave.
+  Quien tenga la clave puede leer nombres, correos y celulares de los huéspedes: trátala como
+  una contraseña.

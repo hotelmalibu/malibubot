@@ -221,6 +221,8 @@
 
   /* Reservas por canal (Dashboard) */
   .orig-periodos { margin: 0 0 12px; }
+  .orig-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; font-size: 13px; color: var(--gris); }
+  .orig-sync .ok { color: var(--verde); font-weight: 700; } .orig-sync .mal { color: var(--alerta); font-weight: 700; }
   .orig-detalle { margin-top: 12px; }
   .orig-detalle summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--oro-profundo); }
   .orig-aviso { margin-top: 12px; padding: 11px 14px; border-radius: 12px; background: var(--oro-suave); border: 1px solid var(--oro-claro); font-size: 13px; color: var(--tinta-2); }
@@ -452,6 +454,7 @@
           <button type="button" data-p="30" onclick="origPeriodo('30')">30 días</button>
           <button type="button" data-p="hoy" onclick="origPeriodo('hoy')">Hoy</button>
         </div>
+        <div class="orig-sync" id="origSync"></div>
         <div class="kpis" id="kpisOrigen"><div class="vacio-tabla">Cargando…</div></div>
         <div class="grafico-wrap" style="margin-top:14px;">
           <div class="grafico-top" id="origLeyenda"></div>
@@ -743,6 +746,29 @@
       if (!r.ok) return;
       pintarOrigenes(await r.json());
     } catch (_) {}
+    cargarSyncVik();
+  }
+  async function cargarSyncVik() {
+    const cont = document.getElementById('origSync'); if (!cont) return;
+    try {
+      const r = await fetch('/admin/api/vik/sync-estado'); if (!r.ok) return;
+      const s = await r.json();
+      if (!s.urlConfigurada) {
+        cont.innerHTML = '<span><b>Lectura directa de Vik Booking: apagada.</b> Es la que trae las reservas de Booking y Expedia aunque Vik no las avise. Para activarla hay que instalar un archivo en tu web y poner una variable en Render (guía en docs/BOOKING-EXPEDIA.md).</span>';
+        return;
+      }
+      const estado = s.corriendo ? 'Leyendo…' : s.error ? '<span class="mal">Falló: ' + esc(s.error) + '</span>' : s.ts ? '<span class="ok">Al día</span> · última lectura ' + haceCuanto(s.ts) + ' · ' + miles(s.leidas) + ' reservas leídas · ' + miles(s.nuevas) + ' nuevas' : 'Aún no ha corrido (corre sola cada pocos minutos).';
+      cont.innerHTML = '<button class="btn-mini" id="btnSyncVik" onclick="sincronizarVik(this)">🔄 Sincronizar con Vik ahora</button><span>Vik Booking: ' + estado + '</span>';
+    } catch (_) {}
+  }
+  async function sincronizarVik(btn) {
+    btn.disabled = true; btn.textContent = 'Sincronizando…';
+    try {
+      const r = await fetch('/admin/api/vik/sincronizar', { method: 'POST' });
+      const d = await r.json();
+      if (!d.ok) alert('No se pudo sincronizar: ' + (d.error || 'error desconocido'));
+    } catch (_) { alert('Error de red.'); }
+    cargarOrigenes(); cargarReservas();
   }
   function haceCuanto(ts) {
     if (!ts) return '';
