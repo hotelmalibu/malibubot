@@ -220,6 +220,7 @@
   .nota-seg { font-size: 12px; color: var(--gris); margin: 10px 0 4px; max-width: 78ch; }
 
   /* Reservas por canal (Dashboard) */
+  .orig-periodos { margin: 0 0 12px; }
   .orig-detalle { margin-top: 12px; }
   .orig-detalle summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--oro-profundo); }
   .orig-aviso { margin-top: 12px; padding: 11px 14px; border-radius: 12px; background: var(--oro-suave); border: 1px solid var(--oro-claro); font-size: 13px; color: var(--tinta-2); }
@@ -442,7 +443,14 @@
 
         <div class="seccion-cab">
           <div><div class="eyebrow">Origen de las reservas</div><h2>Reservas por canal de venta</h2></div>
-          <div class="nota" id="origNota">Según la fecha en que se hizo la reserva · sigue el rango de fechas de arriba</div>
+          <div class="nota" id="origNota"></div>
+        </div>
+        <div class="anios orig-periodos" id="origPeriodos" aria-label="Periodo de las reservas por canal">
+          <button type="button" data-p="todo" class="activo" onclick="origPeriodo('todo')">Todo el tiempo</button>
+          <button type="button" data-p="anio" onclick="origPeriodo('anio')">Este año</button>
+          <button type="button" data-p="mes" onclick="origPeriodo('mes')">Este mes</button>
+          <button type="button" data-p="30" onclick="origPeriodo('30')">30 días</button>
+          <button type="button" data-p="hoy" onclick="origPeriodo('hoy')">Hoy</button>
         </div>
         <div class="kpis" id="kpisOrigen"><div class="vacio-tabla">Cargando…</div></div>
         <div class="grafico-wrap" style="margin-top:14px;">
@@ -456,6 +464,12 @@
             <table class="reservas" style="min-width:680px;">
               <thead><tr><th>Canal</th><th class="n">Reservas</th><th class="n">% reservas</th><th class="n">Noches</th><th class="n">Ingresos</th><th class="n">Ticket promedio</th><th class="n">En proceso</th><th class="n">Canceladas</th></tr></thead>
               <tbody id="cuerpoOrigen"></tbody>
+            </table>
+          </div>
+          <div class="tabla-wrap" style="margin-top:12px;">
+            <table class="reservas" style="min-width:560px;">
+              <thead><tr><th>Año en que se hizo la reserva</th><th class="n">WhatsApp</th><th class="n">Web directa</th><th class="n">Booking</th><th class="n">Expedia</th><th class="n">Otros</th><th class="n">Total</th></tr></thead>
+              <tbody id="cuerpoOrigenAnios"></tbody>
             </table>
           </div>
         </details>
@@ -695,31 +709,61 @@
 
   // ---------- Dashboard ----------
   function rango() { return rangoDe('fDesde', 'fHasta'); }
-  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); cargarOrigenes(); }
-  function buscar() { cargarEstadisticas(); cargarReservas(); cargarOrigenes(); }
+  function preset(tipo) { aplicarPreset(tipo, 'fDesde', 'fHasta'); cargarEstadisticas(); }
+  function buscar() { cargarEstadisticas(); cargarReservas(); }
 
   // ---------- Reservas por canal de venta ----------
   const ORIG_ICO = { whatsapp: ['🤖', 'azul'], web: ['🌐', 'verde'], booking: ['🏨', ''], expedia: ['🧭', 'alerta'], otros: ['📌', 'gris'] };
+  // Periodo propio de esta sección (por defecto, todos los tiempos). Se recuerda en el navegador.
+  let origPeriodoSel = 'todo';
+  try { const g = localStorage.getItem('malibubot-orig-periodo'); if (g) origPeriodoSel = g; } catch (_) {}
+  function origPeriodo(p) {
+    origPeriodoSel = p;
+    try { localStorage.setItem('malibubot-orig-periodo', p); } catch (_) {}
+    cargarOrigenes();
+  }
+  function origRango() {
+    const hoy = new Date(), iso = (d) => isoDe(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
+    const hastaHoy = iso(hoy);
+    if (origPeriodoSel === 'hoy') return { desde: hastaHoy, hasta: hastaHoy };
+    if (origPeriodoSel === '30') { const d = new Date(hoy); d.setDate(d.getDate() - 29); return { desde: iso(d), hasta: hastaHoy }; }
+    if (origPeriodoSel === 'mes') return { desde: hastaHoy.slice(0, 8) + '01', hasta: hastaHoy };
+    if (origPeriodoSel === 'anio') return { desde: hastaHoy.slice(0, 4) + '-01-01', hasta: hastaHoy };
+    return { desde: '', hasta: '' }; // todo el tiempo
+  }
   async function cargarOrigenes() {
     try {
+      document.querySelectorAll('#origPeriodos button').forEach((b) => b.classList.toggle('activo', b.dataset.p === origPeriodoSel));
       const anio = typeof anioSel === 'number' ? anioSel : new Date().getFullYear();
-      const q = rango();
-      const r = await fetch('/admin/api/origenes' + q + (q ? '&' : '?') + 'anio=' + anio);
+      const { desde, hasta } = origRango();
+      const qs = ['anio=' + anio];
+      if (desde) qs.push('desde=' + desde);
+      if (hasta) qs.push('hasta=' + hasta);
+      const r = await fetch('/admin/api/origenes?' + qs.join('&'));
       if (!r.ok) return;
       pintarOrigenes(await r.json());
     } catch (_) {}
+  }
+  function haceCuanto(ts) {
+    if (!ts) return '';
+    const h = (Date.now() - ts) / 36e5;
+    if (h < 1) return 'hace menos de 1 h';
+    if (h < 24) return 'hace ' + Math.round(h) + ' h';
+    const d = Math.round(h / 24);
+    return d === 1 ? 'ayer' : 'hace ' + d + ' días';
   }
   function pintarOrigenes(d) {
     const rg = d.rango || {};
     document.getElementById('origNota').textContent = (rg.desde || rg.hasta)
       ? `Reservas hechas del ${rg.desde || '…'} al ${rg.hasta || '…'} · barras: año ${d.anio}`
-      : `Todas las reservas registradas · barras: año ${d.anio}`;
+      : `Todas las reservas desde el inicio (${miles(d.totalHistorico)} en total) · barras: año ${d.anio}`;
     const principales = d.origenes.filter((o) => o.id !== 'otros' || o.reservas || o.enProceso || o.canceladas);
     document.getElementById('kpisOrigen').innerHTML = principales.map((o) => {
       const [ico, clase] = ORIG_ICO[o.id] || ['📌', 'gris'];
+      const ult = o.ultima ? ` · última ${haceCuanto(o.ultima)}` : '';
       const pie = o.reservas
-        ? `${o.pctReservas}% del total · ${miles(o.noches)} noche${o.noches === 1 ? '' : 's'}${o.montoCOP ? ' · ' + pesos(o.montoCOP) : ''}`
-        : (o.id === 'booking' || o.id === 'expedia' ? 'aún sin reservas registradas' : 'sin reservas en el rango');
+        ? `${o.pctReservas}% del total · ${miles(o.noches)} noche${o.noches === 1 ? '' : 's'}${o.montoCOP ? ' · ' + pesos(o.montoCOP) : ''}${ult}`
+        : (o.ultima ? `sin reservas en este periodo${ult}` : (o.id === 'booking' || o.id === 'expedia' ? 'ninguna reserva ha llegado todavía' : 'sin reservas registradas'));
       return tarjeta(clase, ico, o.nombre, o.reservas, pie);
     }).join('');
 
@@ -757,9 +801,18 @@
       `<tr><td><span class="sw-o o-${o.id}"></span> ${esc(o.nombre)}</td><td class="n"><b>${o.reservas}</b></td><td class="n">${o.pctReservas}%</td><td class="n">${miles(o.noches)}</td><td class="n">${o.montoCOP ? pesos(o.montoCOP) : '—'}</td><td class="n">${o.ticketCOP ? pesos(o.ticketCOP) : '—'}</td><td class="n">${o.enProceso}</td><td class="n">${o.canceladas}</td></tr>`
     ).join('');
 
-    document.getElementById('origAviso').innerHTML = d.sinIdentificar
+    document.getElementById('cuerpoOrigenAnios').innerHTML = (d.anios || []).length
+      ? d.anios.map((a) => `<tr><td>${a.anio}</td><td class="n">${a.whatsapp}</td><td class="n">${a.web}</td><td class="n">${a.booking}</td><td class="n">${a.expedia}</td><td class="n">${a.otros}</td><td class="n"><b>${a.total}</b></td></tr>`).join('')
+      : '<tr><td colspan="7" style="color:var(--gris)">Aún no hay reservas confirmadas.</td></tr>';
+
+    const sinLlegar = d.origenes.filter((o) => (o.id === 'booking' || o.id === 'expedia') && !o.ultima).map((o) => o.corto);
+    const ayudaCanales = sinLlegar.length
+      ? `<div class="orig-aviso">⚠️ <b>${sinLlegar.join(' y ')}: ninguna reserva ha llegado a MALIBUBOT.</b> Si en ${sinLlegar.length > 1 ? 'esos canales' : 'ese canal'} ya tienes reservas, es que Vik Booking no las está avisando. Revisa en Joomla: (1) que la pasarela «MALIBUBOT» esté activa para el envío automático de Vik Booking, (2) que el archivo <code>malibubot.php</code> instalado sea el último, y (3) si las reservas de Booking vienen sin celular: es posible que Vik no llame a la pasarela cuando no hay número (hay que comprobarlo en tu Vik).</div>`
+      : '';
+    const sinIdent = d.sinIdentificar
       ? `<div class="orig-aviso">ℹ️ ${d.sinIdentificar} reserva${d.sinIdentificar === 1 ? '' : 's'} de canales externos que no son Booking ni Expedia (Airbnb, otros) o que Vik Booking no identificó; aparecen en «Otros». Si esperabas que fueran de Booking o Expedia, confirma que Vik tenga instalado el archivo <code>malibubot.php</code> más reciente.</div>`
       : '';
+    document.getElementById('origAviso').innerHTML = ayudaCanales + sinIdent;
   }
 
   async function cargarEstadisticas() {
@@ -1482,8 +1535,8 @@
   }
 
   document.getElementById('filtro').addEventListener('input', pintarLista);
-  document.getElementById('fDesde').addEventListener('change', () => { cargarEstadisticas(); cargarOrigenes(); });
-  document.getElementById('fHasta').addEventListener('change', () => { cargarEstadisticas(); cargarOrigenes(); });
+  document.getElementById('fDesde').addEventListener('change', cargarEstadisticas);
+  document.getElementById('fHasta').addEventListener('change', cargarEstadisticas);
   ['mDesde', 'mHasta'].forEach((id) => document.getElementById(id).addEventListener('change', cargarMonitor));
   ['cDesde', 'cHasta'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
     document.querySelectorAll('.presets-conv button').forEach((b) => b.classList.remove('activo'));
