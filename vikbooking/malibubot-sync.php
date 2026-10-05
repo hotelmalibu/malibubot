@@ -10,10 +10,9 @@
  * INSTALAR (una sola vez):
  *  1. Sube este archivo a la RAIZ de la web (la misma carpeta donde esta el
  *     archivo configuration.php de Joomla), con el nombre malibubot-sync.php.
- *  2. La clave: por defecto usa la MISMA que ya tiene la pasarela "MALIBUBOT" de
- *     Vik Booking (no hay que tocar nada). Solo si eso no funciona, cambia abajo
- *     CLAVE por la clave VIK_WEBHOOK_KEY que esta en Render.
- *  3. En Render agrega la variable VIK_SYNC_URL con el valor
+ *  2. La clave: escribe en la linea "$CLAVE = '...';" (mas abajo) la misma clave que
+ *     VIK_SYNC_KEY en Render. Es el UNICO lugar del archivo que se edita.
+ *  3. En Render agrega VIK_SYNC_KEY (la clave) y VIK_SYNC_URL con el valor
  *     https://www.hotelmalibu.co/malibubot-sync.php
  *
  * Seguridad: solo responde si llega la cabecera X-Malibubot-Key correcta; es de
@@ -22,7 +21,7 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-// ---- CAMBIAR: misma clave que VIK_WEBHOOK_KEY en Render ----
+// ---- CAMBIAR SOLO ESTO: misma clave que VIK_SYNC_KEY en Render ----
 $CLAVE = 'PEGAR_AQUI_LA_CLAVE';
 // -------------------------------------------------------------
 
@@ -69,21 +68,9 @@ $db->set_charset('utf8mb4');
 
 $p = preg_replace('/[^A-Za-z0-9_]/', '', (string) $c->dbprefix);
 
-// Clave: si no se escribio arriba, se usa la MISMA que ya tiene la pasarela
-// "MALIBUBOT" de Vik Booking (Vik la guarda en su configuracion), asi no hay
-// que copiarla a mano.
-if ($CLAVE === '' || $CLAVE === 'PEGAR_AQUI_LA_CLAVE') {
-	$CLAVE = '';
-	$rc = $db->query("SELECT `setting` FROM `" . $p . "vikbooking_config` WHERE `param` = 'smsapifields' LIMIT 1");
-	if ($rc && ($fila = $rc->fetch_assoc())) {
-		$campos = json_decode((string) $fila['setting'], true);
-		if (is_array($campos) && !empty($campos['key'])) {
-			$CLAVE = trim((string) $campos['key']);
-		}
-	}
-	if ($CLAVE === '') {
-		salir(503, array('ok' => false, 'error' => 'No hay clave: escribela en el archivo o configura la pasarela MALIBUBOT en Vik Booking.'));
-	}
+// La clave debe escribirse en la linea de arriba ($CLAVE).
+if ($CLAVE === '' || strpos($CLAVE, 'PEGAR_AQUI') === 0) {
+	salir(503, array('ok' => false, 'error' => 'Falta escribir la clave en la linea $CLAVE del archivo.'));
 }
 if (!hash_equals($CLAVE, $recibida)) {
 	salir(403, array('ok' => false, 'error' => 'Clave incorrecta.'));
