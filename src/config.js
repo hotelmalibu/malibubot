@@ -97,7 +97,7 @@ export const config = {
     // Clave propia de la sincronizacion (VIK_SYNC_KEY); si no existe, usa VIK_WEBHOOK_KEY.
     syncKey: (process.env.VIK_SYNC_KEY || process.env.VIK_WEBHOOK_KEY || '').trim(),
     // Solo se cargan reservas con llegada desde esta fecha (YYYY-MM-DD); por defecto, 2026.
-    syncDesde: /^d{4}-d{2}-d{2}$/.test((process.env.VIK_SYNC_DESDE || '').trim()) ? process.env.VIK_SYNC_DESDE.trim() : '2026-01-01',
+    syncDesde: /^\d{4}-\d{2}-\d{2}$/.test((process.env.VIK_SYNC_DESDE || '').trim()) ? process.env.VIK_SYNC_DESDE.trim() : '2026-01-01',
     syncMinutos: Math.max(5, parseInt(process.env.VIK_SYNC_MIN || '15', 10) || 15),
   },
 
