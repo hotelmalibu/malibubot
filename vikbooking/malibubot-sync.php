@@ -10,7 +10,9 @@
  * INSTALAR (una sola vez):
  *  1. Sube este archivo a la RAIZ de la web (la misma carpeta donde esta el
  *     archivo configuration.php de Joomla), con el nombre malibubot-sync.php.
- *  2. Cambia abajo CLAVE por la misma clave VIK_WEBHOOK_KEY que esta en Render.
+ *  2. La clave: por defecto usa la MISMA que ya tiene la pasarela "MALIBUBOT" de
+ *     Vik Booking (no hay que tocar nada). Solo si eso no funciona, cambia abajo
+ *     CLAVE por la clave VIK_WEBHOOK_KEY que esta en Render.
  *  3. En Render agrega la variable VIK_SYNC_URL con el valor
  *     https://www.hotelmalibu.co/malibubot-sync.php
  *
@@ -32,11 +34,8 @@ function salir($codigo, $datos)
 }
 
 $recibida = isset($_SERVER['HTTP_X_MALIBUBOT_KEY']) ? (string) $_SERVER['HTTP_X_MALIBUBOT_KEY'] : '';
-if ($CLAVE === '' || $CLAVE === 'PEGAR_AQUI_LA_CLAVE') {
-	salir(503, array('ok' => false, 'error' => 'Falta configurar la clave en el archivo.'));
-}
-if (!hash_equals($CLAVE, $recibida)) {
-	salir(403, array('ok' => false, 'error' => 'Clave incorrecta.'));
+if ($recibida === '') {
+	salir(403, array('ok' => false, 'error' => 'Falta la clave.'));
 }
 
 $config = __DIR__ . '/configuration.php';
@@ -69,6 +68,26 @@ if ($db->connect_errno) {
 $db->set_charset('utf8mb4');
 
 $p = preg_replace('/[^A-Za-z0-9_]/', '', (string) $c->dbprefix);
+
+// Clave: si no se escribio arriba, se usa la MISMA que ya tiene la pasarela
+// "MALIBUBOT" de Vik Booking (Vik la guarda en su configuracion), asi no hay
+// que copiarla a mano.
+if ($CLAVE === '' || $CLAVE === 'PEGAR_AQUI_LA_CLAVE') {
+	$CLAVE = '';
+	$rc = $db->query("SELECT `setting` FROM `" . $p . "vikbooking_config` WHERE `param` = 'smsapifields' LIMIT 1");
+	if ($rc && ($fila = $rc->fetch_assoc())) {
+		$campos = json_decode((string) $fila['setting'], true);
+		if (is_array($campos) && !empty($campos['key'])) {
+			$CLAVE = trim((string) $campos['key']);
+		}
+	}
+	if ($CLAVE === '') {
+		salir(503, array('ok' => false, 'error' => 'No hay clave: escribela en el archivo o configura la pasarela MALIBUBOT en Vik Booking.'));
+	}
+}
+if (!hash_equals($CLAVE, $recibida)) {
+	salir(403, array('ok' => false, 'error' => 'Clave incorrecta.'));
+}
 $tOrd = '`' . $p . 'vikbooking_orders`';
 $tOrdRooms = '`' . $p . 'vikbooking_ordersrooms`';
 $tRooms = '`' . $p . 'vikbooking_rooms`';
