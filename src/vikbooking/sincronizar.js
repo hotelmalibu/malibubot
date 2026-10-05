@@ -14,6 +14,7 @@
 // ============================================================
 import { config } from '../config.js';
 import { registrarDesdeSync } from './confirmada.js';
+import { reservasStore } from '../almacen/reservas.js';
 
 const ultimo = {
   activo: false,
@@ -22,6 +23,7 @@ const ultimo = {
   duracionMs: 0,
   leidas: 0,
   omitidas: 0,
+  quitadas: 0,
   nuevas: 0,
   actualizadas: 0,
   canceladas: 0,
@@ -63,7 +65,7 @@ export async function sincronizarConVik() {
 
   ultimo.corriendo = true;
   const inicio = Date.now();
-  const cuenta = { leidas: 0, omitidas: 0, nuevas: 0, actualizadas: 0, canceladas: 0, invalidas: 0, porCanal: {} };
+  const cuenta = { leidas: 0, omitidas: 0, quitadas: 0, nuevas: 0, actualizadas: 0, canceladas: 0, invalidas: 0, porCanal: {} };
   try {
     let desdeId = 0;
     for (let pagina = 0; pagina < 60; pagina++) { // tope de seguridad: 12.000 reservas
@@ -82,6 +84,7 @@ export async function sincronizarConVik() {
       if (!d.ordenes || d.ordenes.length < 200 || d.siguiente <= desdeId) break;
       desdeId = d.siguiente;
     }
+    cuenta.quitadas = reservasStore.purgarVikAnterioresA(config.vik.syncDesde);
     Object.assign(ultimo, cuenta, { error: '' });
     if (cuenta.nuevas || cuenta.actualizadas) {
       console.log(`[vik-sync] ${cuenta.leidas} leídas · ${cuenta.nuevas} nuevas · ${cuenta.actualizadas} con cambio de estado`);

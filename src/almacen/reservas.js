@@ -17,7 +17,7 @@
 //  comporta como antes: se reinicia al redesplegar.
 // ============================================================
 import { config } from '../config.js';
-import { dbActivo, dbGuardarReserva } from './db.js';
+import { dbActivo, dbGuardarReserva, dbEliminarReservas } from './db.js';
 
 // Estados de una reserva:
 //   'pagado'          -> pago en línea confirmado (ocupa habitación).
@@ -103,6 +103,21 @@ export const reservasStore = {
     if (campos.estado && ESTADOS.includes(campos.estado)) r.estado = campos.estado;
     persistirReserva(r);
     return r;
+  },
+
+  /**
+   * Quita las reservas IMPORTADAS de Vik Booking (referencia "vik:...") cuya llegada
+   * es anterior a `desde` (YYYY-MM-DD). Nunca toca las cerradas por el bot o recepcion.
+   * @returns {number} cuantas quito
+   */
+  purgarVikAnterioresA(desde) {
+    const quitar = reservas.filter((r) => String(r.referenciaPago || '').startsWith('vik:')
+      && String(r.fuente || '').startsWith('vikbooking') && r.checkIn && r.checkIn < desde);
+    if (!quitar.length) return 0;
+    const ids = new Set(quitar.map((r) => r.id));
+    for (let i = reservas.length - 1; i >= 0; i--) if (ids.has(reservas[i].id)) reservas.splice(i, 1);
+    if (dbActivo()) dbEliminarReservas([...ids]).catch((e) => console.error('[db] purga:', e.message));
+    return quitar.length;
   },
 
   /** Marca que ya se envio el recordatorio pre-llegada (uno solo por reserva). */

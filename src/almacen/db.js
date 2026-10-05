@@ -154,6 +154,12 @@ export async function dbGuardarMensaje(waId, m) {
 }
 
 /** Inserta/actualiza una reserva completa. */
+/** Borra reservas por id (solo se usa para limpiar lo importado de Vik Booking). */
+export async function dbEliminarReservas(ids) {
+  if (!pool || !ids.length) return;
+  await pool.query('DELETE FROM reservas WHERE id = ANY($1::int[])', [ids]);
+}
+
 export async function dbGuardarReserva(r) {
   if (!pool) return;
   await pool.query(
