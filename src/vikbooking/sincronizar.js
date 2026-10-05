@@ -21,6 +21,7 @@ const ultimo = {
   ts: 0,
   duracionMs: 0,
   leidas: 0,
+  omitidas: 0,
   nuevas: 0,
   actualizadas: 0,
   canceladas: 0,
@@ -62,13 +63,14 @@ export async function sincronizarConVik() {
 
   ultimo.corriendo = true;
   const inicio = Date.now();
-  const cuenta = { leidas: 0, nuevas: 0, actualizadas: 0, canceladas: 0, invalidas: 0, porCanal: {} };
+  const cuenta = { leidas: 0, omitidas: 0, nuevas: 0, actualizadas: 0, canceladas: 0, invalidas: 0, porCanal: {} };
   try {
     let desdeId = 0;
     for (let pagina = 0; pagina < 60; pagina++) { // tope de seguridad: 12.000 reservas
       const d = await pedirPagina(desdeId);
       for (const o of d.ordenes || []) {
         cuenta.leidas++;
+        if (String(o.checkin || '') && String(o.checkin) < config.vik.syncDesde) { cuenta.omitidas = (cuenta.omitidas || 0) + 1; continue; }
         const r = registrarDesdeSync(o);
         if (!r.ok) { cuenta.invalidas++; continue; }
         if (r.nuevo) cuenta.nuevas++;
