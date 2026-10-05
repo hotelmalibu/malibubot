@@ -69,11 +69,12 @@ $db->set_charset('utf8mb4');
 $p = preg_replace('/[^A-Za-z0-9_]/', '', (string) $c->dbprefix);
 
 // La clave debe escribirse en la linea de arriba ($CLAVE).
+$CLAVE = trim($CLAVE);
 if ($CLAVE === '' || strpos($CLAVE, 'PEGAR_AQUI') === 0) {
 	salir(503, array('ok' => false, 'error' => 'Falta escribir la clave en la linea $CLAVE del archivo.'));
 }
 if (!hash_equals($CLAVE, $recibida)) {
-	salir(403, array('ok' => false, 'error' => 'Clave incorrecta.'));
+	salir(403, array('ok' => false, 'error' => 'Clave incorrecta (el archivo tiene ' . strlen($CLAVE) . ' caracteres y Render envio ' . strlen($recibida) . ').'));
 }
 $tOrd = '`' . $p . 'vikbooking_orders`';
 $tOrdRooms = '`' . $p . 'vikbooking_ordersrooms`';
