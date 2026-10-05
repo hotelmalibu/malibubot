@@ -94,6 +94,8 @@ export const config = {
     // las de Booking y Expedia que Vik no avisa) llamando al archivo
     // malibubot-sync.php instalado en la web. Vacio = apagado.
     syncUrl: (process.env.VIK_SYNC_URL || '').trim(),
+    // Clave propia de la sincronizacion (VIK_SYNC_KEY); si no existe, usa VIK_WEBHOOK_KEY.
+    syncKey: (process.env.VIK_SYNC_KEY || process.env.VIK_WEBHOOK_KEY || '').trim(),
     syncMinutos: Math.max(5, parseInt(process.env.VIK_SYNC_MIN || '15', 10) || 15),
   },
 

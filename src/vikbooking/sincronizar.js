@@ -30,7 +30,7 @@ const ultimo = {
 };
 
 export function estadoSync() {
-  return { ...ultimo, activo: !!config.vik.syncUrl, urlConfigurada: !!config.vik.syncUrl, claveConfigurada: !!config.vik.key };
+  return { ...ultimo, activo: !!config.vik.syncUrl, urlConfigurada: !!config.vik.syncUrl, claveConfigurada: !!config.vik.syncKey };
 }
 
 async function pedirPagina(desdeId) {
@@ -38,7 +38,7 @@ async function pedirPagina(desdeId) {
   url.searchParams.set('desde_id', String(desdeId));
   url.searchParams.set('limite', '200');
   const resp = await fetch(url, {
-    headers: { 'X-Malibubot-Key': config.vik.key, Accept: 'application/json' },
+    headers: { 'X-Malibubot-Key': config.vik.syncKey, Accept: 'application/json' },
     signal: AbortSignal.timeout(30000),
   });
   const texto = await resp.text();
@@ -57,7 +57,7 @@ async function pedirPagina(desdeId) {
  */
 export async function sincronizarConVik() {
   if (!config.vik.syncUrl) throw new Error('Falta VIK_SYNC_URL (la dirección de malibubot-sync.php).');
-  if (!config.vik.key) throw new Error('Falta VIK_WEBHOOK_KEY.');
+  if (!config.vik.syncKey) throw new Error('Falta VIK_SYNC_KEY (la clave de la sincronización).');
   if (ultimo.corriendo) throw new Error('Ya hay una sincronización en curso.');
 
   ultimo.corriendo = true;

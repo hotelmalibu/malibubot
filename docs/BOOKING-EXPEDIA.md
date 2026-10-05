@@ -71,8 +71,8 @@ Instalación (una sola vez):
 
 1. Sube `vikbooking/malibubot-sync.php` a la **raíz de la web** (la misma carpeta donde está
    `configuration.php` de Joomla), por el administrador de archivos del hosting o FTP.
-2. La clave no hay que escribirla: el archivo usa la misma que ya tiene la pasarela «MALIBUBOT» de Vik Booking. Solo si falla, cambia `PEGAR_AQUI_LA_CLAVE` por tu `VIK_WEBHOOK_KEY` de Render.
-3. En Render → Environment agrega `VIK_SYNC_URL` = `https://www.hotelmalibu.co/malibubot-sync.php`
+2. Inventa una clave propia para la sincronización (una frase larga, sin espacios) y escríbela en el archivo, en la línea `$CLAVE = '...';`.
+3. En Render → Environment agrega `VIK_SYNC_KEY` = esa misma clave (si no existe, se usa `VIK_WEBHOOK_KEY`) y `VIK_SYNC_URL` = `https://www.hotelmalibu.co/malibubot-sync.php`
    (opcional: `VIK_SYNC_MIN` = minutos entre lecturas, 15 por defecto).
 4. En el Dashboard → *Reservas por canal de venta*, pulsa **Sincronizar con Vik ahora**.
 
