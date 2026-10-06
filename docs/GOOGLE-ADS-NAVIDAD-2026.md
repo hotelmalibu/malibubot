@@ -1,137 +1,108 @@
-# Google Ads · «Navidad en Familia» 15 dic 2026 – 6 ene 2027
+# Google Ads · «Promoción Especial Navideña» 15 dic 2026 – 6 ene 2027
 
-Meta: diciembre de **900 → 1.300 habitaciones vendidas** (+400 noches).
+**Tope de gasto: COP 10.000 diarios (≈ COP 300.000 al mes), hasta el 31 de diciembre de 2026.**
+Meta del hotel para diciembre: 900 → 1.300 habitaciones vendidas.
 
-## 1. ¿La meta es razonable?
+## 1. Lo que se puede esperar con COP 10.000 al día
 
-| | Hoy | Meta |
-|---|---|---|
-| Habitaciones del hotel | 85 | 85 |
-| Capacidad de diciembre (85 × 31) | 2.635 noches | 2.635 noches |
-| Vendidas | 900 (34 % de ocupación) | 1.300 (**49 %**) |
+Con ese tope Google Ads es un **complemento barato, no el motor** de la meta.
 
-Sí es alcanzable: sigue quedando la mitad del mes libre. Pero **no la va a lograr Google Ads solo**: hay que sumar Valentina (WhatsApp), Facebook, Booking/Expedia y la base de clientes anteriores.
-Las 400 noches nuevas deben caer sobre todo del **15 al 31 de diciembre** (17 noches × 85 = 1.445 de capacidad), con foco en el 23-26 y el 30-2.
+| | Estimado mensual |
+|---|---|
+| Gasto | COP 300.000 |
+| Clics (a ~COP 1.200 por clic) | ~250 |
+| Contactos por WhatsApp o llamada (3-4 % de los clics) | ~8-10 |
+| Reservas (la mitad cierra) | ~4-5 |
+| Ingreso (2,5 noches × $309.000) | ~COP 3,5 millones |
 
-Con una estadía de ~2,5 noches son unas **160 reservas nuevas**. Si Google aporta cerca de un tercio, son **~55 reservas** desde anuncios.
+Esto equivale a unas **10-12 noches al mes**. Para llegar a +400 noches hacen falta además Facebook, Valentina por WhatsApp, Booking/Expedia y mensajes a clientes anteriores. Los números son estimados; se corrigen con datos reales en las primeras dos semanas.
 
-## 2. Presupuesto sugerido (estimado, se ajusta con datos reales)
+Como la plata es poca, el plan **no la reparte**: una sola campaña, solo palabras de intención alta (gente que ya busca hotel en Sincelejo), solo en las horas y dispositivos que más convierten.
 
-Una reserva de 2,5 noches vale ~COP 900.000. Costo máximo aceptable por reserva: **COP 90.000 (10 %)**.
+## 2. Una sola campaña de Búsqueda
 
-| Etapa | Fechas | Presupuesto diario |
-|---|---|---|
-| Aprendizaje | 12 oct – 31 oct | COP 60.000 |
-| Crecimiento | 1 nov – 30 nov | COP 120.000 |
-| Empuje | 1 dic – 20 dic | COP 200.000 |
-| Última hora (solo fechas que quedan libres) | 21 dic – 6 ene | COP 150.000 |
+- **Nombre:** Navidad 2026 · Sincelejo
+- **Presupuesto:** COP 10.000 diarios. Google puede gastar hasta el doble un día, pero en el mes nunca pasa de ~COP 304.000 (30,4 × el diario). Revisar el gasto cada lunes.
+- **Fechas:** inicio **1 de noviembre** (cuando la gente empieza a buscar Navidad); fin **31 de diciembre**. Octubre sirve para dejar listo todo lo de abajo. Si prefieres empezar antes, se puede, con el mismo tope.
+- **Red:** solo Búsqueda de Google. Desactivar socios de búsqueda y Display.
+- **Puja:** *Maximizar clics* con **CPC máximo de COP 1.800**. Con tan pocos datos, Google no puede optimizar por conversiones; cuando haya 30 conversiones se puede cambiar a *Maximizar conversiones*.
+- **Ubicación:** Colombia. **Idioma:** español.
+- **Dispositivos:** móvil +30 %; computador y tableta sin ajuste.
+- **Horario:** 11 am – 1 pm y 5 pm – 11 pm (+20 % en la noche). Fuera de eso, desactivado, para no gastar en horas de poco movimiento.
 
-Total aproximado: **COP 10 millones** (~6 % de los ingresos que se buscan). Tras 2 semanas se compara el costo por reserva real y se mueve plata entre campañas; si Google rinde peor que Facebook, se recorta Google y se sube Facebook.
-
-## 3. Campañas
-
-### Campaña 1 · Búsqueda «Navidad Familia Sincelejo» (la principal)
-- Objetivo: ventas / clientes potenciales. Red: solo Búsqueda (sin Display ni socios de búsqueda).
-- Ubicación: Colombia (principalmente familias de Barranquilla, Cartagena, Montería, Medellín y Bogotá que visitan Sincelejo). Opción «Presencia o interés».
-- Idioma: español. Dispositivos: móvil con +20 % de puja.
-- Calendario: todo el día, +15 % de 6 pm a 11 pm.
-- Puja: *Maximizar conversiones* las primeras 3 semanas; luego *CPA objetivo* ≈ COP 60.000.
-- Fechas de la campaña: 12 oct 2026 – 6 ene 2027.
-
-**Grupo A · Navidad y fin de año** (coincidencia de frase y exacta)
+### Palabras clave (solo estas)
 ```
-"hotel navidad sincelejo"      [hotel navidad sincelejo]
-"hotel fin de año sincelejo"   [hotel año nuevo sincelejo]
-"hospedaje navidad sincelejo"  "hoteles en sincelejo diciembre"
-"hotel sincelejo 24 de diciembre"   "hotel sincelejo 31 de diciembre"
+[hotel en sincelejo]            "hotel navidad sincelejo"
+"hotel fin de año sincelejo"    "hotel año nuevo sincelejo"
+"hotel familiar sincelejo"      "hotel para familias sincelejo"
+"habitación familiar sincelejo" "hotel en sincelejo con desayuno"
+"hospedaje sincelejo diciembre" [hotel malibu sincelejo]
 ```
-**Grupo B · Familias**
-```
-"hotel familiar sincelejo"     "hotel para familias sincelejo"
-"habitación familiar sincelejo"   "hotel con niños sincelejo"
-"hotel en sincelejo con desayuno"  "habitación para 4 personas sincelejo"
-```
-**Grupo C · Genérico Sincelejo** (con puja más baja)
-```
-[hotel en sincelejo]  [hoteles en sincelejo]  "hospedaje en sincelejo"  "hotel centro sincelejo"
-```
+Dos grupos de anuncios: **Navidad/fin de año** y **Familias/genérico**, con el mismo anuncio.
 
-**Palabras negativas (a nivel de campaña):**
+### Palabras negativas
 `gratis, empleo, trabajo, vacante, motel, por horas, por hora, alquiler, arriendo, apartamento, finca, casa, cabaña, pasadía, restaurante, salón, salones, eventos, matrimonio, boda, camping, hostal`
 
-### Campaña 2 · Marca «Hotel Malibú» (barata, protege el nombre)
-- Palabras exactas: `[hotel malibú sincelejo]`, `[hotel malibu]`, `[malibu hotel sincelejo]`, `[hotel y centro de eventos malibú]`.
-- Presupuesto: COP 10.000 diarios. Puja: *Porcentaje de impresiones* superior (90 %).
-- Mismo anuncio que la campaña 1, pero con el titular 1 fijo y la oferta de Navidad en descripción.
+Cada semana: abrir *Términos de búsqueda* y agregar como negativa lo que no sirva. Es lo que más cuida un presupuesto pequeño.
 
-### Campaña 3 · Remarketing (a partir del 1 nov)
-- Audiencia: visitantes de hotelmalibu.co y de la página de reservas de los últimos 30 días, y quienes hicieron clic en el botón de WhatsApp sin reservar.
-- Formato: Demand Gen (YouTube / Discover / Gmail) con 3 imágenes (familia, habitación, desayuno).
-- Presupuesto: COP 20.000 diarios. Mensaje: «Todavía hay cupo del 15 dic al 6 ene».
+## 3. Anuncio de búsqueda adaptable (listo para pegar)
 
-## 4. Anuncio de búsqueda adaptable (listo para pegar)
-
-**Titulares** (máx. 30 caracteres, todos verificados):
+**Titulares** (máx. 30 caracteres, verificados):
 1. Hotel Malibú en Sincelejo ← fijar en posición 1
-2. Navidad en Familia
+2. Promoción Especial Navideña
 3. Del 15 Dic al 6 Ene
-4. Desayuno Incluido
-5. Niños Menores de 12 Gratis
-6. Reserva por WhatsApp
-7. Habitaciones Para Familias
-8. Suite Triple Hasta 4 Personas
-9. Celebra la Navidad con Todos
-10. Fin de Año en Sincelejo
-11. Hospedaje Familiar Sincelejo
-12. Confirma Tu Reserva Hoy
-13. Cupos Limitados en Diciembre
-14. Habitación Desde $290.550 ← confirmar que sigue siendo la tarifa mínima de diciembre
-15. Reserva Fácil y Segura
+4. Junior Suite Twins $309.000
+5. Impuestos Incluidos
+6. Niños Menores de 12 Gratis
+7. Dos Camas Queen
+8. Hasta 3 Adultos por Habitación
+9. Reserva por WhatsApp
+10. Hospedaje Familiar Sincelejo
+11. Aire Acondicionado y WiFi
+12. Navidad en Familia
+13. Fin de Año en Sincelejo
+14. Cupos Limitados en Diciembre
+15. Escríbenos y Reserva Hoy
 
 **Descripciones** (máx. 90 caracteres):
-1. Pasa la Navidad en familia en Hotel Malibú. Desayuno incluido en todas las habitaciones. (88)
-2. Niños menores de 12 años sin costo. Suite Triple para 4 personas, niño incluido. (80)
-3. Reserva del 15 de diciembre al 6 de enero. Escríbenos por WhatsApp y confirma en minutos. (89)
-4. Habitaciones cómodas en Sincelejo para toda la familia. Cupos limitados en diciembre. (85)
+1. Promo navideña 15 dic al 6 ene. Junior Suite Twins $309.000, impuestos incluidos. (81)
+2. Dos camas Queen, hasta 3 adultos y niños menores de 12 gratis. Baño, aire y WiFi. (81)
+3. Reserva fácil por WhatsApp al 314 593 3714. Confirmamos tu habitación en minutos. (81)
+4. Hotel Malibú, Cl. 32A #32-04, Sincelejo. Cupos limitados para Navidad y fin de año. (83)
 
-**URL final:** una página dedicada «Navidad en familia» (ver punto 6). Mientras no exista: `https://hotelmalibu.co/index.php/reserve`.
-**Ruta visible:** `hotelmalibu.co/navidad` / `familia`.
+**URL final:** una página «Promoción navideña» con el mismo diseño de la pieza y el botón de WhatsApp. Mientras no exista: `https://hotelmalibu.co/index.php/reserve`.
 
-**Extensiones (recursos):**
-- Llamada: +57 314 593 3714
-- Enlaces: «Reservar por WhatsApp», «Ver habitaciones», «Desayuno incluido», «Cómo llegar»
-- Texto destacado: Desayuno incluido · Niños <12 sin costo · Reserva en minutos
-- Ubicación: ficha de Google Business del hotel (ligada a la cuenta de Ads)
-- Promoción: fechas 15 dic – 6 ene (sin porcentaje de descuento mientras el hotel no lo defina)
+**Recursos (extensiones):**
+- Llamada: +57 314 593 3714.
+- Enlaces: «Reservar por WhatsApp», «Ver habitaciones», «Cómo llegar».
+- Texto destacado: Niños <12 gratis · Impuestos incluidos · 15 dic – 6 ene · WiFi gratis.
+- Ubicación: ficha de Google Business del hotel (Cl. 32A #32-04).
+- Promoción: fechas 15 dic – 6 ene.
+- **Imagen:** subir la pieza cuadrada. Ojo: Google suele **rechazar imágenes con mucho texto**; si la rechaza, no pasa nada, el anuncio funciona sin ella. Las dos piezas (cuadrada y vertical) rinden mejor en Facebook/Instagram.
 
-## 5. Medición (sin esto no se sabe qué rinde más: Google o Facebook)
+## 4. Medición
 
 Conversiones a crear en Google Ads:
 1. Clic en el botón de WhatsApp (principal).
 2. Clic en el teléfono / llamada de más de 30 s.
-3. Reserva confirmada en la web (página de gracias de Vik Booking).
+3. Reserva confirmada en la web.
 
-Para comparar de verdad con Facebook: el enlace de WhatsApp del anuncio lleva el texto prellenado `Hola, vi la promo de Navidad en familia (Google)` y el de Facebook `(Facebook)`. Así cada reserva que cierra Valentina queda ligada a su origen, y en el panel se ve el **costo por reserva por canal**.
+Para comparar con Facebook: el enlace de WhatsApp de cada anuncio lleva texto prellenado, p. ej. `Hola, vi la promo navideña (Google)` y `(Facebook)`. Así se puede medir el costo por reserva por canal.
 
-## 6. Qué conviene preparar en el hotel
+## 5. Antes de salir (lo que debe quedar listo en octubre)
 
-- **Oferta clara y real** (el hotel decide). Ideas de bajo costo: salida tardía (late check-out) para quien reserve 3 noches o más, o un detalle de bienvenida para los niños. Lo que ya existe y se puede anunciar hoy: desayuno incluido y niños menores de 12 sin costo. No anunciar descuentos que no se vayan a cumplir.
-- **Página «Navidad en familia»** en hotelmalibu.co: fechas, 3 tipos de habitación para familia, qué incluye (desayuno), regla de niños, botón grande de WhatsApp y de reserva. Es lo que más sube la conversión.
-- **Tarifas escalonadas:** más barato para quien reserva antes de noviembre; sube 10 % en diciembre. Crea urgencia real.
-- **Misma promo en Booking y Expedia** y un correo/WhatsApp a clientes anteriores de diciembre.
+1. **Valentina debe conocer esta promo.** Hoy su catálogo no tiene «Junior Suite Twins $309.000»: si alguien llega del anuncio, ella daría los precios normales. Hay que cargarla con su precio y fechas (15 dic 2026 – 6 ene 2027), una vez confirmado si los $309.000 son por noche.
+2. Página «Promoción navideña» en hotelmalibu.co.
+3. Etiqueta de conversión de Google en la web.
+4. Ficha de Google Business al día (ubicación, fotos, teléfono).
 
-## 7. Calendario de trabajo
+## 6. Calendario
 
 | Cuándo | Qué |
 |---|---|
-| Esta semana | Cuenta de Google Ads + etiqueta de conversión en la web + ficha de Google Business |
-| 12 oct | Salen las campañas 1 y 2 |
-| 26 oct | Primera revisión: costo por reserva, términos de búsqueda, negativas |
-| 1 nov | Sube presupuesto; arranca remarketing |
-| Cada lunes | Revisar costo por reserva y vender de diciembre en el panel (*Seguimiento anual · reservas mensuales*) |
-| 1 dic | Empuje; foco en fechas con menos ocupación |
-| 21 dic | Solo promocionar lo que quede libre |
-
-## 8. Lo que falta saber (para afinar números)
-
-Estos datos no los tengo y cambian el presupuesto: gasto y resultados actuales de Google Ads y de Facebook, y cuántas de las 900 noches de diciembre vinieron de cada canal.
+| Octubre | Cuenta, conversiones, página, Valentina con la promo |
+| 1 nov | Sale la campaña |
+| 8 nov, luego cada lunes | Revisar gasto (máx. ~COP 70.000 por semana), términos de búsqueda, negativas |
+| 1 dic | Si hay reservas, mantener; si no, mover palabras clave |
+| 15 dic – 6 ene | Fechas de la promo |
+| 31 dic | Fin del anuncio |
