@@ -46,7 +46,24 @@ export const TIPOS_HABITACION = [
     capacidad: 2,
     descripcion: 'Suite de nivel superior. Precio con IVA incluido.',
   },
+  {
+    id: 'junior_twins',
+    nombre: 'Junior Suite Twins',
+    precioDesde: 309000,
+    ivaIncluido: true,
+    capacidad: 3,
+    descripcion: 'Promoción Navideña: 2 camas Queen, máximo 3 adultos, niños menores de 12 gratis, baño privado, aire acondicionado, TV digital y WiFi gratis.',
+    // Solo se vende para llegadas dentro de esta ventana (Promoción Navideña).
+    vigencia: { desde: '2026-12-15', hasta: '2027-01-06', etiqueta: 'Promoción Navideña' },
+  },
 ];
+
+/** ¿Se puede vender este tipo con esa llegada? (los tipos sin vigencia siempre) */
+export function tipoVigente(tipo, checkIn) {
+  if (!tipo?.vigencia) return true;
+  const d = String(checkIn || '');
+  return d >= tipo.vigencia.desde && d <= tipo.vigencia.hasta;
+}
 
 /** Formato corto en pesos colombianos, p. ej. "$309.000". */
 export function precioCOP(valor) {

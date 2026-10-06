@@ -23,7 +23,7 @@ Como la plata es poca, el plan **no la reparte**: una sola campaña, solo palabr
 
 - **Nombre:** Navidad 2026 · Sincelejo
 - **Presupuesto:** COP 10.000 diarios. Google puede gastar hasta el doble un día, pero en el mes nunca pasa de ~COP 304.000 (30,4 × el diario). Revisar el gasto cada lunes.
-- **Fechas:** inicio **1 de noviembre** (cuando la gente empieza a buscar Navidad); fin **31 de diciembre**. Octubre sirve para dejar listo todo lo de abajo. Si prefieres empezar antes, se puede, con el mismo tope.
+- **Fechas:** **desde ya** (6 de octubre) hasta el **31 de diciembre**. Titular 14 («Cupos Limitados en Diciembre») sube de importancia en diciembre.
 - **Red:** solo Búsqueda de Google. Desactivar socios de búsqueda y Display.
 - **Puja:** *Maximizar clics* con **CPC máximo de COP 1.800**. Con tan pocos datos, Google no puede optimizar por conversiones; cuando haya 30 conversiones se puede cambiar a *Maximizar conversiones*.
 - **Ubicación:** Colombia. **Idioma:** español.
@@ -89,9 +89,9 @@ Conversiones a crear en Google Ads:
 
 Para comparar con Facebook: el enlace de WhatsApp de cada anuncio lleva texto prellenado, p. ej. `Hola, vi la promo navideña (Google)` y `(Facebook)`. Así se puede medir el costo por reserva por canal.
 
-## 5. Antes de salir (lo que debe quedar listo en octubre)
+## 5. Antes de salir (esta semana)
 
-1. **Valentina debe conocer esta promo.** Hoy su catálogo no tiene «Junior Suite Twins $309.000»: si alguien llega del anuncio, ella daría los precios normales. Hay que cargarla con su precio y fechas (15 dic 2026 – 6 ene 2027), una vez confirmado si los $309.000 son por noche.
+1. ✅ **Valentina ya conoce la promo** (Junior Suite Twins $309.000 impuestos incluidos, solo para llegadas del 15 dic 2026 al 6 ene 2027). Se asumió que el valor es **por noche**; si no, hay que cambiarlo en `src/datos/habitaciones.js`.
 2. Página «Promoción navideña» en hotelmalibu.co.
 3. Etiqueta de conversión de Google en la web.
 4. Ficha de Google Business al día (ubicación, fotos, teléfono).
@@ -100,8 +100,8 @@ Para comparar con Facebook: el enlace de WhatsApp de cada anuncio lleva texto pr
 
 | Cuándo | Qué |
 |---|---|
-| Octubre | Cuenta, conversiones, página, Valentina con la promo |
-| 1 nov | Sale la campaña |
+| Esta semana | Cuenta, conversiones, página «Promoción navideña» y salen los anuncios |
+| 1 nov | Revisar términos de búsqueda y ajustar palabras |
 | 8 nov, luego cada lunes | Revisar gasto (máx. ~COP 70.000 por semana), términos de búsqueda, negativas |
 | 1 dic | Si hay reservas, mantener; si no, mover palabras clave |
 | 15 dic – 6 ene | Fechas de la promo |

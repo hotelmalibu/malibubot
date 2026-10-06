@@ -14,7 +14,7 @@
 // ============================================================
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
-import { TIPOS_HABITACION, precioCOP } from '../datos/habitaciones.js';
+import { TIPOS_HABITACION, precioCOP, tipoVigente } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
@@ -64,7 +64,7 @@ const MAX_MENSAJES = 24; // historial que enviamos (acota costo)
 
 function catalogoTexto() {
   return TIPOS_HABITACION.map(
-    (t) => `- ${t.nombre}: desde ${precioCOP(t.precioDesde)}${t.ivaIncluido ? ' (IVA incl.)' : ''} · hasta ${t.capacidad} personas`
+    (t) => `- ${t.nombre}: desde ${precioCOP(t.precioDesde)}${t.ivaIncluido ? ' (IVA incl.)' : ''} · hasta ${t.capacidad} personas${t.vigencia ? ` · SOLO ${t.vigencia.etiqueta.toUpperCase()}: llegadas del 15 de diciembre de 2026 al 6 de enero de 2027` : ''}`
   ).join('\n');
 }
 
@@ -122,6 +122,13 @@ function sistema() {
     `- Si es para 2 PERSONAS (o preguntan precio "para dos" / "en pareja"), da SIEMPRE el valor de la Habitación Estándar; y si las fechas caen en FIN DE SEMANA (check-in viernes, sábado o domingo), da el de la Habitación Estándar Ubique, que es la tarifa que mejor se acomoda a los clientes. No ofrezcas suites a menos que las pidan.`,
     `- Para 3 o más personas (sin contar niños menores de 12, ver regla de niños abajo), recomienda la más adecuada (Junior Suite Triple para 3).`,
     `- La "Habitación Estándar Ubique" SOLO está disponible de VIERNES a DOMINGO. Si la piden entre semana, avisa con amabilidad y ofrece la Estándar o ajustar a un fin de semana.`,
+    ``,
+    `PROMOCIÓN NAVIDEÑA (Junior Suite Twins, del 15 de diciembre de 2026 al 6 de enero de 2027):`,
+    `- Es una promoción que el hotel anuncia en redes y Google: *Junior Suite Twins* a *$309.000 impuestos incluidos*, con 2 camas Queen, máximo 3 adultos, niños menores de 12 años GRATIS, baño privado, aire acondicionado, TV digital y WiFi gratis; incluye desayuno como todas las habitaciones.`,
+    `- Aplica SOLO si la llegada (check-in) cae entre el 15 de diciembre de 2026 y el 6 de enero de 2027. Para otras fechas NO la ofrezcas; si la piden, explica con amabilidad las fechas de la promo y ofrece otra habitación.`,
+    `- Si el cliente escribe algo como "vi la promo navideña" o pregunta por Navidad / fin de año / diciembre, salúdalo con la apertura normal (pregunta su nombre) y luego, según fechas y personas, ofrécele esta suite: es ideal para FAMILIAS y grupos de 3 (2 camas Queen) y es la que él vio en el anuncio.`,
+    `- Para 2 personas sin niños sigue la regla de siempre (Estándar / Estándar Ubique); para 3 adultos, o familias con niños, en esas fechas prioriza la Junior Suite Twins. Si piden más gente de la que admite, recomienda dos habitaciones.`,
+    `- Si el mensaje trae "(Google)" o "(Facebook)" es solo la fuente del anuncio: no lo repitas ni lo menciones.`,
     ``,
     `NIÑOS MENORES DE 12 AÑOS (regla importante de ocupación y precio):`,
     `- Un niño o niña MENOR de 12 años se aloja SIN NINGÚN COSTO y NO cuenta como persona adicional para la capacidad de la habitación ni para el precio. Solo aplica a MENORES de 12; de 12 en adelante cuentan como una persona más (y puede requerir otra habitación o cama adicional).`,
@@ -257,7 +264,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
   if (nombre === 'consultar_disponibilidad') {
     const fecha = (entrada?.fecha || '').trim() || null;
     const libro = await ocupacionDelLibro(fecha);
-    const tipos = TIPOS_HABITACION.map((t) => ({ nombre: t.nombre, precioDesde: t.precioDesde, capacidad: t.capacidad }));
+    const tipos = TIPOS_HABITACION.map((t) => ({ nombre: t.nombre, precioDesde: t.precioDesde, capacidad: t.capacidad, ...(t.vigencia ? { soloLlegadasDel: t.vigencia.desde, al: t.vigencia.hasta } : {}) }));
     if (libro) {
       return {
         fecha: libro.fecha,
@@ -284,6 +291,13 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
     const tipo = buscarTipo(entrada?.tipoHabitacion);
     if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
     if (!entrada?.email) return { ok: false, error: 'Falta el correo del cliente.' };
+
+    if (!tipoVigente(tipo, entrada.checkIn)) {
+      return {
+        ok: false,
+        error: `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`,
+      };
+    }
 
     // Candado: Estándar Ubique solo viernes a domingo (check-in vie/sáb/dom).
     if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
@@ -345,6 +359,13 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
   if (nombre === 'reservar_pago_en_hotel') {
     const tipo = buscarTipo(entrada?.tipoHabitacion);
     if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
+
+    if (!tipoVigente(tipo, entrada.checkIn)) {
+      return {
+        ok: false,
+        error: `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`,
+      };
+    }
 
     // Candado: Estándar Ubique solo viernes a domingo (check-in vie/sáb/dom).
     if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
