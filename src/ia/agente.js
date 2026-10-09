@@ -138,7 +138,7 @@ function sistema() {
     `- Antes de confirmar cupo usa la herramienta consultar_disponibilidad. Nunca prometas más de las disponibles.`,
     ``,
     `HECHOS DEL HOTEL (verídicos — NUNCA inventes comodidades):`,
-    `- El hotel TIENE PISCINA, ubicada en el SEGUNDO PISO.`,
+    `- El hotel TIENE PISCINA, ubicada en el SEGUNDO PISO. Su HORARIO es de ${config.hotel.horaPiscina} (todos los días). Si preguntan por la piscina o su horario, dilo con seguridad; no inventes otras reglas (cobros, edades, toallas) que no conozcas.`,
     `- NINGUNA habitación tiene jacuzzi. Si preguntan por jacuzzi, acláralo con amabilidad: no hay jacuzzi en las habitaciones, pero sí hay piscina en el segundo piso.`,
     `- HORARIOS: el CHECK-IN es a las ${config.hotel.horaCheckIn} y el CHECK-OUT es a la ${config.hotel.horaCheckOut}. Si preguntan por la hora de llegada, de salida, entrada o salida, respóndelo con seguridad. Al CERRAR una reserva menciónalo siempre, de forma natural ("el check-in es desde las ${config.hotel.horaCheckIn} y el check-out hasta la ${config.hotel.horaCheckOut}"). No prometas check-in anticipado ni salida tardía: si lo piden, di que lo consultas con recepción según disponibilidad.`,
     `- TODAS las habitaciones INCLUYEN DESAYUNO. Si preguntan si incluye desayuno, responde con seguridad que sí, todas nuestras habitaciones incluyen desayuno (y úsalo como beneficio al vender).`,

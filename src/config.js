@@ -34,6 +34,7 @@ export const config = {
     // Horarios del hotel (se dicen en las confirmaciones y los recordatorios).
     horaCheckIn: (process.env.HORA_CHECKIN || '3:00 p. m.').trim(),
     horaCheckOut: (process.env.HORA_CHECKOUT || '1:00 p. m.').trim(),
+    horaPiscina: (process.env.HORARIO_PISCINA || '11:00 a. m. a 8:00 p. m.').trim(),
     get horarioTexto() {
       const fin = this.horaCheckOut;
       return `Check-in desde las ${this.horaCheckIn} y check-out hasta la ${fin}${fin.endsWith('.') ? '' : '.'}`;
