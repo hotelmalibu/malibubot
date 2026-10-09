@@ -7,6 +7,9 @@ import { reservasStore } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { confirmarReservaPorCorreo } from '../correo/enviar.js';
+import { config } from '../config.js';
+
+const horarios = () => `${config.hotel.horarioTexto} `;
 
 const pesos = (v) => (v ? '$' + Number(v).toLocaleString('es-CO') : '');
 
@@ -20,6 +23,7 @@ export async function confirmarPago(reserva) {
     const msg =
       `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${reserva.habitacion}) quedó lista. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
+      horarios() +
       `¡Te esperamos! 🌴`;
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });
@@ -48,6 +52,7 @@ export async function confirmarReservaEnHotel(reserva) {
       `¡Tu reserva quedó confirmada! ✅ ${reserva.habitacion}${fechas}.\n` +
       `PAGO PENDIENTE: el valor${valor} se paga directamente en el hotel al llegar. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
+      horarios() +
       `¡Te esperamos! 🌴`;
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });

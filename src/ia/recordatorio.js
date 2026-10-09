@@ -47,7 +47,8 @@ export function parametrosRecordatorio(r) {
   const pago = r.estado === 'pendiente_hotel'
     ? 'Recuerda que el pago se realiza al llegar al hotel.'
     : 'Tu pago ya está confirmado.';
-  return [primerNombre(r.nombre) || 'huésped', fecha, detalle, pago];
+  const horarios = config.hotel.horarioTexto;
+  return [primerNombre(r.nombre) || 'huésped', fecha, detalle, `${pago} ${horarios}`];
 }
 
 /** Texto completo (para la ventana de 24 h y para el historial del chat). */

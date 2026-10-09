@@ -261,7 +261,7 @@ export async function procesarConfirmacion(datos = {}) {
   const link = sid && datos.ts
     ? `https://www.hotelmalibu.co/index.php?option=com_vikbooking&view=booking&sid=${encodeURIComponent(sid)}&ts=${encodeURIComponent(datos.ts)}`
     : 'https://www.hotelmalibu.co';
-  const params = [primerNombre(datos.name), id, fechaBonita(ingreso), fechaBonita(salida), link].map(limpiar);
+  const params = [primerNombre(datos.name), id, `${fechaBonita(ingreso)} (desde las ${config.hotel.horaCheckIn})`, `${fechaBonita(salida)} (hasta la ${config.hotel.horaCheckOut})`, link].map(limpiar);
 
   if (config.vik.prueba) {
     if (!simulados.has(id)) {

@@ -31,6 +31,13 @@ export const config = {
     anioInicio: parseInt(process.env.HISTORICO_DESDE || '2018', 10),
     // Numero (solo digitos, con indicativo) al que se remiten las LLAMADAS por
     // WhatsApp: el numero del bot es de la API y no atiende llamadas.
+    // Horarios del hotel (se dicen en las confirmaciones y los recordatorios).
+    horaCheckIn: (process.env.HORA_CHECKIN || '3:00 p. m.').trim(),
+    horaCheckOut: (process.env.HORA_CHECKOUT || '1:00 p. m.').trim(),
+    get horarioTexto() {
+      const fin = this.horaCheckOut;
+      return `Check-in desde las ${this.horaCheckIn} y check-out hasta la ${fin}${fin.endsWith('.') ? '' : '.'}`;
+    },
     telefonoLlamadas: (process.env.TELEFONO_LLAMADAS || '573145933714').replace(/\D/g, ''),
   },
 

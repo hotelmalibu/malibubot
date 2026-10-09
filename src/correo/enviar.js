@@ -164,8 +164,8 @@ function plantilla(reserva, paraRecepcion) {
       ${fila('Correo', reserva.email)}
       ${fila('Habitación', reserva.habitacion)}
       ${fila('Personas', reserva.personas)}
-      ${fila('Check-in', reserva.checkIn)}
-      ${fila('Check-out', reserva.checkOut)}
+      ${fila('Check-in', reserva.checkIn ? `${reserva.checkIn} · desde las ${config.hotel.horaCheckIn}` : '')}
+      ${fila('Check-out', reserva.checkOut ? `${reserva.checkOut} · hasta la ${config.hotel.horaCheckOut}` : '')}
       ${fila(etiquetaTotal, total)}
       ${fila('Referencia de pago', reserva.referenciaPago)}
     </table>
