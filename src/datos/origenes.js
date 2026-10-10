@@ -37,7 +37,7 @@ function noches(r) {
   if (!r.checkIn) return 0;
   const fin = r.checkOut || r.checkIn;
   const n = Math.round((new Date(fin + 'T12:00:00Z') - new Date(r.checkIn + 'T12:00:00Z')) / 864e5);
-  return Math.max(1, n);
+  return Math.max(1, n) * Math.max(1, parseInt(r.cantidad, 10) || 1); // noches-habitacion
 }
 
 const vacio = () => ({ reservas: 0, noches: 0, montoCOP: 0, enProceso: 0, canceladas: 0, ultima: null });

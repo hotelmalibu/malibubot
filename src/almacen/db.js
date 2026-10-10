@@ -112,6 +112,7 @@ export async function iniciarDB() {
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
       ALTER TABLE reservas ADD COLUMN IF NOT EXISTS recordatorio_enviado BIGINT;
+      ALTER TABLE reservas ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1;
     `);
     console.log('[db] Conectada a PostgreSQL y tablas listas. ✅');
     return true;
@@ -165,8 +166,8 @@ export async function dbGuardarReserva(r) {
   await pool.query(
     `INSERT INTO reservas
        (id, wa_id, celular, nombre, email, habitacion, personas, check_in, check_out,
-        monto, estado, fuente, referencia_pago, checkout_id, creado, recordatorio_enviado)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        monto, estado, fuente, referencia_pago, checkout_id, creado, recordatorio_enviado, cantidad)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      ON CONFLICT (id) DO UPDATE SET
        -- Nunca "baja": el recordatorio pre-llegada se envia UNA vez por reserva.
        recordatorio_enviado = GREATEST(COALESCE(reservas.recordatorio_enviado, 0), COALESCE(EXCLUDED.recordatorio_enviado, 0)),
@@ -176,6 +177,7 @@ export async function dbGuardarReserva(r) {
        email = EXCLUDED.email,
        habitacion = EXCLUDED.habitacion,
        personas = EXCLUDED.personas,
+       cantidad = EXCLUDED.cantidad,
        check_in = EXCLUDED.check_in,
        check_out = EXCLUDED.check_out,
        monto = EXCLUDED.monto,
@@ -187,7 +189,7 @@ export async function dbGuardarReserva(r) {
       r.id, r.waId || '', r.celular || '', r.nombre || '', r.email || '', r.habitacion || '',
       r.personas ?? null, r.checkIn || '', r.checkOut || '', r.monto ?? null, r.estado,
       r.fuente || 'manual', r.referenciaPago || '', r.checkoutId || '', r.creado,
-      r.recordatorioEnviado || 0,
+      r.recordatorioEnviado || 0, r.cantidad || 1,
     ]
   );
 }

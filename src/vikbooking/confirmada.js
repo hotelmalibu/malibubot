@@ -165,6 +165,7 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida, avisar
     email: limpiar(d.email),
     habitacion: habitaciones.join(' + '),
     personas: personas || null,
+    cantidad: (d.rooms || []).length || 1,
     checkIn: ingreso,
     checkOut: salida,
     monto,

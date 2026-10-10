@@ -484,7 +484,7 @@
         <div class="tabla-wrap">
           <table class="reservas">
             <thead>
-              <tr><th>Huésped</th><th>Celular</th><th>Canal</th><th>Habitación</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th title="Recordatorio de llegada (anti no-show)">Aviso llegada</th><th></th></tr>
+              <tr><th>Huésped</th><th>Celular</th><th>Canal</th><th>Habitación</th><th title="Cantidad de habitaciones">Hab.</th><th>Personas</th><th>Check-in</th><th>Check-out</th><th>Pago</th><th title="Recordatorio de llegada (anti no-show)">Aviso llegada</th><th></th></tr>
             </thead>
             <tbody id="cuerpoReservas"></tbody>
           </table>
@@ -644,6 +644,7 @@
       <div class="campo full"><label>Nombre completo del huésped</label><input type="text" id="rNombre" placeholder="Ej. María Gómez" /></div>
       <div class="campo"><label>Celular</label><input type="text" id="rCelular" placeholder="Ej. +57 300 123 4567" /></div>
       <div class="campo"><label>Personas</label><input type="number" id="rPersonas" min="1" placeholder="2" /></div>
+      <div class="campo"><label>Cantidad de habitaciones</label><input type="number" id="rCantidad" min="1" max="50" value="1" /></div>
       <div class="campo full"><label>Correo (opcional)</label><input type="email" id="rEmail" placeholder="Si no tiene, déjalo vacío: se confirma por WhatsApp" /></div>
       <div class="campo full"><label>Tipo de habitación</label><select id="rTipo"></select></div>
       <div class="campo"><label>N° habitación (opcional)</label><input type="text" id="rHab" placeholder="Ej. 201" /></div>
@@ -1128,6 +1129,7 @@
         <td>${esc(r.celular) || '—'}</td>
         <td>${canalPill(r.canal)}</td>
         <td>${esc(r.habitacion) || '—'}</td>
+        <td><b>${r.cantidad || 1}</b></td>
         <td>${r.personas || '—'}</td>
         <td>${esc(r.checkIn) || '—'}</td>
         <td>${esc(r.checkOut) || '—'}</td>
@@ -1137,6 +1139,7 @@
           ${String(r.fuente || '').startsWith('vikbooking') ? '<span style="font-size:11px;color:var(--gris)">Se gestiona en Vik Booking</span>' : ''}
           ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'en_proceso' || r.estado === 'pendiente_hotel')) ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
           ${(!String(r.fuente || '').startsWith('vikbooking') && r.estado === 'en_proceso') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button> ` : ''}
+          ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso')) ? `<button class="btn-mini" onclick="modificarReservaPanel(${r.id}, ${r.cantidad || 1}, ${r.personas || 1})">Modificar</button> ` : ''}
           ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso')) ? `<button class="btn-mini" style="color:var(--alerta)" onclick="cancelarReservaPanel(${r.id}, '${esc(r.nombre || '')}')">Cancelar</button>` : ''}
         </td>
       </tr>`).join('');
@@ -1266,6 +1269,7 @@
     document.getElementById('rNota').textContent = '';
     ['rNombre','rCelular','rEmail','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
     document.getElementById('rEstado').value = 'pagado';
+    document.getElementById('rCantidad').value = 1;
     const sel = document.getElementById('rTipo');
     sel.innerHTML = catalogoTipos.map((t) =>
       `<option value="${esc(t.nombre)}">${esc(t.nombre)}${t.precioDesde ? ' — desde ' + pesos(t.precioDesde) : ''}</option>`
@@ -1310,6 +1314,7 @@
         email: document.getElementById('rEmail').value.trim(),
         habitacion: tipo + (num ? ' · N° ' + num : ''),
         personas: document.getElementById('rPersonas').value,
+        cantidad: document.getElementById('rCantidad').value || 1,
         checkIn: document.getElementById('rIn').value,
         checkOut: document.getElementById('rOut').value,
         estado: document.getElementById('rEstado').value,
@@ -1327,6 +1332,23 @@
       else nota.textContent = d.error || 'No se pudo guardar.';
     } catch (_) { nota.textContent = 'Error de red.'; }
     finally { btn.disabled = false; }
+  }
+  // Modificar las cantidades de una reserva (habitaciones y personas).
+  async function modificarReservaPanel(id, cantidadActual, personasActual) {
+    const c = prompt('Cantidad de habitaciones de esta reserva:', cantidadActual);
+    if (c === null) return;
+    const p = prompt('Cantidad de personas:', personasActual);
+    if (p === null) return;
+    if (!(parseInt(c, 10) >= 1)) { alert('La cantidad de habitaciones debe ser 1 o más.'); return; }
+    try {
+      const r = await fetch(`/admin/api/reservas/${id}/modificar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cantidad: parseInt(c, 10), personas: parseInt(p, 10) || undefined }),
+      });
+      const d = await r.json();
+      if (!d.ok) alert(d.error || 'No se pudo modificar.');
+    } catch (_) { alert('Error de red.'); }
+    cargarReservas(); cargarEstadisticas(); cargarGrafico(); cargarMeta(); cargarEmbudo();
   }
   // Cancelación desde el panel: avisa a recepción por correo y al cliente por WhatsApp.
   async function cancelarReservaPanel(id, nombre) {

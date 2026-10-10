@@ -16,7 +16,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
 import { TIPOS_HABITACION, precioCOP, tipoVigente } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
-import { reservasStore } from '../almacen/reservas.js';
+import { reservasStore, cantidadValida } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
@@ -158,7 +158,8 @@ function sistema() {
     `- Deriva con amabilidad a: ${config.ia.linkConsulta} (mismo cuidado: enlace solo, en línea aparte).`,
     ``,
     `CÓMO CIERRAS LA VENTA (DOS FORMAS DE RESERVAR):`,
-    `- Confirma tipo, fechas y valor total (precio por noche × número de noches). Pide el NOMBRE COMPLETO y el correo (UNA sola vez, de paso: "¿A qué correo te envío la confirmación? Si no tienes, no hay problema, te la confirmo por aquí").`,
+    `- CANTIDAD DE HABITACIONES: si son varias personas (más de las que caben en una) o el cliente pide más de una, pregúntale con naturalidad cuántas habitaciones necesita y de qué tipo. Siempre pásalo en cantidadHabitaciones (1 si es una sola). El valor total = precio por noche × noches × cantidad de habitaciones, y en la confirmación dile cuántas habitaciones son ("2 habitaciones Estándar").`,
+    `- Confirma tipo, cantidad de habitaciones, fechas y valor total (precio por noche × número de noches × habitaciones). Pide el NOMBRE COMPLETO y el correo (UNA sola vez, de paso: "¿A qué correo te envío la confirmación? Si no tienes, no hay problema, te la confirmo por aquí").`,
     `- ⚡ CIERRE INMEDIATO: en cuanto el cliente CONFIRME que quiere la reserva ("sí", "resérvala", "listo", "dale") y ya tengas tipo, fechas y nombre completo, LLAMA LA HERRAMIENTA EN ESE MISMO TURNO. No hagas más preguntas ni pidas nada más.`,
     `- Si el cliente dice que NO TIENE correo, que no lo quiere dar, o simplemente no lo da y ya confirmó: NO insistas. Cierra de inmediato con su nombre completo y su celular (el número de WhatsApp) usando reservar_pago_en_hotel sin correo. La confirmación le llega por WhatsApp y recepción recibe el aviso igual. El correo NUNCA es un requisito para reservar.`,
     `- El pago EN LÍNEA sí necesita correo (para el recibo): si no tiene correo, ofrécele la reserva con pago en el hotel y ciérrala.`,
@@ -213,6 +214,7 @@ const HERRAMIENTAS = [
         checkIn: { type: 'string', description: 'Fecha de entrada AAAA-MM-DD.' },
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
+        cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
         nombre: { type: 'string', description: 'Nombre completo del huésped.' },
         email: { type: 'string', description: 'Correo electrónico del huésped.' },
       },
@@ -230,6 +232,7 @@ const HERRAMIENTAS = [
         checkIn: { type: 'string', description: 'Fecha de entrada AAAA-MM-DD.' },
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
+        cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
         nombre: { type: 'string', description: 'Nombre completo del huésped.' },
         email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: si no tiene o no lo dio, omítelo y reserva igual con nombre y celular).' },
       },
@@ -312,7 +315,8 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
     }
 
     const n = noches(entrada.checkIn, entrada.checkOut);
-    const monto = tipo.precioDesde * n;
+    const cant = cantidadValida(entrada.cantidadHabitaciones);
+    const monto = tipo.precioDesde * n * cant;
 
     // Crea la reserva en estado "en_proceso" (se marca pagada al confirmar el pago).
     const reserva = reservasStore.crear({
@@ -321,6 +325,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
       email: entrada.email,
       habitacion: tipo.nombre,
       personas: entrada.personas,
+      cantidad: cant,
       checkIn: entrada.checkIn,
       checkOut: entrada.checkOut,
       monto,
@@ -332,7 +337,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
       const checkout = await crearCheckout({
         monto,
         referencia: reserva.id,
-        descripcion: `Reserva ${tipo.nombre} · ${n} noche(s) · Hotel Malibú`,
+        descripcion: `Reserva ${cant} × ${tipo.nombre} · ${n} noche(s) · Hotel Malibú`,
         metadata: { reserva_id: String(reserva.id), waId },
       });
       reserva.referenciaPago = String(reserva.id);
@@ -346,6 +351,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
         ok: true,
         enlaceEnviado: true,
         noches: n,
+        habitaciones: cant,
         monto,
         tipo: tipo.nombre,
         instruccion:
@@ -380,7 +386,8 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
     }
 
     const n = noches(entrada.checkIn, entrada.checkOut);
-    const monto = tipo.precioDesde * n;
+    const cant = cantidadValida(entrada.cantidadHabitaciones);
+    const monto = tipo.precioDesde * n * cant;
 
     const reserva = reservasStore.crear({
       waId,
@@ -388,6 +395,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
       email: entrada.email,
       habitacion: tipo.nombre,
       personas: entrada.personas,
+      cantidad: cant,
       checkIn: entrada.checkIn,
       checkOut: entrada.checkOut,
       monto,
@@ -400,6 +408,7 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
       return {
         ok: true,
         noches: n,
+        habitaciones: cant,
         monto,
         tipo: tipo.nombre,
         instruccion:

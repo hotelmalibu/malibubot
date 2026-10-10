@@ -3,7 +3,7 @@
 //  envia los correos (cliente + recepcion) y avisa al cliente por WhatsApp.
 //  Es idempotente: si la reserva ya estaba pagada, no repite nada.
 // ============================================================
-import { reservasStore } from '../almacen/reservas.js';
+import { reservasStore, textoHabitaciones } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { confirmarReservaPorCorreo } from '../correo/enviar.js';
@@ -21,7 +21,7 @@ export async function confirmarPago(reserva) {
   confirmarReservaPorCorreo(reserva).catch(() => {});
   if (reserva.waId) {
     const msg =
-      `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${reserva.habitacion}) quedó lista. ` +
+      `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${textoHabitaciones(reserva)}) quedó lista. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
       horarios() +
       `¡Te esperamos! 🌴`;
@@ -49,7 +49,7 @@ export async function confirmarReservaEnHotel(reserva) {
     const fechas = reserva.checkIn ? ` del ${reserva.checkIn} al ${reserva.checkOut}` : '';
     const valor = reserva.monto ? ` de ${pesos(reserva.monto)}` : '';
     const msg =
-      `¡Tu reserva quedó confirmada! ✅ ${reserva.habitacion}${fechas}.\n` +
+      `¡Tu reserva quedó confirmada! ✅ ${textoHabitaciones(reserva)}${fechas}.\n` +
       `PAGO PENDIENTE: el valor${valor} se paga directamente en el hotel al llegar. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
       horarios() +

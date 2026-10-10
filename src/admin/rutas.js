@@ -23,7 +23,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store } from '../almacen/conversaciones.js';
-import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot } from '../almacen/reservas.js';
+import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
@@ -476,12 +476,33 @@ adminRouter.post('/api/reservas', (req, res) => {
     email: b.email,
     habitacion: b.habitacion,
     personas: b.personas,
+    cantidad: b.cantidad,
     checkIn: b.checkIn,
     checkOut: b.checkOut,
     estado: b.estado,
     fuente: 'manual',
   });
   res.json({ ok: true, reserva });
+});
+
+// Modificar las cantidades (habitaciones y personas) de una reserva del panel.
+// Reescala el valor si la reserva ya lo tiene. Las de Vik Booking se gestionan alla.
+adminRouter.post('/api/reservas/:id/modificar', (req, res) => {
+  const r = reservasStore.obtenerPorId(req.params.id);
+  if (!r) return res.status(404).json({ ok: false, error: 'No existe esa reserva.' });
+  if (String(r.fuente || '').startsWith('vikbooking')) {
+    return res.status(400).json({ ok: false, error: 'Esta reserva viene de Vik Booking: se modifica allá.' });
+  }
+  if (ESTADOS_ANULADOS.includes(r.estado)) {
+    return res.status(400).json({ ok: false, error: 'La reserva está cancelada o rechazada.' });
+  }
+  const { cantidad, personas } = req.body || {};
+  if (cantidad !== undefined && !(parseInt(cantidad, 10) >= 1)) {
+    return res.status(400).json({ ok: false, error: 'La cantidad de habitaciones debe ser 1 o más.' });
+  }
+  const nueva = reservasStore.modificar(r.id, { cantidad, personas });
+  console.log(`[admin] Reserva ${r.id} modificada: ${nueva.cantidad} habitación(es), ${nueva.personas || '—'} persona(s).`);
+  res.json({ ok: true, reserva: nueva });
 });
 
 // Cancelar desde el panel: marca cancelada, correo a recepción (y al cliente
@@ -599,7 +620,8 @@ adminRouter.post('/api/conversaciones/:waId/confirmar-reserva', async (req, res)
   const tipo = TIPOS_HABITACION.find((t) => habitacion.toLowerCase().startsWith(t.nombre.toLowerCase()));
   const salida = checkOut || (() => { const d = new Date(checkIn + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
   const noches = Math.max(1, Math.round((new Date(salida + 'T12:00:00Z') - new Date(checkIn + 'T12:00:00Z')) / 864e5));
-  const monto = b.monto ? Number(b.monto) : (tipo ? tipo.precioDesde * noches : null);
+  const cantidad = cantidadValida(b.cantidad);
+  const monto = b.monto ? Number(b.monto) : (tipo ? tipo.precioDesde * noches * cantidad : null);
 
   const reserva = reservasStore.crear({
     waId,
@@ -608,6 +630,7 @@ adminRouter.post('/api/conversaciones/:waId/confirmar-reserva', async (req, res)
     email: String(b.email || '').trim(),
     habitacion: habitacion || (tipo ? tipo.nombre : ''),
     personas: b.personas,
+    cantidad,
     checkIn,
     checkOut: salida,
     monto,

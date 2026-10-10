@@ -42,7 +42,8 @@ export function parametrosRecordatorio(r) {
   const hoy = diaColombia();
   const cuando = r.checkIn === hoy ? 'hoy' : r.checkIn === sumarDias(hoy, 1) ? 'mañana' : 'el';
   const fecha = `${cuando} ${fechaBonita(r.checkIn)}`;
-  const detalle = [r.habitacion ? `habitación ${r.habitacion}` : 'tu habitación', r.personas ? `${r.personas} persona${r.personas === 1 ? '' : 's'}` : '']
+  const cant = Math.max(1, parseInt(r.cantidad, 10) || 1);
+  const detalle = [cant > 1 ? `${cant} habitaciones${r.habitacion ? ' ' + r.habitacion : ''}` : r.habitacion ? `habitación ${r.habitacion}` : 'tu habitación', r.personas ? `${r.personas} persona${r.personas === 1 ? '' : 's'}` : '']
     .filter(Boolean).join(' · ');
   const pago = r.estado === 'pendiente_hotel'
     ? 'Recuerda que el pago se realiza al llegar al hotel.'

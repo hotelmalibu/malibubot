@@ -29,6 +29,19 @@ export const ESTADOS = ['pagado', 'pendiente_hotel', 'en_proceso', 'rechazado', 
 /** Estados que NO cuentan como reserva (ni ocupan ni suman). */
 export const ESTADOS_ANULADOS = ['rechazado', 'cancelado'];
 
+/** Cantidad de habitaciones valida: entero entre 1 y 50 (por defecto 1). */
+export function cantidadValida(v) {
+  const n = parseInt(v, 10);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, 50) : 1;
+}
+
+/** "2 habitaciones · Habitación Estándar" (para mensajes y correos). */
+export function textoHabitaciones(r) {
+  const n = cantidadValida(r?.cantidad);
+  const tipo = r?.habitacion ? ` · ${r.habitacion}` : '';
+  return `${n} ${n === 1 ? 'habitación' : 'habitaciones'}${tipo}`;
+}
+
 let secuencia = 1;
 /** @type {Array<object>} */
 const reservas = [];
@@ -72,6 +85,7 @@ export const reservasStore = {
       email: datos.email || '',
       habitacion: datos.habitacion || '',
       personas: Number(datos.personas) || null,
+      cantidad: cantidadValida(datos.cantidad),   // habitaciones reservadas
       checkIn: datos.checkIn || '',
       checkOut: datos.checkOut || '',
       monto: Number(datos.monto) || null,       // valor a cobrar (COP)
@@ -100,6 +114,7 @@ export const reservasStore = {
     for (const k of ['waId', 'celular', 'nombre', 'email', 'habitacion', 'personas', 'checkIn', 'checkOut', 'monto', 'fuente']) {
       if (campos[k] !== undefined && campos[k] !== null && campos[k] !== '') r[k] = campos[k];
     }
+    if (campos.cantidad !== undefined && campos.cantidad !== null && campos.cantidad !== '') r.cantidad = cantidadValida(campos.cantidad);
     if (campos.estado && ESTADOS.includes(campos.estado)) r.estado = campos.estado;
     persistirReserva(r);
     return r;
@@ -118,6 +133,27 @@ export const reservasStore = {
     for (let i = reservas.length - 1; i >= 0; i--) if (ids.has(reservas[i].id)) reservas.splice(i, 1);
     if (dbActivo()) dbEliminarReservas([...ids]).catch((e) => console.error('[db] purga:', e.message));
     return quitar.length;
+  },
+
+  /**
+   * Cambia la cantidad de habitaciones y/o de personas de una reserva. Si la reserva
+   * tiene valor, lo reescala por la nueva cantidad de habitaciones.
+   */
+  modificar(id, { cantidad, personas } = {}) {
+    const r = reservas.find((x) => x.id === Number(id));
+    if (!r) return null;
+    if (cantidad !== undefined && cantidad !== null && cantidad !== '') {
+      const nueva = cantidadValida(cantidad);
+      const antes = cantidadValida(r.cantidad);
+      if (r.monto && antes !== nueva) r.monto = Math.round((r.monto / antes) * nueva);
+      r.cantidad = nueva;
+    }
+    if (personas !== undefined && personas !== null && personas !== '') {
+      const p = parseInt(personas, 10);
+      if (Number.isInteger(p) && p >= 1) r.personas = p;
+    }
+    persistirReserva(r);
+    return r;
   },
 
   /** Marca que ya se envio el recordatorio pre-llegada (uno solo por reserva). */
@@ -184,7 +220,7 @@ export const reservasStore = {
       return true;
     });
 
-    const ocupadasHoy = reservas.filter((r) => ocupaEn(r, hoy)).length;
+    const ocupadasHoy = reservas.filter((r) => ocupaEn(r, hoy)).reduce((s, r) => s + cantidadValida(r.cantidad), 0);
     const ocupadas = Math.min(ocupadasHoy, total);
     const disponibles = Math.max(total - ocupadas, 0);
 
@@ -225,6 +261,7 @@ export function hidratarReservas(reservaRows = []) {
       email: r.email || '',
       habitacion: r.habitacion || '',
       personas: r.personas != null ? Number(r.personas) : null,
+      cantidad: cantidadValida(r.cantidad),
       checkIn: r.check_in || '',
       checkOut: r.check_out || '',
       monto: r.monto != null ? Number(r.monto) : null,

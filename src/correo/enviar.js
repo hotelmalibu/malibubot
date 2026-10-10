@@ -163,6 +163,7 @@ function plantilla(reserva, paraRecepcion) {
       ${fila('Celular', reserva.celular)}
       ${fila('Correo', reserva.email)}
       ${fila('Habitación', reserva.habitacion)}
+      ${fila('Cantidad de habitaciones', reserva.cantidad || 1)}
       ${fila('Personas', reserva.personas)}
       ${fila('Check-in', reserva.checkIn ? `${reserva.checkIn} · desde las ${config.hotel.horaCheckIn}` : '')}
       ${fila('Check-out', reserva.checkOut ? `${reserva.checkOut} · hasta la ${config.hotel.horaCheckOut}` : '')}
@@ -234,6 +235,7 @@ function plantillaCancelacion(reserva, motivo, paraRecepcion) {
       ${fila('Celular', reserva.celular)}
       ${fila('Correo', reserva.email)}
       ${fila('Habitación', reserva.habitacion)}
+      ${fila('Cantidad de habitaciones', reserva.cantidad || 1)}
       ${fila('Personas', reserva.personas)}
       ${fila('Check-in', reserva.checkIn)}
       ${fila('Check-out', reserva.checkOut)}
