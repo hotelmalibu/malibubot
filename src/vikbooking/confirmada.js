@@ -182,7 +182,9 @@ function registrarReservaPanel(d, { id, status, destino, ingreso, salida, avisar
     registro = reservasStore.crear({ ...campos, creado: ts && ts <= Date.now() ? ts : 0 });
     console.log(`[vik] Reserva ${id} registrada en el panel (${estado}).`);
   } else {
-    reservasStore.actualizar(existente.id, campos);
+    // La cantidad de habitaciones solo se toma de Vik al crear: asi no pisa un cambio hecho a mano en el panel.
+    const { cantidad: _cantidad, ...sinCantidad } = campos;
+    reservasStore.actualizar(existente.id, sinCantidad);
     registro = existente;
   }
   // Recien confirmada (nueva o que pasa de en_proceso/otro a pagado/pendiente

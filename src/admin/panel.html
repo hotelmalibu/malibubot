@@ -1139,7 +1139,7 @@
           ${String(r.fuente || '').startsWith('vikbooking') ? '<span style="font-size:11px;color:var(--gris)">Se gestiona en Vik Booking</span>' : ''}
           ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'en_proceso' || r.estado === 'pendiente_hotel')) ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'pagado')">Marcar pagado</button> ` : ''}
           ${(!String(r.fuente || '').startsWith('vikbooking') && r.estado === 'en_proceso') ? `<button class="btn-mini" onclick="cambiarEstadoReserva(${r.id},'rechazado')">Rechazar</button> ` : ''}
-          ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso')) ? `<button class="btn-mini" onclick="modificarReservaPanel(${r.id}, ${r.cantidad || 1}, ${r.personas || 1})">Modificar</button> ` : ''}
+          ${(r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso') ? `<button class="btn-mini" style="font-weight:700" onclick="modificarReservaPanel(${r.id}, ${r.cantidad || 1}, ${r.personas || 1})">Modificar</button> ` : ''}
           ${(!String(r.fuente || '').startsWith('vikbooking') && (r.estado === 'pagado' || r.estado === 'pendiente_hotel' || r.estado === 'en_proceso')) ? `<button class="btn-mini" style="color:var(--alerta)" onclick="cancelarReservaPanel(${r.id}, '${esc(r.nombre || '')}')">Cancelar</button>` : ''}
         </td>
       </tr>`).join('');

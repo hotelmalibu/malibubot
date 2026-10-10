@@ -486,13 +486,10 @@ adminRouter.post('/api/reservas', (req, res) => {
 });
 
 // Modificar las cantidades (habitaciones y personas) de una reserva del panel.
-// Reescala el valor si la reserva ya lo tiene. Las de Vik Booking se gestionan alla.
+// Reescala el valor si la reserva ya lo tiene. Sirve tambien para las de Vik Booking.
 adminRouter.post('/api/reservas/:id/modificar', (req, res) => {
   const r = reservasStore.obtenerPorId(req.params.id);
   if (!r) return res.status(404).json({ ok: false, error: 'No existe esa reserva.' });
-  if (String(r.fuente || '').startsWith('vikbooking')) {
-    return res.status(400).json({ ok: false, error: 'Esta reserva viene de Vik Booking: se modifica allá.' });
-  }
   if (ESTADOS_ANULADOS.includes(r.estado)) {
     return res.status(400).json({ ok: false, error: 'La reserva está cancelada o rechazada.' });
   }
