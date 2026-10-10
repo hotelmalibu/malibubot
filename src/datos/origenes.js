@@ -40,7 +40,7 @@ function noches(r) {
   return Math.max(1, n) * Math.max(1, parseInt(r.cantidad, 10) || 1); // noches-habitacion
 }
 
-const vacio = () => ({ reservas: 0, noches: 0, montoCOP: 0, enProceso: 0, canceladas: 0, ultima: null });
+const vacio = () => ({ reservas: 0, habitaciones: 0, noches: 0, montoCOP: 0, enProceso: 0, canceladas: 0, ultima: null });
 
 /**
  * Estadística por origen.
@@ -75,7 +75,7 @@ export function resumenOrigenes({ desde, hasta, anio = new Date().getUTCFullYear
     if (desde && dia < desde) continue;
     if (hasta && dia > hasta) continue;
     const e = porOrigen[o];
-    if (confirmada(r)) { e.reservas++; e.noches += noches(r); e.montoCOP += Number(r.monto) || 0; }
+    if (confirmada(r)) { e.reservas++; e.habitaciones += Math.max(1, parseInt(r.cantidad, 10) || 1); e.noches += noches(r); e.montoCOP += Number(r.monto) || 0; }
     else if (r.estado === 'en_proceso') e.enProceso++;
     else if (r.estado === 'cancelado') e.canceladas++;
   }
