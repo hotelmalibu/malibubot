@@ -25,7 +25,8 @@ inicio de sesión de Instagram.)
 
 1. **Verificación del negocio** completada (WhatsApp ya la tiene; confirmar en Configuración del negocio → Seguridad).
 2. **Política de privacidad, condiciones y eliminación de datos** en la configuración básica (ya hechas).
-3. **Ícono de la app** (1024×1024, JPG/PNG): subirlo en Configuración de la app → Básica. *Pendiente.*
+3. **Ícono de la app** (1024×1024, JPG/PNG): `docs/meta/icono-malibubot-dorado-1024.png` (alternativa:
+   `icono-malibubot-blanco-1024.png`), hecho desde el logo del hotel. Subirlo en Configuración de la app → Básica.
 4. **Un video corto** (1–3 min) por permiso, grabando la pantalla, que muestre el flujo real.
 5. **Instrucciones para el revisor** y cuentas de prueba (Meta puede pedir un usuario de prueba).
 

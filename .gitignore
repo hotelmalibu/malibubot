@@ -20,3 +20,6 @@ Thumbs.db
 # Artefactos de empaquetado (no versionar el zip ni lo descomprimido)
 *.zip
 extracted/
+
+# Videos de App Review de Meta (pesados y con datos de clientes)
+docs/meta/app-review/
