@@ -30,6 +30,9 @@ export const config = {
     pageId: (process.env.META_PAGE_ID || '').trim(),
     // Secreto de la app de Meta de Messenger/Instagram, si es distinta a la de WhatsApp.
     appSecret: (process.env.META_APP_SECRET || '').trim(),
+    // Token de verificacion del webhook de Messenger/Instagram. No es un secreto: solo deja que Meta
+    // confirme la direccion; lo que protege los mensajes es la firma (X-Hub-Signature-256).
+    verifyToken: (process.env.META_VERIFY_TOKEN || 'malibubot-meta-2026').trim(),
   },
 
   hotel: {

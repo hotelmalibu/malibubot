@@ -82,7 +82,7 @@ app.get(['/webhook/whatsapp', '/webhook/meta'], (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  if (mode === 'subscribe' && token === config.whatsapp.verifyToken) {
+  if (mode === 'subscribe' && (token === config.whatsapp.verifyToken || token === config.social.verifyToken)) {
     console.log('[webhook] Verificacion correcta.');
     return res.status(200).send(challenge);
   }

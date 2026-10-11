@@ -32,7 +32,7 @@ Se usa la **misma app de Meta** que ya tiene el WhatsApp de MALIBUBOT.
    (la API de mensajería de Instagram).
 2. **Webhooks.** Para los objetos **Page** (Messenger) e **Instagram**:
    - URL de devolución de llamada: `https://bot.hotelmalibu.co/webhook/meta`
-   - Token de verificación: el mismo de WhatsApp (`WHATSAPP_VERIFY_TOKEN` en Render).
+   - Token de verificación: `malibubot-meta-2026` (o el de WhatsApp, `WHATSAPP_VERIFY_TOKEN`). Es público: solo confirma la dirección; los mensajes se protegen con la firma de Meta.
    - Suscríbete a los campos **messages** y **messaging_postbacks**.
 3. **Suscribe la página:** Messenger → Configuración → *Agregar páginas* → elige la página de
    Hotel Malibú y suscríbela a la app.
