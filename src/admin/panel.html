@@ -315,6 +315,14 @@
   .rango-conv input { font-family: var(--ui); flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--linea); border-radius: 8px; font-size: 12.5px; color: var(--tinta); background: var(--arena); }
   .rango-conv input:focus { outline: 2px solid var(--oro); border-color: transparent; }
   .rango-conv span { color: var(--gris); font-size: 12px; }
+  .canales-conv { display: flex; gap: 5px; margin-top: 10px; }
+  .canales-conv button {
+    font-family: var(--ui); flex: 1; border: 1px solid var(--linea); background: var(--espuma); color: var(--gris);
+    font-size: 11.5px; font-weight: 600; padding: 6px 2px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .canales-conv button:hover { background: var(--espuma-2); color: var(--tinta); }
+  .canales-conv button.activo { background: var(--oro-suave); color: var(--oro-profundo); border-color: var(--oro-claro); }
+  .canales-conv button b { font-weight: 700; margin-left: 2px; }
   .grupo-titulo { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gris); padding: 12px 16px 6px; font-weight: 700; }
   .grupo-titulo.atencion { color: var(--alerta); }
   .scroll { overflow-y: auto; flex: 1; min-height: 0; }
@@ -498,6 +506,12 @@
       <aside class="lista">
         <div class="filtro">
           <input id="filtro" type="text" placeholder="Buscar por nombre o número" />
+          <div class="canales-conv" id="canalesConv" role="group" aria-label="Filtrar conversaciones por canal">
+            <button data-c="todos" class="activo" onclick="filtrarCanal('todos')">Todas <b></b></button>
+            <button data-c="whatsapp" onclick="filtrarCanal('whatsapp')">💬 WhatsApp <b></b></button>
+            <button data-c="messenger" onclick="filtrarCanal('messenger')">Messenger <b></b></button>
+            <button data-c="instagram" onclick="filtrarCanal('instagram')">Instagram <b></b></button>
+          </div>
           <div class="filtro-conv">
             <div class="presets-conv">
               <button data-p="todo" class="activo" onclick="presetConv('todo')">Todo</button>
@@ -1501,9 +1515,20 @@
   async function cargarLista() {
     try { const r = await fetch(API + rangoConv()); const { conversaciones } = await r.json(); listaCache = conversaciones; pintarLista(); } catch (_) {}
   }
+  // Canal de mensajeria de una conversacion: por el id (fb:/ig:), si no es WhatsApp.
+  let canalFiltro = 'todos';
+  const canalMsgDe = (waId) => (/^fb:/.test(waId) ? 'messenger' : /^ig:/.test(waId) ? 'instagram' : 'whatsapp');
+  function filtrarCanal(c) { canalFiltro = c; pintarLista(); }
   function pintarLista() {
     const q = document.getElementById('filtro').value.trim().toLowerCase();
-    const filtradas = listaCache.filter((c) => !q || (c.nombre || '').toLowerCase().includes(q) || c.waId.includes(q));
+    const cuenta = { todos: listaCache.length, whatsapp: 0, messenger: 0, instagram: 0 };
+    listaCache.forEach((c) => { cuenta[canalMsgDe(c.waId)]++; });
+    document.querySelectorAll('#canalesConv button').forEach((b) => {
+      b.classList.toggle('activo', b.dataset.c === canalFiltro);
+      b.querySelector('b').textContent = cuenta[b.dataset.c];
+    });
+    const filtradas = listaCache.filter((c) => (canalFiltro === 'todos' || canalMsgDe(c.waId) === canalFiltro)
+      && (!q || (c.nombre || '').toLowerCase().includes(q) || c.waId.includes(q)));
     const atencion = filtradas.filter((c) => c.necesitaAtencion), resto = filtradas.filter((c) => !c.necesitaAtencion);
     const cont = document.getElementById('listaScroll'); cont.innerHTML = '';
     if (atencion.length) {
