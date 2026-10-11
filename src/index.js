@@ -93,7 +93,7 @@ app.get(['/webhook/whatsapp', '/webhook/meta'], (req, res) => {
 // ---------- Recepcion de mensajes (Meta hace un POST) ----------
 app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
   // 1) Validar que venga de Meta.
-  if ((config.whatsapp.appSecret || config.social.appSecret) && !verificarFirma(req)) {
+  if ((config.whatsapp.appSecret || config.social.appSecret || config.social.igAppSecret) && !verificarFirma(req)) {
     console.warn('[webhook] Firma invalida. Peticion rechazada.');
     return res.sendStatus(403);
   }

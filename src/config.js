@@ -33,6 +33,11 @@ export const config = {
     // Token de verificacion del webhook de Messenger/Instagram. No es un secreto: solo deja que Meta
     // confirme la direccion; lo que protege los mensajes es la firma (X-Hub-Signature-256).
     verifyToken: (process.env.META_VERIFY_TOKEN || 'malibubot-meta-2026').trim(),
+    // Instagram con "inicio de sesion de Instagram": no necesita pagina de Facebook vinculada.
+    // Si hay token de Instagram, los chats de Instagram se atienden con el (y Messenger sigue con el de la pagina).
+    igToken: (process.env.META_IG_TOKEN || '').trim(),
+    igAppSecret: (process.env.META_IG_APP_SECRET || '').trim(),
+    igBase: (process.env.INSTAGRAM_API_BASE || 'https://graph.instagram.com').trim(),
   },
 
   hotel: {

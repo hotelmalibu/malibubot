@@ -7,7 +7,8 @@
 //     "fb:<PSID>"   Messenger
 //     "ig:<IGSID>"  Instagram Direct
 //  Por fuera usan la misma Graph API (POST /me/messages) con el token de la
-//  PAGINA de Facebook del hotel (META_PAGE_TOKEN).
+//  PAGINA de Facebook del hotel (META_PAGE_TOKEN). Instagram puede ir ademas por
+//  graph.instagram.com con el token de la cuenta de Instagram (META_IG_TOKEN), sin pagina vinculada.
 // ============================================================
 import { config } from '../config.js';
 
@@ -24,11 +25,15 @@ export function canalSocialDe(id) {
 }
 
 export function socialActivo() {
-  return !!config.social.pageToken;
+  return !!(config.social.pageToken || config.social.igToken);
 }
 
-function base() {
-  return `${config.whatsapp.graphBase}/${config.whatsapp.graphVersion}`;
+/** Servidor y token de Graph que corresponden a este id (Instagram con su propio token si existe). */
+function destinoGraph(id) {
+  if (id && id.startsWith('ig:') && config.social.igToken) {
+    return { base: `${config.social.igBase}/${config.whatsapp.graphVersion}`, token: config.social.igToken };
+  }
+  return { base: `${config.whatsapp.graphBase}/${config.whatsapp.graphVersion}`, token: config.social.pageToken };
 }
 
 /**
@@ -91,7 +96,8 @@ export async function nombreSocial(id) {
   let nombre = '';
   try {
     const campos = pref === 'ig' ? 'name,username' : 'name';
-    const r = await fetch(`${base()}/${uid}?fields=${campos}&access_token=${encodeURIComponent(config.social.pageToken)}`, {
+    const g = destinoGraph(id);
+    const r = await fetch(`${g.base}/${uid}?fields=${campos}&access_token=${encodeURIComponent(g.token)}`, {
       signal: AbortSignal.timeout(8000),
     });
     const d = await r.json().catch(() => ({}));
@@ -102,8 +108,10 @@ export async function nombreSocial(id) {
 }
 
 // ---------- Envio ----------
-async function llamar(payload) {
-  const resp = await fetch(`${base()}/me/messages?access_token=${encodeURIComponent(config.social.pageToken)}`, {
+async function llamar(payload, destino) {
+  const g = destinoGraph(destino);
+  if (!g.token) throw new Error('Falta el token de ' + (destino?.startsWith('ig:') ? 'Instagram (META_IG_TOKEN)' : 'la pagina (META_PAGE_TOKEN)') + '.');
+  const resp = await fetch(`${g.base}/me/messages?access_token=${encodeURIComponent(g.token)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -137,11 +145,11 @@ export function trocear(texto, max = 900) {
 
 /** Envia un texto a un cliente de Messenger o Instagram (id con prefijo fb:/ig:). */
 export async function enviarSocial(destino, texto) {
-  if (!socialActivo()) throw new Error('Messenger/Instagram no estan configurados (falta META_PAGE_TOKEN).');
+  if (!socialActivo()) throw new Error('Messenger/Instagram no estan configurados (falta META_PAGE_TOKEN o META_IG_TOKEN).');
   const uid = destino.slice(3);
   let ultimo;
   for (const parte of trocear(texto)) {
-    ultimo = await llamar({ recipient: { id: uid }, messaging_type: 'RESPONSE', message: { text: parte } });
+    ultimo = await llamar({ recipient: { id: uid }, messaging_type: 'RESPONSE', message: { text: parte } }, destino);
   }
   return ultimo;
 }
@@ -149,5 +157,5 @@ export async function enviarSocial(destino, texto) {
 /** "Visto" para el cliente (opcional, no bloquea). */
 export async function marcarVistoSocial(destino) {
   if (!socialActivo() || !esSocial(destino)) return;
-  await llamar({ recipient: { id: destino.slice(3) }, sender_action: 'mark_seen' });
+  await llamar({ recipient: { id: destino.slice(3) }, sender_action: 'mark_seen' }, destino);
 }

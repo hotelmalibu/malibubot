@@ -15,7 +15,7 @@ export function verificarFirma(req) {
   if (!firmaRecibida || !req.rawBody) return false;
 
   // Puede venir de la app de WhatsApp o de la de Messenger/Instagram (a veces es la misma).
-  const secretos = [config.whatsapp.appSecret, config.social.appSecret].filter(Boolean);
+  const secretos = [config.whatsapp.appSecret, config.social.appSecret, config.social.igAppSecret].filter(Boolean);
   const a = Buffer.from(firmaRecibida);
   return secretos.some((secreto) => {
     const esperada = 'sha256=' + crypto.createHmac('sha256', secreto).update(req.rawBody).digest('hex');
