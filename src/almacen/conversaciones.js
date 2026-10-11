@@ -123,9 +123,10 @@ function agregarMensaje(conv, mensaje) {
 
 export const store = {
   /** Registra un mensaje entrante del cliente. */
-  registrarEntrante({ waId, nombre, tipo, texto }) {
+  registrarEntrante({ waId, nombre, tipo, texto, canal }) {
     const conv = obtenerOCrear(waId, nombre);
-    // La primera vez que detectamos un canal en el texto, lo fijamos.
+    // Messenger / Instagram: el canal ya se sabe. Si no, la primera vez que lo detectamos en el texto, lo fijamos.
+    if (!conv.canal && canal) conv.canal = canal;
     if (!conv.canal) {
       const c = detectarCanal(texto);
       if (c) conv.canal = c;

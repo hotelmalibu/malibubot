@@ -12,7 +12,7 @@ import { reservasStore } from '../almacen/reservas.js';
 import { diaColombia } from '../util/fechas.js';
 
 export const ORIGENES = [
-  { id: 'whatsapp', nombre: 'MALIBUBOT · WhatsApp', corto: 'WhatsApp' },
+  { id: 'whatsapp', nombre: 'MALIBUBOT · WhatsApp, Messenger e Instagram', corto: 'MALIBUBOT' },
   { id: 'web', nombre: 'Web directa · Vik Booking', corto: 'Web directa' },
   { id: 'booking', nombre: 'Booking.com', corto: 'Booking' },
   { id: 'expedia', nombre: 'Expedia', corto: 'Expedia' },

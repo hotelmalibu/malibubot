@@ -17,6 +17,7 @@ import { config, revisarConfig } from './config.js';
 import { verificarFirma } from './whatsapp/firma.js';
 import { parsearMensajes, parsearLlamadas, parsearEstados } from './whatsapp/recibir.js';
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
+import { parsearSocial, nombreSocial, marcarVistoSocial, esSocial } from './whatsapp/social.js';
 import { atenderLlamada, mensajeLlamada } from './whatsapp/llamadas.js';
 
 // Mensajes que NO son texto (llamadas que llegan como "unsupported", audios,
@@ -75,7 +76,8 @@ app.use('/admin', cabecerasSeguridad, loginRouter);
 app.use('/admin', requiereSesion, adminRouter);
 
 // ---------- Verificacion del webhook (Meta hace un GET) ----------
-app.get('/webhook/whatsapp', (req, res) => {
+// /webhook/meta es el mismo webhook (para Messenger e Instagram); /webhook/whatsapp sigue igual.
+app.get(['/webhook/whatsapp', '/webhook/meta'], (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -89,9 +91,9 @@ app.get('/webhook/whatsapp', (req, res) => {
 });
 
 // ---------- Recepcion de mensajes (Meta hace un POST) ----------
-app.post('/webhook/whatsapp', async (req, res) => {
+app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
   // 1) Validar que venga de Meta.
-  if (config.whatsapp.appSecret && !verificarFirma(req)) {
+  if ((config.whatsapp.appSecret || config.social.appSecret) && !verificarFirma(req)) {
     console.warn('[webhook] Firma invalida. Peticion rechazada.');
     return res.sendStatus(403);
   }
@@ -110,8 +112,10 @@ app.post('/webhook/whatsapp', async (req, res) => {
       await atenderLlamada(ll);
     }
 
-    const mensajes = parsearMensajes(req.body);
+    const mensajes = [...parsearMensajes(req.body), ...parsearSocial(req.body)];
     for (const m of mensajes) {
+      // Messenger / Instagram: el webhook no trae el nombre; se pide a Meta (con cache).
+      if (esSocial(m.from) && !m.nombre) m.nombre = await nombreSocial(m.from);
       console.log(`[msg] de ${m.nombre || m.from} (${m.tipo}): ${m.texto}`);
 
       // Registrar en el panel.
@@ -120,10 +124,11 @@ app.post('/webhook/whatsapp', async (req, res) => {
         nombre: m.nombre,
         tipo: m.tipo,
         texto: m.texto,
+        canal: m.canal,
       });
 
-      // Acuse de lectura en WhatsApp (no bloquea si falla).
-      marcarLeido(m.id).catch(() => {});
+      // Acuse de lectura (no bloquea si falla).
+      (esSocial(m.from) ? marcarVistoSocial(m.from) : marcarLeido(m.id)).catch(() => {});
 
       // Si un humano tomo el control, el bot NO responde.
       if (store.obtenerModo(m.from) === 'humano') {

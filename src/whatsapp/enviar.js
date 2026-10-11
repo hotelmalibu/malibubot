@@ -3,6 +3,7 @@
 //  Node 20+ trae fetch global, no hace falta axios.
 // ============================================================
 import { config } from '../config.js';
+import { esSocial, enviarSocial } from './social.js';
 
 function urlMensajes() {
   return `${config.whatsapp.graphBase}/${config.whatsapp.graphVersion}/${config.whatsapp.phoneNumberId}/messages`;
@@ -35,6 +36,8 @@ async function llamarGraph(payload) {
  * @param {string} texto
  */
 export async function enviarTexto(destino, texto) {
+  // Messenger / Instagram (ids fb:... / ig:...): otra ruta de la Graph API.
+  if (esSocial(destino)) return enviarSocial(destino, texto);
   return llamarGraph({
     messaging_product: 'whatsapp',
     to: destino,
@@ -52,6 +55,7 @@ export async function enviarTexto(destino, texto) {
  * @param {string[]} parametros
  */
 export async function enviarPlantilla(destino, nombre, idioma = 'es', parametros = []) {
+  if (esSocial(destino)) throw new Error('Messenger e Instagram no usan plantillas: solo se puede escribir dentro de las 24 h.');
   const components = parametros.length
     ? [{ type: 'body', parameters: parametros.map((p) => ({ type: 'text', text: String(p) })) }]
     : [];

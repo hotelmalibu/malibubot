@@ -1284,13 +1284,16 @@
   }
   // Desde el chat: llena nombre y celular del cliente y, al guardar, confirma
   // la reserva (correo a recepción + WhatsApp al cliente) aunque no tenga correo.
+  // Los chats de Messenger / Instagram no tienen telefono: se muestra el canal, no un "+".
+  const esSocialId = (id) => /^(fb|ig):/.test(String(id || ''));
+  const idMostrar = (id) => (/^fb:/.test(id) ? 'Messenger' : /^ig:/.test(id) ? 'Instagram' : '+' + id);
   function abrirConfirmarDesdeChat() {
     const c = convCache; if (!c) return;
     reservaDesdeChat = c.waId;
     prepararDlgReserva();
-    document.getElementById('dlgTitulo').textContent = 'Confirmar reserva de ' + (c.nombre || '+' + c.waId);
+    document.getElementById('dlgTitulo').textContent = 'Confirmar reserva de ' + (c.nombre || idMostrar(c.waId));
     document.getElementById('rNombre').value = c.nombre || '';
-    document.getElementById('rCelular').value = '+' + c.waId;
+    document.getElementById('rCelular').value = esSocialId(c.waId) ? '' : '+' + c.waId;
     document.getElementById('rEstado').value = 'pendiente_hotel';
     document.getElementById('rPersonas').value = 2;
     const hoy = new Date(), man = new Date(hoy); man.setDate(hoy.getDate() + 1);
@@ -1377,7 +1380,7 @@
     'Anuncio Facebook': ['📣', 'c-fb'], 'Google Ads': ['🔎', 'c-gads'],
     'Google Maps': ['📍', 'c-maps'], 'Instagram': ['📸', 'c-ig'], 'Facebook': ['📘', 'c-fb'],
     'Sitio web': ['🌐', 'c-web'], 'TikTok': ['🎵', 'c-tt'], 'QR físico': ['🔳', 'c-qr'], 'Directo / Otro': ['💬', 'c-dir'],
-    'Manual': ['✍️', 'c-qr'],
+    'Manual': ['✍️', 'c-qr'], 'Messenger': ['💬', 'c-fb'],
     'Página web': ['🌐', 'c-web'], 'OTA (Booking, Expedia…)': ['🏨', 'c-dir'],
     'Booking.com': ['🏨', 'c-fb'], 'Expedia': ['🧭', 'c-gads'], 'OTA (otro canal)': ['🏨', 'c-dir'],
   };
@@ -1432,7 +1435,7 @@
     document.getElementById('numCalientes').textContent = lista.length;
     if (!lista.length) { cont.innerHTML = '<div class="vacio-cards">No hay conversaciones pendientes de cierre. 🎉</div>'; return; }
     cont.innerHTML = lista.map((c) => {
-      const nombre = esc(c.nombre || ('+' + c.waId));
+      const nombre = esc(c.nombre || idMostrar(c.waId));
       const horas = c.horasDesde < 1 ? 'hace menos de 1 h' : `hace ${Math.round(c.horasDesde)} h`;
       const canal = c.canal ? `<span class="pill canal">${esc(c.canal)}</span>` : '';
       let accion;
@@ -1532,7 +1535,7 @@
     document.getElementById('chatVacio').style.display = 'none';
     document.getElementById('chatContenido').style.display = 'flex';
     document.getElementById('chatNombre').textContent = c.nombre || 'Sin nombre';
-    document.getElementById('chatNumero').textContent = '+' + c.waId + (c.canal ? ' · ' + c.canal : '');
+    document.getElementById('chatNumero').textContent = (esSocialId(c.waId) ? '' : '+' + c.waId) + (c.canal ? (esSocialId(c.waId) ? '' : ' · ') + c.canal : '');
     const btn = document.getElementById('btnModo');
     if (c.modo === 'humano') { btn.textContent = 'Devolver al bot'; btn.className = 'btn'; btn.onclick = () => cambiarModo('bot'); }
     else { btn.textContent = 'Tomar control'; btn.className = 'btn peligro'; btn.onclick = () => cambiarModo('humano'); }

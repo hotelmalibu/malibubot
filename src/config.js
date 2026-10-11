@@ -23,6 +23,15 @@ export const config = {
     wabaId: process.env.WHATSAPP_WABA_ID,
   },
 
+  // Messenger e Instagram Direct (mismo bot, otro canal). El token es el de la
+  // PAGINA de Facebook del hotel, con permiso pages_messaging e instagram_manage_messages.
+  social: {
+    pageToken: (process.env.META_PAGE_TOKEN || '').trim(),
+    pageId: (process.env.META_PAGE_ID || '').trim(),
+    // Secreto de la app de Meta de Messenger/Instagram, si es distinta a la de WhatsApp.
+    appSecret: (process.env.META_APP_SECRET || '').trim(),
+  },
+
   hotel: {
     nombre: process.env.HOTEL_NOMBRE || 'Hotel y Centro de Eventos Malibu',
     // Total de habitaciones del hotel (para el calculo de ocupadas/disponibles).

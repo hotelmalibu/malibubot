@@ -17,6 +17,7 @@ import { config } from '../config.js';
 import { TIPOS_HABITACION, precioCOP, tipoVigente } from '../datos/habitaciones.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { reservasStore, cantidadValida } from '../almacen/reservas.js';
+import { esSocial, canalSocialDe } from '../whatsapp/social.js';
 import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
@@ -48,6 +49,17 @@ function limpiarWhatsApp(texto) {
   // ...y los pegados DESPUES de un enlace (lo que lo rompe).
   t = t.replace(/(https?:\/\/[^\s*_~`]+)[*_~`]+/gi, '$1');
   return t.trim();
+}
+
+/**
+ * Celular del cliente para la reserva. En WhatsApp es su propio numero (wa_id).
+ * En Messenger/Instagram no se conoce: hay que pedirselo; devuelve null si falta o es invalido.
+ */
+function celularDe(waId, dato) {
+  if (!esSocial(waId)) return waId;
+  let d = String(dato || '').replace(/\D/g, '');
+  if (d.length === 10 && d.startsWith('3')) d = '57' + d; // celular colombiano sin indicativo
+  return d.length >= 10 && d.length <= 15 ? d : null;
 }
 
 function buscarTipo(nombre) {
@@ -83,10 +95,19 @@ function fechaHoy() {
   };
 }
 
-function sistema() {
+function sistema(canalSocial = '') {
   const hoy = fechaHoy();
   return [
     `Eres Valentina, la asesora de reservas del "Hotel y Centro de Eventos Malibú" en Sincelejo (Sucre, Colombia). Atiendes por WhatsApp.`,
+    ...(canalSocial
+      ? [
+          `CANAL: este chat es de ${canalSocial.toUpperCase()}, NO de WhatsApp. Aquí no tienes el celular del cliente.`,
+          `- ANTES de cerrar cualquier reserva pídele su CELULAR (con indicativo si no es de Colombia) y pásalo en el campo "celular" de la herramienta: recepción lo necesita para contactarlo y la herramienta falla sin él. Pídelo una sola vez, de forma natural ("¿me regalas tu número de celular para dejar la reserva a tu nombre?").`,
+          `- Escribe SIN asteriscos ni formato: ${canalSocial} no muestra negritas. Mensajes cortos.`,
+          `- Si el cliente prefiere hablar por WhatsApp o llamar, dale el número de llamadas de la regla correspondiente.`,
+          ``,
+        ]
+      : []),
     `Hablas como una persona REAL, cálida y cercana, en español colombiano natural (tuteo amable). NUNCA suenas a robot ni a formulario. Eres experta en VENTAS hoteleras: tu misión es que el cliente termine reservando, sintiéndose bien atendido.`,
     ``,
     `CÓMO SUENAS (100% humana):`,
@@ -215,6 +236,7 @@ const HERRAMIENTAS = [
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
         cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
+        celular: { type: 'string', description: 'Celular del cliente. OBLIGATORIO si el chat es de Messenger o Instagram (en WhatsApp no hace falta).' },
         nombre: { type: 'string', description: 'Nombre completo del huésped.' },
         email: { type: 'string', description: 'Correo electrónico del huésped.' },
       },
@@ -233,6 +255,7 @@ const HERRAMIENTAS = [
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
         cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
+        celular: { type: 'string', description: 'Celular del cliente. OBLIGATORIO si el chat es de Messenger o Instagram (en WhatsApp no hace falta).' },
         nombre: { type: 'string', description: 'Nombre completo del huésped.' },
         email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: si no tiene o no lo dio, omítelo y reserva igual con nombre y celular).' },
       },
@@ -264,7 +287,7 @@ const HERRAMIENTAS = [
   },
 ];
 
-async function ejecutarHerramienta(waId, nombre, entrada) {
+export async function ejecutarHerramienta(waId, nombre, entrada) {
   if (nombre === 'consultar_disponibilidad') {
     const fecha = (entrada?.fecha || '').trim() || null;
     const libro = await ocupacionDelLibro(fecha);
@@ -316,11 +339,16 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
+    const celular = celularDe(waId, entrada.celular);
+    if (celular === null) {
+      return { ok: false, error: 'Falta el celular del cliente (este chat es de Messenger o Instagram). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.' };
+    }
     const monto = tipo.precioDesde * n * cant;
 
     // Crea la reserva en estado "en_proceso" (se marca pagada al confirmar el pago).
     const reserva = reservasStore.crear({
       waId,
+      celular,
       nombre: entrada.nombre,
       email: entrada.email,
       habitacion: tipo.nombre,
@@ -387,10 +415,15 @@ async function ejecutarHerramienta(waId, nombre, entrada) {
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
+    const celular = celularDe(waId, entrada.celular);
+    if (celular === null) {
+      return { ok: false, error: 'Falta el celular del cliente (este chat es de Messenger o Instagram). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.' };
+    }
     const monto = tipo.precioDesde * n * cant;
 
     const reserva = reservasStore.crear({
       waId,
+      celular,
       nombre: entrada.nombre,
       email: entrada.email,
       habitacion: tipo.nombre,
@@ -494,7 +527,7 @@ export async function responderIA(waId) {
         max_tokens: 1024,
         // Cachea el prompt de sistema (grande y estable): ahorra ~90% en esos
         // tokens de entrada en las llamadas siguientes.
-        system: [{ type: 'text', text: sistema(), cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: sistema(canalSocialDe(waId)), cache_control: { type: 'ephemeral' } }],
         tools: HERRAMIENTAS,
         tool_choice: { type: 'auto' },
         messages: mensajes,
@@ -525,7 +558,8 @@ export async function responderIA(waId) {
         .map((b) => b.text)
         .join('\n')
         .trim();
-      return limpiarWhatsApp(texto) || null;
+      const limpio = limpiarWhatsApp(texto);
+      return (esSocial(waId) ? limpio.replace(/\*+/g, '') : limpio) || null;
     }
     return null;
   } catch (err) {

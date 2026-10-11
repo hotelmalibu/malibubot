@@ -14,15 +14,13 @@ export function verificarFirma(req) {
   const firmaRecibida = req.get('X-Hub-Signature-256');
   if (!firmaRecibida || !req.rawBody) return false;
 
-  const firmaEsperada =
-    'sha256=' +
-    crypto
-      .createHmac('sha256', config.whatsapp.appSecret || '')
-      .update(req.rawBody)
-      .digest('hex');
-
-  // Comparacion en tiempo constante para evitar ataques de temporizacion.
+  // Puede venir de la app de WhatsApp o de la de Messenger/Instagram (a veces es la misma).
+  const secretos = [config.whatsapp.appSecret, config.social.appSecret].filter(Boolean);
   const a = Buffer.from(firmaRecibida);
-  const b = Buffer.from(firmaEsperada);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return secretos.some((secreto) => {
+    const esperada = 'sha256=' + crypto.createHmac('sha256', secreto).update(req.rawBody).digest('hex');
+    const b = Buffer.from(esperada);
+    // Comparacion en tiempo constante para evitar ataques de temporizacion.
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  });
 }

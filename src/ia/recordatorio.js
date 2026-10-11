@@ -12,6 +12,7 @@
 //  está abierta.
 // ============================================================
 import { config } from '../config.js';
+import { esSocial } from '../whatsapp/social.js';
 import { store } from '../almacen/conversaciones.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { enviarTexto, enviarPlantilla } from '../whatsapp/enviar.js';
@@ -26,6 +27,8 @@ function confirmada(r) {
 
 /** Número de WhatsApp de la reserva (wa_id o el celular en dígitos). */
 export function destinoDe(r) {
+  // Messenger / Instagram: se le escribe por ese mismo chat (dentro de las 24 h).
+  if (esSocial(r.waId)) return r.waId;
   const d = (r.waId || '').replace(/\D/g, '') || (r.celular || '').replace(/\D/g, '');
   if (!d) return '';
   if (d.length === 10 && d.startsWith('3')) return '57' + d; // celular colombiano sin indicativo
@@ -79,12 +82,22 @@ export async function enviarRecordatorio(id) {
   if (!r) return { ok: false, error: 'Reserva no encontrada.' };
   if (!confirmada(r)) return { ok: false, error: 'Solo se avisa a reservas confirmadas (pagadas o con pago en el hotel).' };
   if (r.recordatorioEnviado) return { ok: false, error: 'A esta reserva ya se le envió el recordatorio (solo se permite uno).' };
-  const destino = destinoDe(r);
+  let destino = destinoDe(r);
   if (!destino) return { ok: false, error: 'La reserva no tiene un celular válido de WhatsApp.' };
 
   const texto = mensajeRecordatorio(r);
-  const ultimo = store.ultimoEntrante(destino);
-  const enVentana = !!ultimo && Date.now() - ultimo < VENTANA_WA_MS;
+  let ultimo = store.ultimoEntrante(destino);
+  let enVentana = !!ultimo && Date.now() - ultimo < VENTANA_WA_MS;
+  // Messenger / Instagram fuera de las 24 h: no hay plantillas, asi que se usa su celular por WhatsApp.
+  if (esSocial(destino) && !enVentana) {
+    const d = (r.celular || '').replace(/\D/g, '');
+    const wa = d.length === 10 && d.startsWith('3') ? '57' + d : d.length >= 11 ? d : '';
+    if (wa) {
+      destino = wa;
+      ultimo = store.ultimoEntrante(wa);
+      enVentana = !!ultimo && Date.now() - ultimo < VENTANA_WA_MS;
+    }
+  }
   const { plantilla, idioma } = config.recordatorio;
 
   let via = '';

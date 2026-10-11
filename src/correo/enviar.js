@@ -111,7 +111,9 @@ export async function estadoEnResend(id) {
 }
 
 /** Nombre legible del canal de una reserva, para el correo a recepción. */
-function nombreCanal(fuente) {
+function nombreCanal(fuente, waId) {
+  if (fuente === 'bot' && /^fb:/.test(waId || '')) return 'Messenger (bot)';
+  if (fuente === 'bot' && /^ig:/.test(waId || '')) return 'Instagram (bot)';
   const m = {
     'vikbooking': 'Página web',
     'vikbooking-booking': 'Booking.com',
@@ -127,7 +129,7 @@ function nombreCanal(fuente) {
 function plantilla(reserva, paraRecepcion) {
   const total = reserva.monto ? precioCOP(reserva.monto) : '';
   const pendiente = reserva.estado === 'pendiente_hotel';
-  const canal = paraRecepcion ? nombreCanal(reserva.fuente) : '';
+  const canal = paraRecepcion ? nombreCanal(reserva.fuente, reserva.waId) : '';
 
   const titulo = paraRecepcion
     ? (pendiente ? 'Nueva reserva — PAGO PENDIENTE (cobro en el hotel)' : 'Nueva reserva PAGADA')
@@ -301,7 +303,7 @@ export async function confirmarReservaPorCorreo(reserva, { soloRecepcion = false
   }
   const recepcion = destinosRecepcion();
   if (recepcion.length) {
-    const canalTag = nombreCanal(reserva.fuente);
+    const canalTag = nombreCanal(reserva.fuente, reserva.waId);
     const sufijoCanal = canalTag ? ` [${canalTag}]` : '';
     tareas.push(
       enviarCorreo({
