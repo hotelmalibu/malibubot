@@ -74,6 +74,12 @@ const CONDICIONES_HTML = readFileSync(join(__dirname, 'legal', 'condiciones.html
 const ELIMINAR_HTML = readFileSync(join(__dirname, 'legal', 'eliminar-datos.html'), 'utf8');
 app.get(['/condiciones', '/terminos', '/terms'], (_req, res) => { res.type('html').send(CONDICIONES_HTML); });
 app.get(['/eliminar-datos', '/data-deletion'], (_req, res) => { res.type('html').send(ELIMINAR_HTML); });
+// Icono publico de la app (logo del hotel). Se sirve con CORS para poder cargarlo en la consola de Meta.
+const ICONO_PNG = readFileSync(join(__dirname, 'legal', 'icono-malibubot-1024.png'));
+app.get('/icono-malibubot.png', (_req, res) => {
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=86400' });
+  res.type('png').send(ICONO_PNG);
+});
 
 // ---------- Consola de monitoreo ----------
 // Login/logout son publicos; el resto de /admin exige sesion.
