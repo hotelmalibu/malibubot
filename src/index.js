@@ -91,6 +91,18 @@ app.get(['/webhook/whatsapp', '/webhook/meta'], (req, res) => {
 });
 
 // ---------- Recepcion de mensajes (Meta hace un POST) ----------
+// Instagram puede llegar por dos caminos (webhook general de la app y el del producto Instagram):
+// si los dos pasan la firma, el mismo mensaje llegaria dos veces. Se ignora el repetido por su id.
+const socialVistos = new Map();
+function socialRepetido(id) {
+  if (!id) return false;
+  const ahora = Date.now();
+  for (const [k, t] of socialVistos) if (ahora - t > 10 * 60 * 1000) socialVistos.delete(k);
+  if (socialVistos.has(id)) return true;
+  socialVistos.set(id, ahora);
+  return false;
+}
+
 app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
   // 1) Validar que venga de Meta.
   if ((config.whatsapp.appSecret || config.social.appSecret || config.social.igAppSecret) && !verificarFirma(req)) {
@@ -116,6 +128,7 @@ app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
 
     const mensajes = [...parsearMensajes(req.body), ...parsearSocial(req.body)];
     for (const m of mensajes) {
+      if (esSocial(m.from) && socialRepetido(m.id)) { console.log(`[social] Mensaje repetido ignorado (${m.id.slice(0, 12)}…)`); continue; }
       // Messenger / Instagram: el webhook no trae el nombre; se pide a Meta (con cache).
       if (esSocial(m.from) && !m.nombre) m.nombre = await nombreSocial(m.from);
       console.log(`[msg] de ${m.nombre || m.from} (${m.tipo}): ${m.texto}`);

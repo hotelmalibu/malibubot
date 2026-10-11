@@ -47,6 +47,29 @@ Se usa la **misma app de Meta** que ya tiene el WhatsApp de MALIBUBOT.
    Facebook**. En la app de Instagram: *Configuración → Mensajes y respuestas a historias →
    Controles de mensajes → Herramientas conectadas → Permitir acceso a los mensajes*.
 
+## Instagram sin vincular a la página (lo que sí funcionó)
+
+Si la cuenta de Instagram no se deja vincular a la página de Facebook (por ejemplo, la página pertenece a
+otro portfolio comercial y no tienes control total), se usa la **API de Instagram con inicio de sesión de
+Instagram**. No necesita página vinculada ni el diálogo de permisos de Facebook.
+
+1. Meta for Developers → tu app → **Agregar producto → Instagram → Configurar**.
+2. **Paso 2, webhooks:** URL `https://bot.hotelmalibu.co/webhook/meta`, token `malibubot-meta-2026`, campo `messages`.
+3. **Paso 1, Agregar cuenta:** se agrega la cuenta como **Evaluador de Instagram**; la cuenta debe aceptar la invitación en
+   instagram.com/accounts/manage_access (pestaña *Invitaciones para evaluadores*).
+4. **Generar token** de la cuenta y activar **Suscripción al webhook** de esa cuenta (solo se deja después de generar el token).
+5. En Render (variables, las pegas tú): `META_IG_TOKEN` = ese token y `META_IG_APP_SECRET` = "Clave secreta de la app de Instagram".
+   Messenger sigue usando `META_PAGE_TOKEN`.
+
+Notas:
+- Instagram puede llegar por dos caminos (webhook general y webhook del producto Instagram). Un camino puede salir con
+  "Firma invalida" si el secreto no coincide; mientras el otro pase, funciona. El mismo mensaje repetido se ignora por su id.
+- El aviso "Firma invalida" muestra el tipo de evento y qué secretos hay configurados (sin valores).
+- Si Facebook pide un mensaje automático, desactiva la *Respuesta automática* de Meta Business Suite (Mensajes → Automatizaciones):
+  si no, el cliente recibe ese texto además de la respuesta de Valentina.
+- Para la página de Facebook también hay que suscribirla a `messages` y `messaging_postbacks` (Messenger → Configuración de la API →
+  paso 2 → *Agregar suscripciones*); sin eso Meta no entrega los mensajes.
+
 ## Importante: publicar la app
 
 Mientras la app esté en modo **desarrollo**, Valentina solo responde a personas con rol en la app
