@@ -69,6 +69,11 @@ const PRIVACIDAD_HTML = readFileSync(join(__dirname, 'legal', 'privacidad.html')
 app.get(['/privacidad', '/politica-de-privacidad', '/privacy'], (_req, res) => {
   res.type('html').send(PRIVACIDAD_HTML);
 });
+// Condiciones del servicio y eliminacion de datos (tambien las pide Meta para publicar la app).
+const CONDICIONES_HTML = readFileSync(join(__dirname, 'legal', 'condiciones.html'), 'utf8');
+const ELIMINAR_HTML = readFileSync(join(__dirname, 'legal', 'eliminar-datos.html'), 'utf8');
+app.get(['/condiciones', '/terminos', '/terms'], (_req, res) => { res.type('html').send(CONDICIONES_HTML); });
+app.get(['/eliminar-datos', '/data-deletion'], (_req, res) => { res.type('html').send(ELIMINAR_HTML); });
 
 // ---------- Consola de monitoreo ----------
 // Login/logout son publicos; el resto de /admin exige sesion.
