@@ -94,7 +94,9 @@ app.get(['/webhook/whatsapp', '/webhook/meta'], (req, res) => {
 app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
   // 1) Validar que venga de Meta.
   if ((config.whatsapp.appSecret || config.social.appSecret || config.social.igAppSecret) && !verificarFirma(req)) {
-    console.warn('[webhook] Firma invalida. Peticion rechazada.');
+    // Diagnostico seguro (sin valores): de que objeto era y que secretos hay configurados.
+    const si = (v) => (v ? 'si' : 'no');
+    console.warn(`[webhook] Firma invalida. Peticion rechazada. (objeto=${req.body?.object || '?'}, secretos: whatsapp=${si(config.whatsapp.appSecret)} meta=${si(config.social.appSecret)} instagram=${si(config.social.igAppSecret)})`);
     return res.sendStatus(403);
   }
 
