@@ -25,9 +25,16 @@ import { atenderLlamada, mensajeLlamada } from './whatsapp/llamadas.js';
 // por cliente para no repetirlo si manda varias cosas seguidas.
 const avisoNoTexto = new Map();
 const AVISO_NO_TEXTO_MS = 60 * 60 * 1000;
+
+/** Lo que se ve en el panel de un mensaje: su texto, o una marca legible si es una foto o un documento. */
+function textoParaPanel(m) {
+  if (!m.media) return m.texto;
+  const marca = m.tipo === 'image' ? '📷 Imagen' : `📎 Documento${m.media.nombre ? ': ' + m.media.nombre : ''}`;
+  return m.media.caption ? `${marca} — ${m.media.caption}` : marca;
+}
 import { store, hidratarConversaciones, reclasificarCanales } from './almacen/conversaciones.js';
 import { reservasStore, hidratarReservas } from './almacen/reservas.js';
-import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos, dbCargarCorreos } from './almacen/db.js';
+import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCargarVikAvisos, dbCargarCorreos, dbCargarDocumentos } from './almacen/db.js';
 import { hidratarCorreos } from './correo/enviar.js';
 import { hidratarVikAvisos, procesarConfirmacion, claveValida, registrarEstadoWhatsApp } from './vikbooking/confirmada.js';
 import { programarSync } from './vikbooking/sincronizar.js';
@@ -39,6 +46,8 @@ import { responderIA } from './ia/agente.js';
 import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
+import { procesarComprobante } from './pagos/transferencia.js';
+import { documentosStore } from './datos/documentos.js';
 import { requiereSesion, cabecerasSeguridad } from './admin/sesion.js';
 import { loginRouter, adminRouter } from './admin/rutas.js';
 
@@ -60,7 +69,9 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.status(200).json({ ok: true, servicio: 'malibubot', persistencia: dbActivo() ? 'postgresql' : 'memoria' });
+  // `commit`: version desplegada (Render la inyecta en RENDER_GIT_COMMIT); sirve para comprobar que un despliegue ya quedo activo.
+  const commit = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7);
+  res.status(200).json({ ok: true, servicio: 'malibubot', persistencia: dbActivo() ? 'postgresql' : 'memoria', ...(commit ? { commit } : {}) });
 });
 
 // ---------- Politica de privacidad (requerida por Meta para publicar la app) ----------
@@ -149,12 +160,23 @@ app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
         waId: m.from,
         nombre: m.nombre,
         tipo: m.tipo,
-        texto: m.texto,
+        texto: textoParaPanel(m),
         canal: m.canal,
       });
 
       // Acuse de lectura (no bloquea si falla).
       (esSocial(m.from) ? marcarVistoSocial(m.from) : marcarLeido(m.id)).catch(() => {});
+
+      // Foto o PDF de un cliente con una TRANSFERENCIA pendiente = su comprobante de pago: se descarga de
+      // WhatsApp y se reenvia por correo a recepcion (reservas@hotelmalibu.co), adjunto. Si recepcion tiene
+      // el control del chat igual se reenvia (es la unica forma de que lo vea), pero el bot no le escribe.
+      if (m.media && !esSocial(m.from)) {
+        const rc = await procesarComprobante(m, { silencioso: store.obtenerModo(m.from) === 'humano' }).catch((err) => {
+          console.error('[transferencia] Error atendiendo el comprobante:', err);
+          return { manejado: false };
+        });
+        if (rc.manejado) continue;
+      }
 
       // Si un humano tomo el control, el bot NO responde.
       if (store.obtenerModo(m.from) === 'humano') {
@@ -298,6 +320,8 @@ async function arrancar() {
       hidratarAjustes(await dbCargarAjustes());
       hidratarCorreos(await dbCargarCorreos());
       hidratarVikAvisos(await dbCargarVikAvisos());
+      const nDocs = documentosStore.hidratar(await dbCargarDocumentos());
+      if (nDocs) console.log(`[documentos] ${nDocs} certificado(s) bancario(s) cargado(s) desde la base.`);
     } catch (err) {
       console.error('[db] Error hidratando desde la base:', err.message);
     }

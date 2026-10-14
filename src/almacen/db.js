@@ -109,6 +109,13 @@ export async function iniciarDB() {
         resend_id   TEXT,
         reserva_id  INTEGER
       );
+      CREATE TABLE IF NOT EXISTS documentos (
+        clave       TEXT PRIMARY KEY,
+        nombre      TEXT,
+        mime        TEXT,
+        datos       BYTEA,
+        actualizado BIGINT
+      );
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
       ALTER TABLE reservas ADD COLUMN IF NOT EXISTS recordatorio_enviado BIGINT;
@@ -232,6 +239,33 @@ export async function dbGuardarCorreo(c) {
 export async function dbCargarCorreos(limite = 60) {
   if (!pool) return [];
   const r = await pool.query('SELECT * FROM correos ORDER BY ts DESC LIMIT $1', [limite]);
+  return r.rows;
+}
+
+/**
+ * Guarda un documento PRIVADO del hotel (p. ej. el certificado de una cuenta bancaria).
+ * Se espera (await) a proposito: si falla, el panel debe avisarlo, no quedarse callado.
+ */
+export async function dbGuardarDocumento(d) {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO documentos (clave, nombre, mime, datos, actualizado) VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (clave) DO UPDATE SET
+       nombre = EXCLUDED.nombre, mime = EXCLUDED.mime, datos = EXCLUDED.datos, actualizado = EXCLUDED.actualizado`,
+    [d.clave, d.nombre || '', d.mime || 'application/pdf', d.datos, d.actualizado || Date.now()]
+  );
+}
+
+/** Borra un documento privado. */
+export async function dbEliminarDocumento(clave) {
+  if (!pool) return;
+  await pool.query('DELETE FROM documentos WHERE clave = $1', [clave]);
+}
+
+/** Lee los documentos privados (para hidratar la memoria al arrancar). */
+export async function dbCargarDocumentos() {
+  if (!pool) return [];
+  const r = await pool.query('SELECT clave, nombre, mime, datos, actualizado FROM documentos');
   return r.rows;
 }
 

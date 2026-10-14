@@ -49,7 +49,7 @@ function destinosRecepcion() {
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function enviarCorreo({ to, subject, html, reservaId }) {
+async function enviarCorreo({ to, subject, html, reservaId, attachments }) {
   if (!activo()) {
     console.warn('[correo] Sin RESEND_API_KEY; no se envia:', subject, '->', to);
     registrar({ to, subject, ok: false, error: 'Falta RESEND_API_KEY', reservaId });
@@ -59,7 +59,7 @@ async function enviarCorreo({ to, subject, html, reservaId }) {
   let ultimoError = '', ultimoStatus = null;
   for (let intento = 1; intento <= 3; intento++) {
     try {
-      const resp = await fetch('https://api.resend.com/emails', {
+      const resp = await fetch(`${config.correo.resendBase}/emails`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.correo.resendApiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,6 +68,8 @@ async function enviarCorreo({ to, subject, html, reservaId }) {
           subject,
           html,
           ...(config.correo.responder ? { reply_to: config.correo.responder } : {}),
+          // Adjuntos: [{ filename, content (base64) }] (p. ej. el comprobante de una transferencia).
+          ...(attachments?.length ? { attachments } : {}),
         }),
       });
       if (resp.ok) {
@@ -98,7 +100,7 @@ async function enviarCorreo({ to, subject, html, reservaId }) {
 export async function estadoEnResend(id) {
   if (!activo() || !id) return null;
   try {
-    const resp = await fetch(`https://api.resend.com/emails/${encodeURIComponent(id)}`, {
+    const resp = await fetch(`${config.correo.resendBase}/emails/${encodeURIComponent(id)}`, {
       headers: { Authorization: `Bearer ${config.correo.resendApiKey}` },
       signal: AbortSignal.timeout(6000),
     });
@@ -129,23 +131,29 @@ function nombreCanal(fuente, waId) {
 function plantilla(reserva, paraRecepcion) {
   const total = reserva.monto ? precioCOP(reserva.monto) : '';
   const pendiente = reserva.estado === 'pendiente_hotel';
+  // Abono por transferencia ya verificado: el saldo (no el total) se paga en el hotel.
+  const abono = pendiente && /abono verificado/i.test(reserva.referenciaPago || '');
   const canal = paraRecepcion ? nombreCanal(reserva.fuente, reserva.waId) : '';
 
   const titulo = paraRecepcion
-    ? (pendiente ? 'Nueva reserva — PAGO PENDIENTE (cobro en el hotel)' : 'Nueva reserva PAGADA')
+    ? (abono ? 'Nueva reserva — ABONO RECIBIDO (saldo en el hotel)' : pendiente ? 'Nueva reserva — PAGO PENDIENTE (cobro en el hotel)' : 'Nueva reserva PAGADA')
     : '¡Reserva confirmada!';
   const intro = paraRecepcion
-    ? (pendiente
+    ? (abono
+        ? 'Se verificó el ABONO por transferencia de una reserva de MALIBUBOT. El saldo se cobra al huésped en el hotel:'
+        : pendiente
         ? 'Se confirmó una nueva reserva desde MALIBUBOT con PAGO PENDIENTE. El valor se cobra al huésped en el hotel:'
         : 'Se confirmó el pago de una nueva reserva desde MALIBUBOT:')
-    : (pendiente
+    : (abono
+        ? `Hola ${reserva.nombre || ''}, recibimos tu abono y tu reserva en el Hotel Malibú quedó confirmada. El saldo se paga directamente en el hotel al llegar. ¡Te esperamos!`
+        : pendiente
         ? `Hola ${reserva.nombre || ''}, tu reserva en el Hotel Malibú quedó confirmada. El pago está PENDIENTE y se realiza directamente en el hotel al llegar. ¡Te esperamos!`
         : `Hola ${reserva.nombre || ''}, tu reserva en el Hotel Malibú quedó confirmada. ¡Te esperamos!`);
 
-  const etiquetaTotal = pendiente ? 'Total a pagar en el hotel' : 'Total pagado';
+  const etiquetaTotal = abono ? 'Valor total de la reserva' : pendiente ? 'Total a pagar en el hotel' : 'Total pagado';
   // Aviso destacado del estado del pago.
   const avisoPago = pendiente
-    ? `<div style="margin:14px 0;padding:10px 14px;background:#e9f0f8;border:1px solid #cddcee;border-radius:10px;color:#2f5b8a;font-size:14px;font-weight:700">PAGO PENDIENTE — se cobra en el hotel al llegar</div>`
+    ? `<div style="margin:14px 0;padding:10px 14px;background:#e9f0f8;border:1px solid #cddcee;border-radius:10px;color:#2f5b8a;font-size:14px;font-weight:700">${abono ? 'ABONO RECIBIDO — el saldo se paga en el hotel al llegar' : 'PAGO PENDIENTE — se cobra en el hotel al llegar'}</div>`
     : `<div style="margin:14px 0;padding:10px 14px;background:#e4f2ea;border:1px solid #cbe6d6;border-radius:10px;color:#2f8f5b;font-size:14px;font-weight:700">PAGO CONFIRMADO ✓</div>`;
 
   const fila = (k, v) =>
@@ -176,6 +184,93 @@ function plantilla(reserva, paraRecepcion) {
   </div>`;
 }
 
+const escaparHtml = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function pesoLegible(bytes) {
+  const n = Number(bytes) || 0;
+  return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+const ESTADO_EN_PANEL = {
+  en_proceso: 'En proceso (esperando verificar el pago)',
+  pendiente_hotel: 'Confirmada · saldo pendiente en el hotel',
+  pagado: 'Pagada',
+};
+
+/** Correo a recepcion con el COMPROBANTE de una transferencia (adjunto). Todo texto del cliente va escapado. */
+function plantillaComprobante(reserva, archivo, { numero = 1, mensajeCliente = '', recientes = [] } = {}) {
+  const total = reserva.monto ? precioCOP(reserva.monto) : '';
+  const fila = (k, v) =>
+    v || v === 0 ? `<tr><td style="padding:6px 10px;color:#6b6f77">${k}</td><td style="padding:6px 10px;font-weight:600;color:#2c2f34">${escaparHtml(v)}</td></tr>` : '';
+  // En orden de lectura: primero sus mensajes recientes y al final lo que escribio junto al comprobante.
+  const citas = [...recientes, mensajeCliente].map((t) => String(t || '').trim()).filter(Boolean);
+  const bloqueMensajes = citas.length
+    ? `<div style="margin:14px 0;padding:10px 14px;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;font-size:14px;color:#2c2f34">
+         <div style="font-size:12px;color:#6b6f77;font-weight:700;margin-bottom:4px">LO QUE ESCRIBIÓ EL CLIENTE</div>
+         ${citas.slice(-4).map((t) => `<div style="margin:2px 0">“${escaparHtml(t.slice(0, 300))}”</div>`).join('')}
+       </div>`
+    : '';
+  return `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2c2f34">
+    <div style="border-bottom:2px solid #b8873a;padding-bottom:10px;margin-bottom:14px">
+      <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#9c6f2b;font-weight:700">Hotel y Centro de Eventos Malibú</div>
+      <h2 style="margin:6px 0 0">Soporte de pago por transferencia</h2>
+    </div>
+    <p style="font-size:15px;line-height:1.5">El cliente envió por WhatsApp (MALIBUBOT) el comprobante de su transferencia: pago <b>parcial o completo</b> de las habitaciones. Va adjunto en este correo.</p>
+    <div style="margin:14px 0;padding:10px 14px;background:#e9f0f8;border:1px solid #cddcee;border-radius:10px;color:#2f5b8a;font-size:14px;font-weight:700">COMPROBANTE RECIBIDO — POR VERIFICAR EN EL BANCO (Davivienda o Bancolombia)</div>
+    <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
+      ${fila('Reserva N°', reserva.id)}
+      ${fila('Canal', nombreCanal(reserva.fuente, reserva.waId))}
+      ${fila('Huésped', reserva.nombre)}
+      ${fila('Celular', reserva.celular)}
+      ${fila('Correo', reserva.email)}
+      ${fila('Habitación', reserva.habitacion)}
+      ${fila('Cantidad de habitaciones', reserva.cantidad || 1)}
+      ${fila('Personas', reserva.personas)}
+      ${fila('Check-in', reserva.checkIn)}
+      ${fila('Check-out', reserva.checkOut)}
+      ${fila('Valor total de la reserva', total)}
+      ${fila('Estado en el panel', ESTADO_EN_PANEL[reserva.estado] || reserva.estado)}
+      ${fila('Comprobante n.º', numero)}
+      ${fila('Archivo adjunto', `${archivo.nombre} · ${pesoLegible(archivo.bytes)}`)}
+    </table>
+    ${bloqueMensajes}
+    <div style="margin:16px 0 4px;font-size:14px;line-height:1.55">
+      <b>Qué hacer</b>
+      <ol style="margin:6px 0 0 18px;padding:0">
+        <li>Abre el adjunto y confirma en el banco que la transferencia llegó.</li>
+        <li>Si pagó el <b>total</b>: en el panel (Reservas) pulsa <b>«Pago total verificado»</b>; el cliente recibe su confirmación por WhatsApp.</li>
+        <li>Si fue un <b>abono</b>: pulsa <b>«Abono verificado»</b>; la reserva queda confirmada con el saldo pendiente para el hotel.</li>
+        <li>Si algo no cuadra, escríbele desde la pestaña Conversaciones del panel.</li>
+      </ol>
+      <div style="margin-top:8px"><a href="${escaparHtml(config.publicUrl)}/admin" style="color:#9c6f2b;font-weight:700">Abrir el panel</a></div>
+    </div>
+    <p style="font-size:12px;color:#9aa0a8;margin-top:16px">Hotel y Centro de Eventos Malibú · Sincelejo, Sucre, Colombia</p>
+  </div>`;
+}
+
+/**
+ * Reenvia a recepcion (reservas@hotelmalibu.co) el comprobante de pago de una transferencia, adjunto,
+ * junto con los datos de la reserva.
+ * @param {object} reserva
+ * @param {{nombre:string, datos:Buffer, bytes:number}} archivo  el comprobante tal como lo mando el cliente
+ * @param {{numero?:number, mensajeCliente?:string, recientes?:string[]}} [extra]
+ * @returns {Promise<boolean>} true si Resend lo acepto
+ */
+export async function enviarComprobanteTransferencia(reserva, archivo, extra = {}) {
+  const destinos = destinosRecepcion();
+  if (!destinos.length) return false;
+  const canalTag = nombreCanal(reserva.fuente, reserva.waId);
+  return enviarCorreo({
+    to: destinos,
+    subject: `Soporte de pago por transferencia — ${reserva.nombre || reserva.celular || ''} · ${reserva.checkIn || ''}${canalTag ? ` [${canalTag}]` : ''}`,
+    html: plantillaComprobante(reserva, archivo, extra),
+    reservaId: reserva.id,
+    attachments: [{ filename: archivo.nombre, content: archivo.datos.toString('base64') }],
+  });
+}
+
 /** Diagnostico: envia un correo de prueba y devuelve la respuesta de Resend. */
 export async function probarCorreo(to) {
   if (!config.correo.resendApiKey) {
@@ -183,7 +278,7 @@ export async function probarCorreo(to) {
   }
   const destino = to || config.correo.recepcion;
   try {
-    const resp = await fetch('https://api.resend.com/emails', {
+    const resp = await fetch(`${config.correo.resendBase}/emails`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${config.correo.resendApiKey}`,
@@ -283,12 +378,15 @@ export async function cancelarReservaPorCorreo(reserva, motivo = '') {
  */
 export async function confirmarReservaPorCorreo(reserva, { soloRecepcion = false } = {}) {
   const pendiente = reserva.estado === 'pendiente_hotel';
+  const abono = pendiente && /abono verificado/i.test(reserva.referenciaPago || '');
   const tareas = [];
   if (reserva.email && !soloRecepcion) {
     tareas.push(
       enviarCorreo({
         to: reserva.email,
-        subject: pendiente
+        subject: abono
+          ? 'Reserva confirmada (abono recibido) — Hotel Malibú'
+          : pendiente
           ? 'Reserva confirmada (pago pendiente en el hotel) — Hotel Malibú'
           : 'Reserva confirmada — Hotel Malibú',
         html: plantilla(reserva, false),
@@ -308,7 +406,9 @@ export async function confirmarReservaPorCorreo(reserva, { soloRecepcion = false
     tareas.push(
       enviarCorreo({
         to: recepcion,
-        subject: (pendiente
+        subject: (abono
+          ? `Nueva reserva ABONO RECIBIDO (saldo en hotel) — ${reserva.nombre || reserva.celular || ''}`
+          : pendiente
           ? `Nueva reserva PAGO PENDIENTE (cobro en hotel) — ${reserva.nombre || reserva.celular || ''}`
           : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`) + sufijoCanal,
         html: plantilla(reserva, true),

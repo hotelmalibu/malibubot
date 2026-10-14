@@ -12,6 +12,7 @@ en PostgreSQL y se recupera al arrancar. El código ya está preparado: **crea l
 | `reservas` | Reservas del bot, manuales y **las de Vik Booking** (fuente `vikbooking` / `vikbooking-ota`, referencia `vik:<número>`) |
 | `vik_avisos` | Qué reservas de Vik Booking ya recibieron el WhatsApp de confirmación (evita repetirlo) |
 | `ajustes`, `metricas`, `ocupacion_cache` | Meta semanal, consumo de IA y caché de ocupación |
+| `documentos` | PDF **privados** del hotel (certificados de las cuentas bancarias para el pago por transferencia), subidos desde el panel; ver `docs/PAGO-TRANSFERENCIA.md` |
 
 ## Crear la base (Neon, gratis)
 

@@ -22,6 +22,8 @@ import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
 import { cancelarReserva } from '../pagos/cancelar.js';
+import { enviarCertificados, esTransferencia, REF_ESPERA } from '../pagos/transferencia.js';
+import { documentosStore } from '../datos/documentos.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { telefonoBonito, enlaceLlamada } from '../whatsapp/llamadas.js';
 import { registrarUso } from './metricas.js';
@@ -60,6 +62,23 @@ function celularDe(waId, dato) {
   let d = String(dato || '').replace(/\D/g, '');
   if (d.length === 10 && d.startsWith('3')) d = '57' + d; // celular colombiano sin indicativo
   return d.length >= 10 && d.length <= 15 ? d : null;
+}
+
+/**
+ * Candados comunes de las herramientas de reserva: promoción con vigencia (Junior Suite Twins) y
+ * Estándar Ubique solo de viernes a domingo. Devuelve el texto del error o null si todo está bien.
+ */
+function errorDeTipoYFechas(tipo, entrada) {
+  if (!tipoVigente(tipo, entrada.checkIn)) {
+    return `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`;
+  }
+  if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
+    const dia = new Date(entrada.checkIn + 'T12:00:00').getDay(); // 0=dom, 5=vie, 6=sáb
+    if (![0, 5, 6].includes(dia)) {
+      return 'La Habitación Estándar Ubique solo está disponible de viernes a domingo. Ofrece otro tipo o ajustar a un fin de semana.';
+    }
+  }
+  return null;
 }
 
 function buscarTipo(nombre) {
@@ -186,10 +205,24 @@ function sistema(canalSocial = '') {
     `- El pago EN LÍNEA sí necesita correo (para el recibo): si no tiene correo, ofrécele la reserva con pago en el hotel y ciérrala.`,
     `- Después de reservar, NO digas que "le llegó la confirmación por correo" si el cliente NO dio correo: en ese caso dile que este WhatsApp es su confirmación y que lo muestre al llegar.`,
     `- Si el cliente dice que YA reservó por la página web (o que le llegó un correo de la página), NO crees otra reserva por WhatsApp a menos que te confirme que la de la página NO quedó (p. ej. el pago no pasó). Si la duplicas, recepción tendrá dos reservas para la misma persona.`,
-    `- OFRÉCELE SIEMPRE las dos opciones: 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante) o 2) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual).`,
+    ...(canalSocial
+      ? [
+          `- OFRÉCELE las dos opciones: 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante) o 2) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual).`,
+          `- La TRANSFERENCIA bancaria NO se atiende por ${canalSocial}: solo por WhatsApp. No la ofrezcas; si el cliente quiere pagar por transferencia, dile con amabilidad que para eso escriba por WhatsApp al +${config.hotel.whatsappChat} (enlace https://wa.me/${config.hotel.whatsappChat}, solo, en una línea aparte) y ahí le envías los datos.`,
+        ]
+      : [
+          `- OFRÉCELE SIEMPRE las tres opciones, en una frase corta y natural (sin lista larga): 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante), 2) PAGAR POR TRANSFERENCIA bancaria a Davivienda o Bancolombia (le envías los certificados de las cuentas y la reserva se confirma cuando recepción verifica su comprobante) o 3) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual).`,
+          `- Solo existen esas formas de pago. Si piden otra (Nequi, Daviplata, efectivo en otro lugar...), di con amabilidad que por ahora son esas tres y vuelve a ofrecerlas. Una "consignación" en el banco cuenta como transferencia.`,
+        ]),
     `- Si elige en línea: usa generar_link_pago (envía el enlace en un mensaje aparte; no lo repitas tú).`,
     `- Si elige pagar en el hotel, o dice "pago al llegar / en efectivo allá": usa DIRECTAMENTE reservar_pago_en_hotel. Eso deja la reserva CONFIRMADA y envía solo los correos y el WhatsApp.`,
-    `- En ambos casos la confirmación llega al correo del cliente y a recepción.`,
+    ...(canalSocial
+      ? []
+      : [
+          `- Si elige TRANSFERENCIA (o pide los datos de la cuenta / "a dónde consigno"): usa reservar_pago_transferencia con sus datos (tipo, fechas, nombre completo; el correo es opcional). La herramienta le envía los certificados de las cuentas en mensajes aparte; tú solo le explicas, breve: que puede transferir el total o un abono a la cuenta que prefiera y que apenas transfiera te mande la FOTO o el PDF del comprobante por este mismo chat. La reserva queda PENDIENTE hasta que recepción verifique el pago: NO digas que quedó confirmada ni pagada. NO inventes números de cuenta ni datos bancarios: están en los certificados.`,
+          `- Si el cliente dice que YA transfirió o que va a enviar el comprobante y todavía no hiciste este paso, hazlo ahora con reservar_pago_transferencia (con los datos de su reserva); si ya se lo enviaste, solo pídele que mande el comprobante (foto o PDF) por aquí. El comprobante se lo pasa el sistema a recepción solo; tú NO lo reenvías ni confirmas que el pago llegó: eso lo verifica recepción y te lo confirma el sistema.`,
+        ]),
+    `- En todos los casos la confirmación llega al correo del cliente (si dio) y a recepción.`,
     `- No confirmes tú mismo un pago EN LÍNEA (eso es automático al aprobarse). El pago en el hotel sí lo confirma reservar_pago_en_hotel.`,
     ``,
     `CANCELACIONES (si el cliente quiere cancelar una reserva):`,
@@ -201,7 +234,7 @@ function sistema(canalSocial = '') {
     `FORMATO WhatsApp: nada de Markdown. Negrita con UN solo asterisco (*palabra*), nunca dobles. No empieces ni termines con asteriscos.`,
     ``,
     `REGLAS FIRMES:`,
-    `- ⚠️ LA RESERVA SOLO EXISTE SI USAS UNA HERRAMIENTA. Para dejar una reserva confirmada DEBES llamar generar_link_pago (pago en línea) o reservar_pago_en_hotel (pago en el hotel). NUNCA, JAMÁS le digas al cliente que su reserva "quedó confirmada / lista / apartada" si no llamaste la herramienta correspondiente en este mismo turno. Tus palabras NO confirman nada; solo la herramienta crea la reserva y envía los correos. Si ya tienes tipo, fechas y nombre y el cliente aceptó, LLAMA la herramienta de una.`,
+    `- ⚠️ LA RESERVA SOLO EXISTE SI USAS UNA HERRAMIENTA. Para dejar una reserva DEBES llamar generar_link_pago (pago en línea), reservar_pago_en_hotel (pago en el hotel)${canalSocial ? '' : ' o reservar_pago_transferencia (transferencia: queda PENDIENTE hasta verificar el comprobante)'}. NUNCA, JAMÁS le digas al cliente que su reserva "quedó confirmada / lista / apartada" si no llamaste la herramienta correspondiente en este mismo turno. Tus palabras NO confirman nada; solo la herramienta crea la reserva y envía los correos. Si ya tienes tipo, fechas y nombre y el cliente aceptó, LLAMA la herramienta de una.`,
     `- NUNCA inventes un enlace de pago. El único válido lo crea generar_link_pago.`,
     `- No inventes precios, servicios ni disponibilidad. Si algo no lo sabes, ofrécete a confirmarlo con recepción, pero SIGUE la conversación hacia la reserva.`,
     `- Resuelve tú mismo las consultas; eres capaz. Usa escalar_a_humano SOLO si es estrictamente necesario (el cliente exige hablar con una persona, hay una queja seria, un reclamo o algo que de verdad no puedes resolver). NO escales por dudas normales de reservas, precios o fechas.`,
@@ -263,6 +296,24 @@ const HERRAMIENTAS = [
     },
   },
   {
+    name: 'reservar_pago_transferencia',
+    description:
+      'El cliente ELIGIÓ pagar POR TRANSFERENCIA bancaria (a Davivienda o a Bancolombia). Deja la reserva PENDIENTE (NO confirmada) y le envía por WhatsApp, en mensajes aparte, los certificados PDF de las cuentas del hotel. La reserva se confirma cuando el cliente manda el comprobante por este chat y recepción lo verifica. Solo funciona en WhatsApp. Requiere tipo, fechas y nombre; el correo es opcional. Úsala también si el cliente pide que le reenvíes los datos de la cuenta.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipoHabitacion: { type: 'string', description: 'Nombre del tipo de habitación (uno del catálogo).' },
+        checkIn: { type: 'string', description: 'Fecha de entrada AAAA-MM-DD.' },
+        checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
+        personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
+        cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
+        nombre: { type: 'string', description: 'Nombre completo del huésped.' },
+        email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: si no tiene o no lo dio, omítelo).' },
+      },
+      required: ['tipoHabitacion', 'checkIn', 'checkOut', 'nombre'],
+    },
+  },
+  {
     name: 'cancelar_reserva',
     description:
       'Cancela una reserva VIGENTE del cliente (la busca por su número de WhatsApp). Úsala cuando el cliente pide cancelar. Avisa a recepción por correo y confirma al cliente por WhatsApp. Si el cliente tiene varias reservas, devuelve la lista para que preguntes cuál; entonces vuelve a llamarla con checkIn.',
@@ -319,23 +370,8 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
     if (!entrada?.email) return { ok: false, error: 'Falta el correo del cliente.' };
 
-    if (!tipoVigente(tipo, entrada.checkIn)) {
-      return {
-        ok: false,
-        error: `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`,
-      };
-    }
-
-    // Candado: Estándar Ubique solo viernes a domingo (check-in vie/sáb/dom).
-    if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
-      const dia = new Date(entrada.checkIn + 'T12:00:00').getDay(); // 0=dom, 5=vie, 6=sáb
-      if (![0, 5, 6].includes(dia)) {
-        return {
-          ok: false,
-          error: 'La Habitación Estándar Ubique solo está disponible de viernes a domingo. Ofrece otro tipo o ajustar a un fin de semana.',
-        };
-      }
-    }
+    const errorFechas = errorDeTipoYFechas(tipo, entrada);
+    if (errorFechas) return { ok: false, error: errorFechas };
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
@@ -395,23 +431,8 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     const tipo = buscarTipo(entrada?.tipoHabitacion);
     if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
 
-    if (!tipoVigente(tipo, entrada.checkIn)) {
-      return {
-        ok: false,
-        error: `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`,
-      };
-    }
-
-    // Candado: Estándar Ubique solo viernes a domingo (check-in vie/sáb/dom).
-    if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
-      const dia = new Date(entrada.checkIn + 'T12:00:00').getDay();
-      if (![0, 5, 6].includes(dia)) {
-        return {
-          ok: false,
-          error: 'La Habitación Estándar Ubique solo está disponible de viernes a domingo. Ofrece otro tipo o ajustar a un fin de semana.',
-        };
-      }
-    }
+    const errorFechas = errorDeTipoYFechas(tipo, entrada);
+    if (errorFechas) return { ok: false, error: errorFechas };
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
@@ -450,6 +471,88 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     } catch (err) {
       return { ok: false, error: 'No se pudo confirmar la reserva. Ofrece que recepción lo gestione.' };
     }
+  }
+
+  if (nombre === 'reservar_pago_transferencia') {
+    if (esSocial(waId)) {
+      return {
+        ok: false,
+        error: `La transferencia solo se atiende por WhatsApp. Dile con amabilidad que escriba por WhatsApp al +${config.hotel.whatsappChat} (enlace: https://wa.me/${config.hotel.whatsappChat}, en una línea aparte) y ahí le envías los datos; mientras tanto, ofrécele pagar en línea o en el hotel.`,
+      };
+    }
+    if (!config.transferencia.activa) {
+      return { ok: false, error: 'La opción de transferencia no está disponible por ahora. Ofrece pagar en línea o en el hotel.' };
+    }
+    if (!documentosStore.cargados().length) {
+      store.marcarEscalado(waId, true); // que recepcion lo vea en el panel
+      return {
+        ok: false,
+        error:
+          'Los certificados de las cuentas bancarias todavía no están cargados en el sistema, así que no puedes enviarlos. NO prometas que llegarán solos. Dile con amabilidad que recepción le enviará los datos de la cuenta en un momento (ya se les avisó) y ofrécele, mientras tanto, pagar en línea o en el hotel.',
+      };
+    }
+
+    const tipo = buscarTipo(entrada?.tipoHabitacion);
+    if (!tipo) return { ok: false, error: 'Tipo de habitación no reconocido. Pregunta cuál del catálogo.' };
+    const errorFechas = errorDeTipoYFechas(tipo, entrada);
+    if (errorFechas) return { ok: false, error: errorFechas };
+
+    const n = noches(entrada.checkIn, entrada.checkOut);
+    const cant = cantidadValida(entrada.cantidadHabitaciones);
+    const monto = tipo.precioDesde * n * cant;
+
+    // Si el cliente ya tiene esa misma reserva (reservó "pago en el hotel" y ahora prefiere transferir, o
+    // pide los datos otra vez) se reutiliza: no se duplica.
+    let reserva = reservasStore
+      .vigentesDe(waId)
+      .find((r) => r.fuente === 'bot' && r.habitacion === tipo.nombre && r.checkIn === entrada.checkIn && r.checkOut === entrada.checkOut
+        && (r.estado === 'en_proceso' || r.estado === 'pendiente_hotel'));
+    let nueva = false;
+    if (!reserva) {
+      reserva = reservasStore.crear({
+        waId,
+        celular: waId, // transferencia solo por WhatsApp: el celular es el propio wa_id
+        nombre: entrada.nombre,
+        email: entrada.email,
+        habitacion: tipo.nombre,
+        personas: entrada.personas,
+        cantidad: cant,
+        checkIn: entrada.checkIn,
+        checkOut: entrada.checkOut,
+        monto,
+        estado: 'en_proceso',
+        fuente: 'bot',
+        referenciaPago: REF_ESPERA,
+      });
+      nueva = true;
+    } else if (!esTransferencia(reserva)) {
+      reserva.referenciaPago = REF_ESPERA;
+      reservasStore.guardar(reserva);
+    }
+
+    const envio = await enviarCertificados(waId);
+    if (!envio.ok) {
+      if (nueva) reservasStore.actualizarEstado(reserva.id, 'rechazado'); // no deja una reserva fantasma
+      store.marcarEscalado(waId, true);
+      return {
+        ok: false,
+        error: 'No se pudieron enviar los certificados por WhatsApp. Pide disculpas, dile que recepción le enviará los datos de la cuenta (ya se les avisó) y ofrécele pagar en línea o en el hotel.',
+      };
+    }
+    return {
+      ok: true,
+      noches: n,
+      habitaciones: cant,
+      monto,
+      tipo: tipo.nombre,
+      certificadosEnviados: envio.enviados,
+      ...(envio.fallaron.length ? { noSeEnvio: envio.fallaron } : {}),
+      instruccion:
+        `Los certificados de las cuentas del hotel (${envio.enviados.join(' y ')}, en PDF) YA se enviaron al cliente en mensajes aparte. La reserva quedó PENDIENTE: NO está confirmada ni pagada hasta que recepción verifique el comprobante. ` +
+        `Dile, breve y cálido (2 o 3 frases): que le enviaste los certificados, que puede transferir a la cuenta que prefiera, que el valor total es ${precioCOP(monto)} (puede transferir el total o un abono) y que apenas transfiera te mande la FOTO o el PDF del comprobante por este mismo chat: tú se lo pasas a recepción y le confirmas la reserva. ` +
+        (envio.fallaron.length ? `OJO: el certificado de ${envio.fallaron.join(' y ')} NO se pudo enviar; díselo y ofrece que recepción se lo comparte. ` : '') +
+        'NO inventes números de cuenta ni datos bancarios (están en los PDF). NO digas que la reserva está confirmada ni pagada.',
+    };
   }
 
   if (nombre === 'cancelar_reserva') {

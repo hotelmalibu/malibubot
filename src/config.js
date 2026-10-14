@@ -57,6 +57,23 @@ export const config = {
       return `Check-in desde las ${this.horaCheckIn} y check-out hasta la ${fin}${fin.endsWith('.') ? '' : '.'}`;
     },
     telefonoLlamadas: (process.env.TELEFONO_LLAMADAS || '573145933714').replace(/\D/g, ''),
+    // Numero (solo digitos) del CHAT de Valentina en WhatsApp: a el se remite a quien escribe
+    // por Messenger/Instagram y quiere pagar por transferencia (eso solo se atiende por WhatsApp).
+    whatsappChat: (process.env.WHATSAPP_CHAT || '573002299991').replace(/\D/g, ''),
+  },
+
+  // Pago por TRANSFERENCIA bancaria: Valentina envia los certificados de las cuentas (PDF guardados
+  // en la base de datos desde el panel, NO en el repositorio) y reenvia a recepcion por correo el
+  // comprobante que mande el cliente. Ver docs/PAGO-TRANSFERENCIA.md.
+  transferencia: {
+    activa: (process.env.TRANSFERENCIA_ACTIVA || 'true') !== 'false',
+    // Peso maximo del comprobante (foto o PDF) que se descarga y se reenvia por correo.
+    maxMb: Math.max(1, parseFloat(process.env.COMPROBANTE_MAX_MB || '10') || 10),
+    // Tope de comprobantes que se reenvian por reserva (evita llenar el buzon de recepcion).
+    maxPorReserva: Math.max(1, parseInt(process.env.COMPROBANTE_MAX_RESERVA || '8', 10) || 8),
+    // Texto OPCIONAL que se envia despues de los certificados (p. ej. los numeros de cuenta, para copiarlos).
+    // Se define en Render (no en el codigo); "\n" se convierte en salto de linea.
+    datosExtra: (process.env.TRANSFERENCIA_DATOS || '').replace(/\\n/g, '\n').trim(),
   },
 
   // Conexion con el Libro de Reservas (Google Sheet) via un Apps Script Web App
@@ -155,6 +172,8 @@ export const config = {
   // Envio de correos (Resend).
   correo: {
     resendApiKey: process.env.RESEND_API_KEY || '',
+    // Base de la API de Resend. Solo se cambia en pruebas locales con un servidor simulado.
+    resendBase: (process.env.RESEND_API_BASE || 'https://api.resend.com').replace(/\/+$/, ''),
     // Remitente (el "De:"). Debe ser una direccion REAL del dominio verificado
     // hotelmalibu.co. OJO: usar una direccion que NO existe como buzon (p.ej.
     // reservasbot@) hace que el propio servidor del dominio RECHACE el correo a

@@ -6,7 +6,10 @@
 
 /**
  * @param {object} body  Cuerpo JSON del webhook de WhatsApp.
- * @returns {Array<{from:string, id:string, tipo:string, texto:string, nombre:string}>}
+ * @returns {Array<{from:string, id:string, tipo:string, texto:string, nombre:string,
+ *   media:null|{id:string, mime:string, nombre:string, caption:string}}>}
+ *   `media` viene en fotos (image) y documentos (document): id para descargarlo, tipo, nombre del archivo y el
+ *   texto que el cliente escribio junto al archivo.
  */
 export function parsearMensajes(body) {
   const resultado = [];
@@ -23,12 +26,16 @@ export function parsearMensajes(body) {
       const nombre = value.contacts?.[0]?.profile?.name || '';
 
       for (const msg of mensajes) {
+        const archivo = msg.type === 'image' ? msg.image : msg.type === 'document' ? msg.document : null;
         resultado.push({
           from: msg.from,          // numero del cliente (wa_id)
           id: msg.id,              // id del mensaje (wamid...)
           tipo: msg.type,          // text, image, audio, etc.
           texto: msg.text?.body || '',
           nombre,
+          media: archivo?.id
+            ? { id: archivo.id, mime: String(archivo.mime_type || '').toLowerCase(), nombre: archivo.filename || '', caption: archivo.caption || '' }
+            : null,
         });
       }
     }

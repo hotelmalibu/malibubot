@@ -43,6 +43,9 @@ import {
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { confirmarPago, confirmarReservaEnHotel } from '../pagos/confirmar.js';
 import { cancelarReserva } from '../pagos/cancelar.js';
+import { enviarCertificados, confirmarTransferencia, esTransferencia } from '../pagos/transferencia.js';
+import { documentosStore } from '../datos/documentos.js';
+import { dbActivo } from '../almacen/db.js';
 import { config } from '../config.js';
 import {
   validarCredenciales,
@@ -514,14 +517,92 @@ adminRouter.post('/api/reservas/:id/cancelar', async (req, res) => {
   res.json({ ok: true, reserva: reservasStore.obtenerPorId(reserva.id) });
 });
 
-adminRouter.post('/api/reservas/:id/estado', (req, res) => {
+adminRouter.post('/api/reservas/:id/estado', async (req, res) => {
   const estado = req.body?.estado;
   if (!ESTADOS.includes(estado)) {
     return res.status(400).json({ ok: false, error: 'Estado inválido.' });
   }
+  const actual = reservasStore.obtenerPorId(req.params.id);
+  if (!actual) return res.status(404).json({ ok: false, error: 'Reserva no encontrada.' });
+
+  // Transferencia verificada por recepcion (botones "Pago total verificado" / "Abono verificado"): ademas de
+  // cambiar el estado, se le avisa al cliente por WhatsApp y se mandan los correos de confirmacion.
+  const verificacion = req.body?.verificacion;
+  if (verificacion === 'total' || verificacion === 'abono') {
+    if (!esTransferencia(actual)) return res.status(400).json({ ok: false, error: 'Esta reserva no es de transferencia.' });
+    if (ESTADOS_ANULADOS.includes(actual.estado)) return res.status(400).json({ ok: false, error: 'La reserva está cancelada o rechazada.' });
+    const r = await confirmarTransferencia(actual, verificacion);
+    return res.status(r.ok ? 200 : 400).json({ ...r, reserva: reservasStore.obtenerPorId(actual.id) });
+  }
+
   const r = reservasStore.actualizarEstado(req.params.id, estado);
-  if (!r) return res.status(404).json({ ok: false, error: 'Reserva no encontrada.' });
   res.json({ ok: true, reserva: r });
+});
+
+// -------- Pago por transferencia: certificados bancarios que Valentina envia por WhatsApp --------
+// Los PDF NO estan en el repositorio (es publico): se suben aqui y quedan en la base de datos.
+adminRouter.get('/api/transferencia', (_req, res) => {
+  const esperando = reservasStore.listar().filter((r) => esTransferencia(r) && r.estado === 'en_proceso').length;
+  res.json({
+    ok: true,
+    activa: config.transferencia.activa,
+    documentos: documentosStore.listar(),
+    persistente: dbActivo(),
+    correoDestino: [config.correo.recepcion, ...config.correo.copia].filter(Boolean),
+    pendientes: esperando,
+  });
+});
+
+adminRouter.post('/api/transferencia/documentos/:clave', async (req, res) => {
+  const base64 = String(req.body?.base64 || '').replace(/^data:[^,]*,/, '');
+  try {
+    const documento = await documentosStore.guardar(req.params.clave, { nombre: req.body?.nombre, datos: Buffer.from(base64, 'base64') });
+    console.log(`[admin] Certificado ${req.params.clave} guardado (${documento.bytes} bytes).`);
+    res.json({ ok: true, documento });
+  } catch (err) {
+    if (err.deUso) return res.status(400).json({ ok: false, error: err.message });
+    console.error('[admin] Error guardando el certificado:', err.message);
+    res.status(500).json({ ok: false, error: 'No se pudo guardar de forma permanente. Intenta de nuevo.' });
+  }
+});
+
+adminRouter.delete('/api/transferencia/documentos/:clave', async (req, res) => {
+  try {
+    await documentosStore.eliminar(req.params.clave);
+    console.log(`[admin] Certificado ${req.params.clave} eliminado.`);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.deUso) return res.status(400).json({ ok: false, error: err.message });
+    console.error('[admin] Error eliminando el certificado:', err.message);
+    res.status(500).json({ ok: false, error: 'No se pudo eliminar. Intenta de nuevo.' });
+  }
+});
+
+// Para verificar que se cargo el PDF correcto (se abre en otra pestaña, dentro del panel protegido).
+adminRouter.get('/api/transferencia/documentos/:clave/ver', (req, res) => {
+  const d = documentosStore.obtener(req.params.clave);
+  if (!d) return res.status(404).type('text').send('Ese documento no está cargado.');
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `inline; filename="${encodeURIComponent(d.nombre || 'certificado.pdf')}"`,
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.send(d.datos);
+});
+
+// Prueba: manda los certificados a un celular (el del dueño). WhatsApp solo deja escribir libre a quien
+// escribio al bot en las ultimas 24 h.
+adminRouter.post('/api/transferencia/probar', async (req, res) => {
+  let cel = String(req.body?.celular || '').replace(/\D/g, '');
+  if (cel.length === 10 && cel.startsWith('3')) cel = '57' + cel; // celular colombiano sin indicativo
+  if (cel.length < 10 || cel.length > 15) return res.status(400).json({ ok: false, error: 'Escribe un celular válido (con indicativo si no es de Colombia).' });
+  const r = await enviarCertificados(cel);
+  if (r.ok) return res.json({ ok: true, enviados: r.enviados, fallaron: r.fallaron });
+  const motivo = r.error === 'sin_certificados'
+    ? 'Todavía no hay certificados cargados.'
+    : `WhatsApp no aceptó el envío${r.detalle ? ': ' + r.detalle : ''}. Si ese número no le ha escrito al bot en las últimas 24 h, escríbele primero y vuelve a probar.`;
+  res.status(400).json({ ok: false, error: motivo });
 });
 
 // -------- Diagnostico de canales (primer mensaje -> canal detectado) --------

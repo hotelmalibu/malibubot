@@ -10,6 +10,7 @@ import { config } from '../config.js';
 import { store } from '../almacen/conversaciones.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
+import { transferenciaPendienteDe } from '../pagos/transferencia.js';
 
 const VENTANA_WA_MS = 24 * 60 * 60 * 1000; // WhatsApp: solo texto libre dentro de 24 h
 const MARGEN_MS = 22 * 60 * 60 * 1000;     // el automatico no se envia pasadas 22 h
@@ -28,9 +29,20 @@ function primerNombre(nombre) {
   return n && n.length <= 20 ? n : '';
 }
 
-/** Mensaje corto y calido, en el tono de Valentina. */
-export function mensajeSeguimiento(conv) {
+/**
+ * Mensaje corto y calido, en el tono de Valentina. Si el cliente ya eligio pagar por transferencia
+ * y solo falta su comprobante, el recordatorio es sobre eso (conserva la frase "quedé pendiente de tu
+ * reserva": con ella se reconoce que el seguimiento ya se envió).
+ */
+export function mensajeSeguimiento(conv, { transferencia = false } = {}) {
   const nom = primerNombre(conv.nombre);
+  if (transferencia) {
+    return (
+      `Hola${nom ? ' ' + nom : ''} 👋 Soy Valentina, del Hotel Malibú. ` +
+      `Quedé pendiente de tu reserva 😊 Para dejarla lista solo falta el comprobante de tu transferencia: ` +
+      `envíamelo por aquí (foto o PDF) y se lo paso a recepción. Y si prefieres otra forma de pago, dime y te ayudo. 🌴`
+    );
+  }
   return (
     `Hola${nom ? ' ' + nom : ''} 👋 Soy Valentina, del Hotel Malibú. ` +
     `Quedé pendiente de tu reserva 😊 ¿Te ayudo a apartar la habitación? ` +
@@ -59,7 +71,7 @@ export async function enviarEmpujon(waId) {
     };
   }
 
-  const texto = mensajeSeguimiento(conv);
+  const texto = mensajeSeguimiento(conv, { transferencia: !!transferenciaPendienteDe(waId) });
   try {
     await enviarTexto(waId, texto);
   } catch (err) {
