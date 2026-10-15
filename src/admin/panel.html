@@ -799,7 +799,9 @@
         return;
       }
       const estado = s.corriendo ? 'Leyendo…' : s.error ? '<span class="mal">Falló: ' + esc(s.error) + '</span>' : s.ts ? '<span class="ok">Al día</span> · última lectura ' + haceCuanto(s.ts) + ' · ' + miles(s.leidas) + ' reservas leídas · ' + miles(s.nuevas) + ' nuevas' : 'Aún no ha corrido (corre sola cada pocos minutos).';
-      cont.innerHTML = '<button class="btn-mini" id="btnSyncVik" onclick="sincronizarVik(this)">🔄 Sincronizar con Vik ahora</button><span>Vik Booking: ' + estado + '</span>';
+      const aviso = s.cadenaPropia && !s.error && !s.corriendo
+        ? '<span title="El hosting envía el certificado SSL de la web sin su certificado intermedio. El bot lo compensa solo, pero conviene pedirle al hosting que instale la cadena completa.">⚠️ Certificado SSL de la web incompleto (el bot lo compensa; avisa al hosting)</span>' : '';
+      cont.innerHTML = '<button class="btn-mini" id="btnSyncVik" onclick="sincronizarVik(this)">🔄 Sincronizar con Vik ahora</button><span>Vik Booking: ' + estado + '</span>' + aviso;
     } catch (_) {}
   }
   async function sincronizarVik(btn) {

@@ -141,6 +141,11 @@ export const config = {
     // Solo se cargan reservas con llegada desde esta fecha (YYYY-MM-DD); por defecto, 2026.
     syncDesde: /^\d{4}-\d{2}-\d{2}$/.test((process.env.VIK_SYNC_DESDE || '').trim()) ? process.env.VIK_SYNC_DESDE.trim() : '2026-01-01',
     syncMinutos: Math.max(5, parseInt(process.env.VIK_SYNC_MIN || '15', 10) || 15),
+    // Tiempo maximo de cada consulta a malibubot-sync.php (milisegundos).
+    syncTimeoutMs: Math.max(1000, parseInt(process.env.VIK_SYNC_TIMEOUT_MS || '30000', 10) || 30000),
+    // Archivo .pem opcional con certificados intermedios EXTRA (ademas de los de src/vikbooking/certificados/)
+    // para cuando el hosting manda el certificado SSL de la web sin su intermedio.
+    caExtra: (process.env.VIK_SYNC_CA_EXTRA || '').trim(),
   },
 
   // Meta semanal de reservas (valor inicial; se puede cambiar desde el panel).

@@ -8,6 +8,8 @@ node_modules/
 credenciales/
 *.pem
 *.key
+# Excepcion: certificados PUBLICOS de autoridades certificadoras (intermedios) para la sincronizacion con Vik. Jamas claves privadas.
+!src/vikbooking/certificados/*.pem
 
 # Logs
 *.log

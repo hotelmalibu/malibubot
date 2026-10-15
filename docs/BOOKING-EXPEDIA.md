@@ -85,3 +85,29 @@ Cómo funciona:
 - El archivo es de solo lectura, no devuelve datos de pago y solo responde con la clave.
   Quien tenga la clave puede leer nombres, correos y celulares de los huéspedes: trátala como
   una contraseña.
+
+### Si el panel dice «Vik Booking: Falló: …»
+
+El mensaje dice la causa. No tiene nada que ver con la suscripción de Vik Channel Manager: la lectura va directo a la web, sin pasar por el Channel Manager.
+
+| El panel dice | Qué pasa | Qué hacer |
+|---|---|---|
+| «No se pudo verificar el certificado SSL de la web (UNABLE_TO_VERIFY_LEAF_SIGNATURE)… sin su certificado intermedio» | El hosting instaló el certificado SSL sin su intermedio (o con el de otra autoridad). Los navegadores lo completan solos; el bot no. Ver abajo. | Pedir al hosting que instale la cadena completa. Mientras tanto el bot lo compensa solo (ver abajo). |
+| «El certificado SSL de la web está vencido» | El certificado de `www.hotelmalibu.co` venció. | Renovarlo en el hosting. |
+| «El certificado SSL no corresponde al dominio de VIK_SYNC_URL» | `VIK_SYNC_URL` apunta a un nombre que el certificado no cubre. | Usar `https://www.hotelmalibu.co/malibubot-sync.php`. |
+| «Clave incorrecta (el archivo tiene N caracteres y Render envió M)» | La clave del archivo PHP y `VIK_SYNC_KEY` en Render no son iguales. | Dejar las dos idénticas. |
+| «respuesta 465 (no es JSON…)» o «respuesta 466» | El firewall de la web bloqueó la petición (rechaza las que no traen User-Agent o parecen un robot). | El bot manda `User-Agent: MALIBUBOT-sync/1.0`; si vuelve a pasar, permitirlo en el firewall del hosting. |
+| «respuesta 404/500 (no es JSON…)» | El archivo `malibubot-sync.php` no está en la raíz de la web, o PHP falló. | Revisar que esté junto a `configuration.php`. |
+| «No se encontró el dominio…», «La web cortó la conexión», «La web no respondió a tiempo» | Problema de red o la web está caída. | Abrir `https://www.hotelmalibu.co` y reintentar con el botón. |
+
+**Cadena de certificados incompleta (13-oct-2026).** El certificado de la web se renovó ese día (RapidSSL, vigente hasta el 29-abr-2027) pero el servidor siguió enviando
+los intermedios de Sectigo del certificado anterior. Desde entonces la lectura fallaba con `fetch failed`. Dos arreglos:
+
+1. **De fondo (hosting):** instalar como CA bundle el intermedio *RapidSSL TLS RSA CA G1* (`http://cacerts.rapidssl.com/RapidSSLTLSRSACAG1.crt`). Se comprueba con
+   `openssl s_client -connect www.hotelmalibu.co:443 -servername www.hotelmalibu.co -showcerts` (deben llegar la hoja y el intermedio de RapidSSL) o en
+   <https://www.ssllabs.com/ssltest/>. Instalar certificados es un ajuste del hosting, no del bot.
+2. **En el bot (ya hecho):** si la conexión normal falla por cadena incompleta, `src/vikbooking/sincronizar.js` reintenta confiando en las raíces de Node **más** los intermedios
+   de `src/vikbooking/certificados/` (ver su `LEEME.md`). Se sigue verificando la cadena hasta una raíz de confianza y el nombre del dominio. El panel muestra «⚠️ Certificado SSL de
+   la web incompleto (el bot lo compensa; avisa al hosting)» mientras el hosting no lo arregle. Ese intermedio vence el **2-nov-2027**.
+
+Prueba automática (sin tocar producción; necesita `openssl`): `node scripts/probar-sync-ssl.js`.
