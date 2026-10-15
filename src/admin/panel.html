@@ -231,8 +231,8 @@
   .o-whatsapp { fill: var(--oro-profundo); } .o-web { fill: var(--verde); } .o-booking { fill: var(--azul); } .o-expedia { fill: #e0a100; } .o-otros { fill: #b9b4a6; }
   .sw-o.o-whatsapp { background: var(--oro-profundo); } .sw-o.o-web { background: var(--verde); } .sw-o.o-booking { background: var(--azul); } .sw-o.o-expedia { background: #e0a100; } .sw-o.o-otros { background: #b9b4a6; }
 
-  /* Franja: habitaciones reservadas por canal (Dashboard, bajo el resumen de habitaciones) */
-  .franja-canal { margin-top: 14px; background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 14px 18px 16px; box-shadow: var(--sombra); }
+  /* Franja: habitaciones reservadas por canal (Dashboard, despues de «Reservas por canal de venta») */
+  .franja-canal { margin-top: 18px; background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 14px 18px 16px; box-shadow: var(--sombra); }
   .franja-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
   .franja-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--oro-profundo); }
   .franja-nota { font-size: 12.5px; color: var(--gris); margin-top: 3px; }
@@ -466,24 +466,6 @@
         </div>
         <div class="kpis" id="kpisHab" style="margin-top:14px;"></div>
 
-        <div class="franja-canal" id="franjaCanal" title="Suma las habitaciones de las reservas confirmadas (pagadas o con pago en el hotel) que llegaron por cada canal. No incluye las que están en proceso ni las canceladas.">
-          <div class="franja-cab">
-            <div>
-              <div class="franja-eyebrow">Habitaciones reservadas por canal</div>
-              <div class="franja-nota" id="franjaNota">Cargando…</div>
-            </div>
-            <div class="anios franja-periodos" id="franjaPeriodos" aria-label="Periodo de las habitaciones reservadas por canal">
-              <button type="button" data-p="todo" class="activo" onclick="origPeriodo('todo')">Todo el tiempo</button>
-              <button type="button" data-p="anio" onclick="origPeriodo('anio')">Este año</button>
-              <button type="button" data-p="mes" onclick="origPeriodo('mes')">Este mes</button>
-              <button type="button" data-p="30" onclick="origPeriodo('30')">30 días</button>
-              <button type="button" data-p="hoy" onclick="origPeriodo('hoy')">Hoy</button>
-            </div>
-          </div>
-          <div class="franja-fichas" id="franjaFichas"></div>
-          <div class="franja-barra" id="franjaBarra" role="img" aria-label="Reparto de las habitaciones reservadas por canal"></div>
-        </div>
-
         <div class="seccion-cab">
           <div><div class="eyebrow">Seguimiento anual</div><h2><span id="tituloGrafico">Reservas mensuales</span> <span id="anioGrafico">2026</span></h2></div>
           <div class="nota">Noches reservadas según el Libro · 🤖 reservas creadas por el bot</div>
@@ -540,6 +522,24 @@
             </table>
           </div>
         </details>
+
+        <div class="franja-canal" id="franjaCanal" title="Suma las habitaciones de las reservas confirmadas (pagadas o con pago en el hotel) que llegaron por cada canal. No incluye las que están en proceso ni las canceladas.">
+          <div class="franja-cab">
+            <div>
+              <div class="franja-eyebrow">Habitaciones reservadas por canal</div>
+              <div class="franja-nota" id="franjaNota">Cargando…</div>
+            </div>
+            <div class="anios franja-periodos" id="franjaPeriodos" aria-label="Periodo de las habitaciones reservadas por canal">
+              <button type="button" data-p="todo" class="activo" onclick="origPeriodo('todo')">Todo el tiempo</button>
+              <button type="button" data-p="anio" onclick="origPeriodo('anio')">Este año</button>
+              <button type="button" data-p="mes" onclick="origPeriodo('mes')">Este mes</button>
+              <button type="button" data-p="30" onclick="origPeriodo('30')">30 días</button>
+              <button type="button" data-p="hoy" onclick="origPeriodo('hoy')">Hoy</button>
+            </div>
+          </div>
+          <div class="franja-fichas" id="franjaFichas"></div>
+          <div class="franja-barra" id="franjaBarra" role="img" aria-label="Reparto de las habitaciones reservadas por canal"></div>
+        </div>
 
         <div class="seccion-cab">
           <div><div class="eyebrow">Ventas</div><h2>Reservas de habitaciones</h2></div>
