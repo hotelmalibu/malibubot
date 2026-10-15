@@ -231,7 +231,7 @@
   .o-whatsapp { fill: var(--oro-profundo); } .o-web { fill: var(--verde); } .o-booking { fill: var(--azul); } .o-expedia { fill: #e0a100; } .o-otros { fill: #b9b4a6; }
   .sw-o.o-whatsapp { background: var(--oro-profundo); } .sw-o.o-web { background: var(--verde); } .sw-o.o-booking { background: var(--azul); } .sw-o.o-expedia { background: #e0a100; } .sw-o.o-otros { background: #b9b4a6; }
 
-  /* Franja: habitaciones reservadas por canal (Dashboard, despues de «Reservas por canal de venta») */
+  /* Franja: noches reservadas por canal (Dashboard, despues de «Reservas por canal de venta») */
   .franja-canal { margin-top: 18px; background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 14px 18px 16px; box-shadow: var(--sombra); }
   .franja-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
   .franja-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--oro-profundo); }
@@ -523,13 +523,13 @@
           </div>
         </details>
 
-        <div class="franja-canal" id="franjaCanal" title="Suma las habitaciones de las reservas confirmadas (pagadas o con pago en el hotel) que llegaron por cada canal. No incluye las que están en proceso ni las canceladas.">
+        <div class="franja-canal" id="franjaCanal" title="Suma las noches de las reservas confirmadas (pagadas o con pago en el hotel) que llegaron por cada canal. Cuenta noches de habitación: una reserva de 2 habitaciones por 3 noches suma 6. No incluye las que están en proceso ni las canceladas.">
           <div class="franja-cab">
             <div>
-              <div class="franja-eyebrow">Habitaciones reservadas por canal</div>
+              <div class="franja-eyebrow">Noches reservadas por canal</div>
               <div class="franja-nota" id="franjaNota">Cargando…</div>
             </div>
-            <div class="anios franja-periodos" id="franjaPeriodos" aria-label="Periodo de las habitaciones reservadas por canal">
+            <div class="anios franja-periodos" id="franjaPeriodos" aria-label="Periodo de las noches reservadas por canal">
               <button type="button" data-p="todo" class="activo" onclick="origPeriodo('todo')">Todo el tiempo</button>
               <button type="button" data-p="anio" onclick="origPeriodo('anio')">Este año</button>
               <button type="button" data-p="mes" onclick="origPeriodo('mes')">Este mes</button>
@@ -538,7 +538,7 @@
             </div>
           </div>
           <div class="franja-fichas" id="franjaFichas"></div>
-          <div class="franja-barra" id="franjaBarra" role="img" aria-label="Reparto de las habitaciones reservadas por canal"></div>
+          <div class="franja-barra" id="franjaBarra" role="img" aria-label="Reparto de las noches reservadas por canal"></div>
         </div>
 
         <div class="seccion-cab">
@@ -858,7 +858,7 @@
     const d = Math.round(h / 24);
     return d === 1 ? 'ayer' : 'hace ' + d + ' días';
   }
-  // Franja del Dashboard: habitaciones de las reservas confirmadas, por canal, en el mismo periodo que «Reservas por canal».
+  // Franja del Dashboard: noches (de habitación: noches × habitaciones) de las reservas confirmadas, por canal, en el mismo periodo que «Reservas por canal».
   const FRANJA_PERIODO = { todo: 'desde el inicio', anio: 'este año', mes: 'este mes', 30: 'en los últimos 30 días', hoy: 'hoy' };
   // Porcentajes enteros que suman 100 (método del mayor resto), para que la franja no diga 101 %.
   function repartoPct(valores) {
@@ -871,26 +871,26 @@
   }
   function pintarFranjaCanales(d) {
     const fichas = document.getElementById('franjaFichas'); if (!fichas) return;
-    const lista = d.origenes.filter((o) => o.id !== 'otros' || o.habitaciones || o.reservas);
-    const total = lista.reduce((s, o) => s + (o.habitaciones || 0), 0);
+    const lista = d.origenes.filter((o) => o.id !== 'otros' || o.noches || o.reservas);
+    const total = lista.reduce((s, o) => s + (o.noches || 0), 0);
     const reservas = lista.reduce((s, o) => s + (o.reservas || 0), 0);
-    const pcts = repartoPct(lista.map((o) => o.habitaciones || 0));
+    const pcts = repartoPct(lista.map((o) => o.noches || 0));
     const plural = (n) => `${miles(n)} reserva${n === 1 ? '' : 's'}`;
     document.getElementById('franjaNota').textContent = total
-      ? `Reservas confirmadas hechas ${FRANJA_PERIODO[origPeriodoSel] || ''}`
+      ? `Noches de las reservas confirmadas hechas ${FRANJA_PERIODO[origPeriodoSel] || ''}`
       : `Aún no hay reservas confirmadas hechas ${FRANJA_PERIODO[origPeriodoSel] || ''}`;
     fichas.innerHTML = lista.map((o, i) => {
       const [ico] = ORIG_ICO[o.id] || ['📌'];
-      return `<div class="ficha-canal" title="${esc(o.nombre)}"><span class="sw-o o-${o.id}"></span><div><div class="lbl">${ico} ${esc(o.corto)}</div><div class="num">${miles(o.habitaciones || 0)}</div><div class="pie">${total ? pcts[i] + '% · ' : ''}${plural(o.reservas || 0)}</div></div></div>`;
+      return `<div class="ficha-canal" title="${esc(o.nombre)}"><span class="sw-o o-${o.id}"></span><div><div class="lbl">${ico} ${esc(o.corto)}</div><div class="num">${miles(o.noches || 0)}</div><div class="pie">${total ? pcts[i] + '% · ' : ''}${plural(o.reservas || 0)}</div></div></div>`;
     }).join('') +
       `<div class="ficha-canal total"><div><div class="lbl">Total</div><div class="num">${miles(total)}</div><div class="pie">${plural(reservas)}</div></div></div>`;
     const barra = document.getElementById('franjaBarra');
     barra.innerHTML = total
-      ? lista.map((o, i) => o.habitaciones ? `<span class="seg o-${o.id}" style="width:${(o.habitaciones / total) * 100}%" title="${esc(o.corto)}: ${miles(o.habitaciones)} habitación${o.habitaciones === 1 ? '' : 'es'} (${pcts[i]}%)"></span>` : '').join('')
+      ? lista.map((o, i) => o.noches ? `<span class="seg o-${o.id}" style="width:${(o.noches / total) * 100}%" title="${esc(o.corto)}: ${miles(o.noches)} noche${o.noches === 1 ? '' : 's'} (${pcts[i]}%)"></span>` : '').join('')
       : '';
     barra.setAttribute('aria-label', total
-      ? 'Reparto de las habitaciones reservadas: ' + lista.filter((o) => o.habitaciones).map((o) => `${o.corto} ${o.habitaciones}`).join(', ')
-      : 'Sin habitaciones reservadas en este periodo');
+      ? 'Reparto de las noches reservadas: ' + lista.filter((o) => o.noches).map((o) => `${o.corto} ${o.noches}`).join(', ')
+      : 'Sin noches reservadas en este periodo');
   }
   function pintarOrigenes(d) {
     pintarFranjaCanales(d);

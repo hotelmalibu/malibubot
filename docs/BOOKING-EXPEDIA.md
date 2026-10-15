@@ -61,12 +61,13 @@ Cada vez que una reserva se confirma (o se cancela) en Vik Booking, el archivo
 ticket promedio, en proceso y canceladas, según la fecha en que se **hizo** la reserva. Tiene
 su propio selector de periodo (por defecto, todos los tiempos); las barras son los meses del año elegido.
 
-*Habitaciones reservadas por canal* (la franja que está justo después de «Reservas por canal de venta», antes de la tabla de reservas): el **número de
-habitaciones** de las reservas confirmadas (pagadas o con pago en el hotel) de cada canal —MALIBUBOT, Web directa, Booking, Expedia y Otros
-(este último solo si tiene datos)—, el porcentaje de cada uno, el total y una barra con el reparto. Una reserva de 3 habitaciones suma 3. No cuenta
+*Noches reservadas por canal* (la franja que está justo después de «Reservas por canal de venta», antes de la tabla de reservas): el **número de
+noches** de las reservas confirmadas (pagadas o con pago en el hotel) de cada canal —MALIBUBOT, Web directa, Booking, Expedia y Otros
+(este último solo si tiene datos)—, el porcentaje de cada uno, el total y una barra con el reparto. Son **noches de habitación** (noches × habitaciones,
+igual que «Noches reservadas» del Libro): una reserva de 2 habitaciones por 3 noches suma 6; sin fecha de salida cuenta 1 noche por habitación. No cuenta
 las reservas en proceso, rechazadas ni canceladas. Usa el **mismo periodo** que «Reservas por canal de venta» (por fecha en que se hizo la
-reserva): sus botones y los de esa sección están sincronizados. Los números salen de `GET /api/origenes` (campo `habitaciones` de cada canal);
-prueba: `node scripts/probar-franja-canales.js`.
+reserva): sus botones y los de esa sección están sincronizados. Los números salen de `GET /api/origenes` (campo `noches` de cada canal);
+prueba: `node scripts/probar-franja-canales.js`. (La primera versión contaba habitaciones, no noches; se cambió a pedido del dueño el 14-oct-2026.)
 
 ## Si las reservas de Booking o Expedia no aparecen en el panel
 
