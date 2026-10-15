@@ -231,6 +231,25 @@
   .o-whatsapp { fill: var(--oro-profundo); } .o-web { fill: var(--verde); } .o-booking { fill: var(--azul); } .o-expedia { fill: #e0a100; } .o-otros { fill: #b9b4a6; }
   .sw-o.o-whatsapp { background: var(--oro-profundo); } .sw-o.o-web { background: var(--verde); } .sw-o.o-booking { background: var(--azul); } .sw-o.o-expedia { background: #e0a100; } .sw-o.o-otros { background: #b9b4a6; }
 
+  /* Franja: habitaciones reservadas por canal (Dashboard, bajo el resumen de habitaciones) */
+  .franja-canal { margin-top: 14px; background: var(--espuma); border: 1px solid var(--linea); border-radius: 16px; padding: 14px 18px 16px; box-shadow: var(--sombra); }
+  .franja-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+  .franja-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--oro-profundo); }
+  .franja-nota { font-size: 12.5px; color: var(--gris); margin-top: 3px; }
+  .franja-periodos { margin: 0; }
+  .franja-periodos button { padding: 5px 11px; font-size: 12px; }
+  .franja-fichas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .ficha-canal { flex: 1 1 140px; min-width: 130px; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 12px; background: var(--espuma-2); }
+  .ficha-canal .sw-o { margin-top: 3px; flex: none; }
+  .ficha-canal .lbl { font-size: 12px; color: var(--gris); font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+  .ficha-canal .num { font-family: var(--display); font-size: 28px; font-weight: 600; line-height: 1.05; margin-top: 2px; color: var(--tinta); font-variant-numeric: tabular-nums; }
+  .ficha-canal .pie { font-size: 12px; color: var(--gris); margin-top: 2px; }
+  .ficha-canal.total { flex: 0 1 160px; background: var(--oro-suave); border-color: var(--oro-claro); }
+  .franja-barra { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--gris-suave); margin-top: 12px; }
+  .franja-barra .seg { display: block; height: 100%; min-width: 3px; border-right: 2px solid var(--espuma); }
+  .franja-barra .seg:last-child { border-right: 0; }
+  .franja-barra .seg.o-whatsapp { background: var(--oro-profundo); } .franja-barra .seg.o-web { background: var(--verde); } .franja-barra .seg.o-booking { background: var(--azul); } .franja-barra .seg.o-expedia { background: #e0a100; } .franja-barra .seg.o-otros { background: #b9b4a6; }
+
   /* Monitor financiero */
   .fin-sub { margin-top: 6px; }
   .fin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
@@ -446,6 +465,24 @@
           </div>
         </div>
         <div class="kpis" id="kpisHab" style="margin-top:14px;"></div>
+
+        <div class="franja-canal" id="franjaCanal" title="Suma las habitaciones de las reservas confirmadas (pagadas o con pago en el hotel) que llegaron por cada canal. No incluye las que están en proceso ni las canceladas.">
+          <div class="franja-cab">
+            <div>
+              <div class="franja-eyebrow">Habitaciones reservadas por canal</div>
+              <div class="franja-nota" id="franjaNota">Cargando…</div>
+            </div>
+            <div class="anios franja-periodos" id="franjaPeriodos" aria-label="Periodo de las habitaciones reservadas por canal">
+              <button type="button" data-p="todo" class="activo" onclick="origPeriodo('todo')">Todo el tiempo</button>
+              <button type="button" data-p="anio" onclick="origPeriodo('anio')">Este año</button>
+              <button type="button" data-p="mes" onclick="origPeriodo('mes')">Este mes</button>
+              <button type="button" data-p="30" onclick="origPeriodo('30')">30 días</button>
+              <button type="button" data-p="hoy" onclick="origPeriodo('hoy')">Hoy</button>
+            </div>
+          </div>
+          <div class="franja-fichas" id="franjaFichas"></div>
+          <div class="franja-barra" id="franjaBarra" role="img" aria-label="Reparto de las habitaciones reservadas por canal"></div>
+        </div>
 
         <div class="seccion-cab">
           <div><div class="eyebrow">Seguimiento anual</div><h2><span id="tituloGrafico">Reservas mensuales</span> <span id="anioGrafico">2026</span></h2></div>
@@ -777,7 +814,7 @@
   }
   async function cargarOrigenes() {
     try {
-      document.querySelectorAll('#origPeriodos button').forEach((b) => b.classList.toggle('activo', b.dataset.p === origPeriodoSel));
+      document.querySelectorAll('#origPeriodos button, #franjaPeriodos button').forEach((b) => b.classList.toggle('activo', b.dataset.p === origPeriodoSel));
       const anio = typeof anioSel === 'number' ? anioSel : new Date().getFullYear();
       const { desde, hasta } = origRango();
       const qs = ['anio=' + anio];
@@ -821,7 +858,42 @@
     const d = Math.round(h / 24);
     return d === 1 ? 'ayer' : 'hace ' + d + ' días';
   }
+  // Franja del Dashboard: habitaciones de las reservas confirmadas, por canal, en el mismo periodo que «Reservas por canal».
+  const FRANJA_PERIODO = { todo: 'desde el inicio', anio: 'este año', mes: 'este mes', 30: 'en los últimos 30 días', hoy: 'hoy' };
+  // Porcentajes enteros que suman 100 (método del mayor resto), para que la franja no diga 101 %.
+  function repartoPct(valores) {
+    const total = valores.reduce((s, v) => s + v, 0);
+    if (!total) return valores.map(() => 0);
+    const pct = valores.map((v) => Math.floor((v / total) * 100));
+    let resto = 100 - pct.reduce((s, v) => s + v, 0);
+    valores.map((v, i) => [i, (v / total) * 100 - pct[i]]).sort((a, b) => b[1] - a[1]).forEach(([i]) => { if (resto > 0 && valores[i] > 0) { pct[i]++; resto--; } });
+    return pct;
+  }
+  function pintarFranjaCanales(d) {
+    const fichas = document.getElementById('franjaFichas'); if (!fichas) return;
+    const lista = d.origenes.filter((o) => o.id !== 'otros' || o.habitaciones || o.reservas);
+    const total = lista.reduce((s, o) => s + (o.habitaciones || 0), 0);
+    const reservas = lista.reduce((s, o) => s + (o.reservas || 0), 0);
+    const pcts = repartoPct(lista.map((o) => o.habitaciones || 0));
+    const plural = (n) => `${miles(n)} reserva${n === 1 ? '' : 's'}`;
+    document.getElementById('franjaNota').textContent = total
+      ? `Reservas confirmadas hechas ${FRANJA_PERIODO[origPeriodoSel] || ''}`
+      : `Aún no hay reservas confirmadas hechas ${FRANJA_PERIODO[origPeriodoSel] || ''}`;
+    fichas.innerHTML = lista.map((o, i) => {
+      const [ico] = ORIG_ICO[o.id] || ['📌'];
+      return `<div class="ficha-canal" title="${esc(o.nombre)}"><span class="sw-o o-${o.id}"></span><div><div class="lbl">${ico} ${esc(o.corto)}</div><div class="num">${miles(o.habitaciones || 0)}</div><div class="pie">${total ? pcts[i] + '% · ' : ''}${plural(o.reservas || 0)}</div></div></div>`;
+    }).join('') +
+      `<div class="ficha-canal total"><div><div class="lbl">Total</div><div class="num">${miles(total)}</div><div class="pie">${plural(reservas)}</div></div></div>`;
+    const barra = document.getElementById('franjaBarra');
+    barra.innerHTML = total
+      ? lista.map((o, i) => o.habitaciones ? `<span class="seg o-${o.id}" style="width:${(o.habitaciones / total) * 100}%" title="${esc(o.corto)}: ${miles(o.habitaciones)} habitación${o.habitaciones === 1 ? '' : 'es'} (${pcts[i]}%)"></span>` : '').join('')
+      : '';
+    barra.setAttribute('aria-label', total
+      ? 'Reparto de las habitaciones reservadas: ' + lista.filter((o) => o.habitaciones).map((o) => `${o.corto} ${o.habitaciones}`).join(', ')
+      : 'Sin habitaciones reservadas en este periodo');
+  }
   function pintarOrigenes(d) {
+    pintarFranjaCanales(d);
     const rg = d.rango || {};
     document.getElementById('origNota').textContent = (rg.desde || rg.hasta)
       ? `Reservas hechas del ${rg.desde || '…'} al ${rg.hasta || '…'} · barras: año ${d.anio}`

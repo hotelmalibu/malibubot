@@ -61,6 +61,13 @@ Cada vez que una reserva se confirma (o se cancela) en Vik Booking, el archivo
 ticket promedio, en proceso y canceladas, según la fecha en que se **hizo** la reserva. Tiene
 su propio selector de periodo (por defecto, todos los tiempos); las barras son los meses del año elegido.
 
+*Habitaciones reservadas por canal* (la franja que está justo debajo del resumen de habitaciones, arriba del Dashboard): el **número de
+habitaciones** de las reservas confirmadas (pagadas o con pago en el hotel) de cada canal —MALIBUBOT, Web directa, Booking, Expedia y Otros
+(este último solo si tiene datos)—, el porcentaje de cada uno, el total y una barra con el reparto. Una reserva de 3 habitaciones suma 3. No cuenta
+las reservas en proceso, rechazadas ni canceladas. Usa el **mismo periodo** que «Reservas por canal de venta» (por fecha en que se hizo la
+reserva): sus botones y los de esa sección están sincronizados. Los números salen de `GET /api/origenes` (campo `habitaciones` de cada canal);
+prueba: `node scripts/probar-franja-canales.js`.
+
 ## Si las reservas de Booking o Expedia no aparecen en el panel
 
 La pasarela `malibubot.php` solo avisa cuando Vik Booking la llama, y Vik no siempre lo
