@@ -32,6 +32,7 @@ import { enviarEmpujon, waIdsCerrados } from '../ia/seguimiento.js';
 import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { estadoSync, sincronizarConVik } from '../vikbooking/sincronizar.js';
+import { estadoDespertador } from '../vikbooking/despertar.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import { resumenOrigenes, origenDe } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
@@ -616,7 +617,7 @@ adminRouter.get('/api/vik/estado', (_req, res) => {
 });
 // Lee AHORA las reservas directamente de Vik Booking (Booking, Expedia, web) y las deja en el panel.
 adminRouter.get('/api/vik/sync-estado', (_req, res) => {
-  res.json({ ok: true, ...estadoSync() });
+  res.json({ ok: true, ...estadoSync(), despertador: estadoDespertador() });
 });
 adminRouter.post('/api/vik/sincronizar', async (_req, res) => {
   try {

@@ -838,7 +838,14 @@
       const estado = s.corriendo ? 'Leyendo…' : s.error ? '<span class="mal">Falló: ' + esc(s.error) + '</span>' : s.ts ? '<span class="ok">Al día</span> · última lectura ' + haceCuanto(s.ts) + ' · ' + miles(s.leidas) + ' reservas leídas · ' + miles(s.nuevas) + ' nuevas' : 'Aún no ha corrido (corre sola cada pocos minutos).';
       const aviso = s.cadenaPropia && !s.error && !s.corriendo
         ? '<span title="El hosting envía el certificado SSL de la web sin su certificado intermedio. El bot lo compensa solo, pero conviene pedirle al hosting que instale la cadena completa.">⚠️ Certificado SSL de la web incompleto (el bot lo compensa; avisa al hosting)</span>' : '';
-      cont.innerHTML = '<button class="btn-mini" id="btnSyncVik" onclick="sincronizarVik(this)">🔄 Sincronizar con Vik ahora</button><span>Vik Booking: ' + estado + '</span>' + aviso;
+      // «Despertador»: cada pocos minutos el bot llama a la tarea programada de VikBooking para que la IA de Vik conteste los mensajes de Booking.
+      const d = s.despertador || {};
+      const hace = d.ts ? (() => { const m = Math.max(0, Math.round((Date.now() - d.ts) / 60000)); return 'hace ' + (m < 1 ? 'menos de 1 min' : m + ' min'); })() : '';
+      const despierta = !d.activo ? ''
+        : d.ok === null ? '<span>IA de Vik (mensajes de Booking): el bot la despertará pronto (cada ' + d.cadaMin + ' min).</span>'
+        : d.ok ? '<span>IA de Vik (mensajes de Booking): <span class="ok">despierta cada ' + d.cadaMin + ' min</span> · última llamada ' + hace + '</span>'
+        : '<span class="mal">IA de Vik: no se pudo despertar (' + esc(d.error) + ')</span>';
+      cont.innerHTML = '<button class="btn-mini" id="btnSyncVik" onclick="sincronizarVik(this)">🔄 Sincronizar con Vik ahora</button><span>Vik Booking: ' + estado + '</span>' + aviso + despierta;
     } catch (_) {}
   }
   async function sincronizarVik(btn) {

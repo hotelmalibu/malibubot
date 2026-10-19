@@ -146,6 +146,13 @@ export const config = {
     // Archivo .pem opcional con certificados intermedios EXTRA (ademas de los de src/vikbooking/certificados/)
     // para cuando el hosting manda el certificado SSL de la web sin su intermedio.
     caExtra: (process.env.VIK_SYNC_CA_EXTRA || '').trim(),
+    // «Despertador» de la IA de Vik (contestador de mensajes de Booking): llama cada pocos minutos a la tarea
+    // programada de VikBooking (index.php?option=com_vikbooking&task=crontab); en Joomla 3 nadie la llama sola.
+    // Vacio VIK_CRON_URL = la misma web de VIK_SYNC_URL. VIK_CRON_ACTIVO=false lo apaga.
+    cronActivo: (process.env.VIK_CRON_ACTIVO || 'true') !== 'false',
+    cronUrl: (process.env.VIK_CRON_URL || '').trim(),
+    cronMinutos: Math.max(1, parseInt(process.env.VIK_CRON_MIN || '5', 10) || 5),
+    cronTimeoutMs: Math.max(5000, parseInt(process.env.VIK_CRON_TIMEOUT_MS || '60000', 10) || 60000),
   },
 
   // Meta semanal de reservas (valor inicial; se puede cambiar desde el panel).

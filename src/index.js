@@ -38,6 +38,7 @@ import { iniciarDB, dbCargar, dbActivo, dbCargarMetricas, dbCargarAjustes, dbCar
 import { hidratarCorreos } from './correo/enviar.js';
 import { hidratarVikAvisos, procesarConfirmacion, claveValida, registrarEstadoWhatsApp } from './vikbooking/confirmada.js';
 import { programarSync } from './vikbooking/sincronizar.js';
+import { programarDespertador } from './vikbooking/despertar.js';
 import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
@@ -346,6 +347,8 @@ async function arrancar() {
   //    un solo mensaje por reserva confirmada (9 a. m. – 8 p. m. Colombia).
   // Lectura directa de las reservas de Vik Booking (Booking, Expedia, web), si hay VIK_SYNC_URL.
   programarSync();
+  // «Despierta» cada 5 min a la IA de Vik (contestador de mensajes de Booking), que en Joomla 3 no se activa sola.
+  programarDespertador();
 
   const recordar = () => enviarRecordatorios().catch((e) => console.error('[recordatorio]', e.message));
   setTimeout(recordar, 3 * 60 * 1000);

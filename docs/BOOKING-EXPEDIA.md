@@ -69,6 +69,21 @@ las reservas en proceso, rechazadas ni canceladas. Usa el **mismo periodo** que 
 reserva): sus botones y los de esa sección están sincronizados. Los números salen de `GET /api/origenes` (campo `noches` de cada canal);
 prueba: `node scripts/probar-franja-canales.js`. (La primera versión contaba habitaciones, no noches; se cambió a pedido del dueño el 14-oct-2026.)
 
+## Mensajes de Booking contestados por la IA de Vik (canal AI de e4jConnect)
+
+Los mensajes de los huéspedes de Booking.com llegan a Vik Booking (Escritorio → widget «Guest Messages»). Desde el 18-oct-2026 el hotel tiene el **canal AI de e4jConnect**
+(AI Service, vigente hasta el 8-abr-2027) con **30 respuestas modelo** cargadas (`docs/BOOKING-IA-RESPUESTAS.md`) y el **Messaging Auto-Responder** encendido en
+Vik Channel Manager → Settings. Las **primeras 20 respuestas son borradores**: aparecen en la caja de respuesta de la conversación; recepción las revisa, las edita
+y las envía. Pasadas 20 enviadas, el envío automático se desbloquea y ya no se puede volver a borradores. Cada borrador o envío deja un aviso en el Centro de
+notificaciones (grupo «AI»). Para apagarlo: Settings → «Messaging Auto-Responder» (y usar el botón «AI» de cada conversación si se quiere ayuda manual).
+
+**El despertador.** El contestador trabaja con las tareas programadas de VikBooking, y en Joomla 3 nadie las llama solo. Por eso MALIBUBOT (`src/vikbooking/despertar.js`)
+hace un GET cada 5 minutos a `https://www.hotelmalibu.co/index.php?option=com_vikbooking&task=crontab` (responde 200 sin cuerpo), con `User-Agent: MALIBUBOT-cron/1.0`
+(el firewall de la web rechaza lo que no trae User-Agent) y el mismo plan B del certificado SSL de la sincronización. Se enciende solo si hay `VIK_SYNC_URL`;
+variables opcionales: `VIK_CRON_ACTIVO=false` (apagarlo), `VIK_CRON_URL` (otra dirección), `VIK_CRON_MIN` (minutos, 5 por defecto), `VIK_CRON_TIMEOUT_MS`.
+En el Dashboard, bajo «Reservas por canal de venta», se ve «IA de Vik (mensajes de Booking): despierta cada 5 min · última llamada hace N min» o, si falla, el motivo en rojo
+(p. ej. «el firewall de la web bloqueó la llamada» si responde 465/466). Si el hosting configura su propio cron a esa dirección, el despertador sobra pero no estorba.
+Prueba: `node scripts/probar-despertador.js`.
 ## Si las reservas de Booking o Expedia no aparecen en el panel
 
 La pasarela `malibubot.php` solo avisa cuando Vik Booking la llama, y Vik no siempre lo

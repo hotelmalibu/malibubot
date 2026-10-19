@@ -73,35 +73,38 @@ export function intermediosConocidos() {
   return lista;
 }
 
-/** Texto para el panel: que fallo, en palabras del dueño (fetch solo dice "fetch failed"). */
-export function describirErrorDeRed(err) {
+/**
+ * Texto para el panel: que fallo, en palabras del dueño (fetch solo dice "fetch failed").
+ * @param opts  { variable: nombre de la variable de Render con la direccion, timeoutMs: tiempo maximo usado }
+ */
+export function describirErrorDeRed(err, { variable = 'VIK_SYNC_URL', timeoutMs = config.vik.syncTimeoutMs } = {}) {
   const codigo = codigoDe(err);
   const nombre = err?.name || '';
   if (ERRORES_DE_CADENA.has(codigo)) return `No se pudo verificar el certificado SSL de la web (${codigo}): el hosting lo instaló sin su certificado intermedio.`;
   if (codigo === 'CERT_HAS_EXPIRED') return 'El certificado SSL de la web está vencido (CERT_HAS_EXPIRED).';
-  if (codigo === 'ERR_TLS_CERT_ALTNAME_INVALID') return 'El certificado SSL no corresponde al dominio de VIK_SYNC_URL (ERR_TLS_CERT_ALTNAME_INVALID).';
+  if (codigo === 'ERR_TLS_CERT_ALTNAME_INVALID') return `El certificado SSL no corresponde al dominio de ${variable} (ERR_TLS_CERT_ALTNAME_INVALID).`;
   if (codigo === 'DEPTH_ZERO_SELF_SIGNED_CERT' || codigo === 'SELF_SIGNED_CERT_IN_CHAIN') return `La web usa un certificado SSL no confiable (${codigo}).`;
-  if (codigo === 'ENOTFOUND' || codigo === 'EAI_AGAIN') return `No se encontró el dominio de VIK_SYNC_URL (${codigo}): revisa la dirección.`;
+  if (codigo === 'ENOTFOUND' || codigo === 'EAI_AGAIN') return `No se encontró el dominio de ${variable} (${codigo}): revisa la dirección.`;
   if (codigo === 'ECONNREFUSED' || codigo === 'ECONNRESET') return `La web cortó la conexión (${codigo}).`;
   if (nombre === 'TimeoutError' || nombre === 'AbortError' || codigo === 'ETIMEDOUT' || codigo === 'UND_ERR_CONNECT_TIMEOUT') {
-    return `La web no respondió a tiempo (más de ${Math.round(config.vik.syncTimeoutMs / 1000)} s).`;
+    return `La web no respondió a tiempo (más de ${Math.round(timeoutMs / 1000)} s).`;
   }
   const mensaje = String(err?.message || 'error desconocido');
   return codigo && !mensaje.includes(codigo) ? `${mensaje} (${codigo})` : mensaje;
 }
 
-async function pedirNormal(url, headers) {
-  const resp = await fetch(url, { headers, signal: AbortSignal.timeout(config.vik.syncTimeoutMs) });
+async function pedirNormal(url, headers, timeoutMs) {
+  const resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
   return { status: resp.status, ok: resp.ok, texto: await resp.text(), redirige: '' };
 }
 
-function pedirConIntermedios(url, headers) {
+function pedirConIntermedios(url, headers, timeoutMs) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
       method: 'GET',
       headers,
       ca: [...rootCertificates, ...intermediosConocidos()],
-      signal: AbortSignal.timeout(config.vik.syncTimeoutMs),
+      signal: AbortSignal.timeout(timeoutMs),
     }, (res) => {
       const partes = [];
       let bytes = 0;
@@ -123,30 +126,40 @@ function pedirConIntermedios(url, headers) {
   });
 }
 
+/**
+ * GET a la web del hotel: primero la conexion normal; si el certificado SSL de la web llega incompleto,
+ * reintenta con los intermedios guardados (ver arriba). `ctx.cadenaPropia` recuerda que ya hizo falta
+ * (las siguientes peticiones van directo al plan B). Lanza un Error con un mensaje en español si no hay respuesta.
+ * @returns {Promise<{status:number, ok:boolean, texto:string, redirige:string}>}
+ */
+export async function pedirWeb(url, headers, ctx = {}, { timeoutMs = config.vik.syncTimeoutMs, variable = 'VIK_SYNC_URL' } = {}) {
+  let resp = null;
+  if (!ctx.cadenaPropia) {
+    try {
+      resp = await pedirNormal(url, headers, timeoutMs);
+    } catch (err) {
+      if (!ERRORES_DE_CADENA.has(codigoDe(err)) || url.protocol !== 'https:') throw new Error(describirErrorDeRed(err, { variable, timeoutMs }));
+    }
+  }
+  if (!resp) { // cadena incompleta (o ya se vio en esta lectura): se usan los intermedios guardados
+    try {
+      resp = await pedirConIntermedios(url, headers, timeoutMs);
+      ctx.cadenaPropia = true;
+    } catch (err) {
+      const cadena = ERRORES_DE_CADENA.has(codigoDe(err));
+      throw new Error(describirErrorDeRed(err, { variable, timeoutMs }) + (cadena ? ' El bot también lo intentó con sus certificados intermedios guardados (src/vikbooking/certificados).' : ''));
+    }
+  }
+  return resp;
+}
+
 async function pedirPagina(desdeId, ctx) {
   const url = new URL(config.vik.syncUrl);
   url.searchParams.set('desde_id', String(desdeId));
   url.searchParams.set('limite', '200');
   // El firewall de la web responde 465 «Access Denied» a las peticiones SIN User-Agent (https.request no manda ninguno).
   const headers = { 'X-Malibubot-Key': config.vik.syncKey, Accept: 'application/json', 'User-Agent': 'MALIBUBOT-sync/1.0' };
-
-  let resp = null;
-  if (!ctx.cadenaPropia) {
-    try {
-      resp = await pedirNormal(url, headers);
-    } catch (err) {
-      if (!ERRORES_DE_CADENA.has(codigoDe(err)) || url.protocol !== 'https:') throw new Error(describirErrorDeRed(err));
-    }
-  }
-  if (!resp) { // cadena incompleta (o ya se vio en esta lectura): se usan los intermedios guardados
-    try {
-      resp = await pedirConIntermedios(url, headers);
-      ctx.cadenaPropia = true;
-    } catch (err) {
-      const cadena = ERRORES_DE_CADENA.has(codigoDe(err));
-      throw new Error(describirErrorDeRed(err) + (cadena ? ' El bot también lo intentó con sus certificados intermedios guardados (src/vikbooking/certificados).' : ''));
-    }
-  }
+  const resp = await pedirWeb(url, headers, ctx);
 
   let d;
   try { d = JSON.parse(resp.texto); } catch { d = null; }
