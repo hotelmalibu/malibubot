@@ -11,6 +11,8 @@ import { store } from '../almacen/conversaciones.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { transferenciaPendienteDe } from '../pagos/transferencia.js';
+import { iaCaida } from './agente.js';
+import { primerNombre } from './perfil.js';
 
 const VENTANA_WA_MS = 24 * 60 * 60 * 1000; // WhatsApp: solo texto libre dentro de 24 h
 const MARGEN_MS = 22 * 60 * 60 * 1000;     // el automatico no se envia pasadas 22 h
@@ -22,11 +24,6 @@ export function waIdsCerrados() {
     if ((r.estado === 'pagado' || r.estado === 'pendiente_hotel') && r.waId) s.add(r.waId);
   }
   return s;
-}
-
-function primerNombre(nombre) {
-  const n = (nombre || '').trim().split(/\s+/)[0];
-  return n && n.length <= 20 ? n : '';
 }
 
 /**
@@ -87,6 +84,9 @@ export async function enviarEmpujon(waId) {
 /** Tarea periodica: seguimiento automatico a las calientes que ya toca. */
 export async function enviarSeguimientos() {
   if (!config.seguimiento.activo) return;
+  // Con la IA caida el «quedé pendiente de tu reserva» solo gastaria el UNICO seguimiento de cada cliente y, si responde,
+  // recibiria otra vez el mensaje de espera: se espera a que Valentina vuelva a contestar.
+  if (iaCaida()) { console.log('[seguimiento] La IA no está pudiendo responder; los seguimientos automáticos esperan a que vuelva.'); return; }
   const minMs = Math.max(0.5, config.seguimiento.horas) * 60 * 60 * 1000;
   const lista = store.paraSeguimiento({ cerrados: waIdsCerrados(), minMs, maxMs: MARGEN_MS, limite: 20 });
   for (const c of lista) {

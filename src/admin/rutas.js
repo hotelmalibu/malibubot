@@ -609,7 +609,9 @@ adminRouter.post('/api/transferencia/probar', async (req, res) => {
 
 // -------- Salud de Valentina (IA): ultimos errores al llamar a Claude y prueba de conexion --------
 adminRouter.get('/api/ia/estado', (_req, res) => {
-  res.json({ ok: true, ...saludIA() });
+  // sinRespuesta = chats cuyo ultimo mensaje de la casa fue el de espera (nadie les ha contestado de verdad).
+  const sinRespuesta = store.listar().filter((c) => c.sinRespuestaIA).length;
+  res.json({ ok: true, ...saludIA(), sinRespuesta });
 });
 adminRouter.post('/api/ia/diag', async (_req, res) => {
   res.json({ ...(await probarIA()), salud: saludIA() });

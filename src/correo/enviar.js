@@ -271,6 +271,32 @@ export async function enviarComprobanteTransferencia(reserva, archivo, extra = {
   });
 }
 
+/**
+ * Aviso INTERNO para recepcion y las copias (+ CORREO_ALERTAS), p. ej. «Valentina no puede responder». Todo texto va escapado.
+ * @param {{asunto:string, titulo:string, intro:string, filas?:Array<[string, string|number]>, pasos?:string[], tono?:'alerta'|'ok'}} a
+ * @returns {Promise<boolean>} true si Resend lo acepto
+ */
+export async function enviarAlertaInterna({ asunto, titulo, intro, filas = [], pasos = [], tono = 'alerta' }) {
+  const destinos = [...new Set([...destinosRecepcion(), ...config.correo.alertas])];
+  if (!destinos.length) return false;
+  const c = tono === 'ok' ? { fondo: '#e4f2ea', borde: '#cbe6d6', texto: '#2f8f5b' } : { fondo: '#f7e6de', borde: '#ecc9ba', texto: '#a8452a' };
+  const fila = ([k, v]) =>
+    v || v === 0 ? `<tr><td style="padding:6px 10px;color:#6b6f77">${escaparHtml(k)}</td><td style="padding:6px 10px;font-weight:600;color:#2c2f34">${escaparHtml(v)}</td></tr>` : '';
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2c2f34">
+    <div style="border-bottom:2px solid #b8873a;padding-bottom:10px;margin-bottom:14px">
+      <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#9c6f2b;font-weight:700">MALIBUBOT · Hotel y Centro de Eventos Malibú</div>
+      <h2 style="margin:6px 0 0">${escaparHtml(titulo)}</h2>
+    </div>
+    <div style="margin:14px 0;padding:12px 14px;background:${c.fondo};border:1px solid ${c.borde};border-radius:10px;color:${c.texto};font-size:15px;line-height:1.5;font-weight:700">${escaparHtml(intro)}</div>
+    ${filas.length ? `<table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">${filas.map(fila).join('')}</table>` : ''}
+    ${pasos.length ? `<div style="margin:16px 0 4px;font-size:14px;line-height:1.55"><b>Qué hacer</b><ol style="margin:6px 0 0 18px;padding:0">${pasos.map((p) => `<li>${escaparHtml(p)}</li>`).join('')}</ol></div>` : ''}
+    <div style="margin-top:10px;font-size:14px"><a href="${escaparHtml(config.publicUrl)}/admin" style="color:#9c6f2b;font-weight:700">Abrir el panel</a></div>
+    <p style="font-size:12px;color:#9aa0a8;margin-top:16px">Aviso automático de MALIBUBOT · Hotel y Centro de Eventos Malibú · Sincelejo, Sucre, Colombia</p>
+  </div>`;
+  return enviarCorreo({ to: destinos, subject: asunto, html });
+}
+
 /** Diagnostico: envia un correo de prueba y devuelve la respuesta de Resend. */
 export async function probarCorreo(to) {
   if (!config.correo.resendApiKey) {

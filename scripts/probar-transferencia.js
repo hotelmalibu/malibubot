@@ -328,7 +328,7 @@ const respIA = await responderIA(CLIA);
 const peticion1 = claude.peticiones[nPetAntes], peticion2 = claude.peticiones[nPetAntes + 1];
 const sistemaWA = peticion1?.system?.[0]?.text || '';
 ok('el asistente recibe la herramienta nueva', (peticion1?.tools || []).some((x) => x.name === 'reservar_pago_transferencia' && x.input_schema.required.includes('nombre')));
-ok('en WhatsApp el prompt ofrece las TRES formas de pago y explica la transferencia', /tres opciones/.test(sistemaWA) && /TRANSFERENCIA bancaria a Davivienda o Bancolombia/.test(sistemaWA) && /reservar_pago_transferencia/.test(sistemaWA) && /NO inventes números de cuenta/.test(sistemaWA));
+ok('en WhatsApp el prompt ofrece pago en línea o en el hotel y deja la transferencia para cuando el cliente la pide', /dos formas de pago de siempre/.test(sistemaWA) && /NO la ofrezcas tú/.test(sistemaWA) && /TRANSFERENCIA bancaria a Davivienda o Bancolombia/.test(sistemaWA) && /reservar_pago_transferencia/.test(sistemaWA) && /NO inventes números de cuenta/.test(sistemaWA));
 ok('el prompt no dejó huecos ni "undefined"', !/undefined|\[object/.test(sistemaWA));
 const resultadoTool = JSON.stringify(peticion2?.messages?.at(-1)?.content || '');
 ok('la herramienta se ejecutó y el asistente recibió la instrucción (certificados enviados, reserva pendiente)', /tool_result/.test(resultadoTool) && /YA se enviaron/.test(resultadoTool) && /PENDIENTE/.test(resultadoTool));

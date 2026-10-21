@@ -44,6 +44,7 @@ import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
 import { enviarRecordatorios } from './ia/recordatorio.js';
 import { responderIA } from './ia/agente.js';
+import { decidirRespaldo } from './ia/respaldo.js';
 import { hidratarOcupacion, refrescarVistas } from './datos/ocupacion.js';
 import { verificarWebhook as verificarWebhookRapyd, consultarCheckout, rapydActivo } from './pagos/rapyd.js';
 import { confirmarPago } from './pagos/confirmar.js';
@@ -197,12 +198,17 @@ app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
         continue;
       }
 
-      // Modo bot -> responde la IA (Claude). Respaldo si no hay IA disponible.
+      // Modo bot -> responde la IA (Claude). Si no puede (sin saldo, clave mala, Claude caido...: ver «[ia]» en el log y
+      // el aviso del panel) se manda UN mensaje de espera con el nombre del cliente; no se repite el mismo mensaje
+      // y el chat queda marcado «sin respuesta» en el panel para que recepcion lo atienda.
       let respuesta = await responderIA(m.from);
       if (!respuesta) {
-        respuesta =
-          'Gracias por escribir al Hotel Malibú. En un momento te atendemos. ' +
-          'Para reservas de habitaciones cuéntame tus fechas y número de personas.';
+        const d = decidirRespaldo(store.obtener(m.from), m.nombre);
+        if (d.omitir) {
+          console.log(`[ia] ${m.from}: la IA sigue sin poder responder; el mensaje de espera ya se envió hace poco, no se repite.`);
+          continue;
+        }
+        respuesta = d.texto;
       }
 
       await enviarTexto(m.from, respuesta);

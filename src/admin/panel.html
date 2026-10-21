@@ -356,6 +356,13 @@
   .pill { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; }
   .pill.bot { background: var(--oro-suave); color: var(--oro-profundo); }
   .pill.humano { background: var(--alerta-suave); color: var(--alerta); }
+  .pill.sinresp { background: var(--alerta); color: #fff; }
+  /* Franja roja global: Valentina (la IA) no esta pudiendo responder */
+  .aviso-ia { display: none; background: var(--alerta-suave); border-bottom: 2px solid var(--alerta); color: #6e2a15; padding: 11px 22px; font-size: 13.5px; line-height: 1.5; flex: none; max-height: 45vh; overflow-y: auto; }
+  .aviso-ia b { color: #55200f; }
+  .aviso-ia .acc { margin-top: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .aviso-ia.bien { background: var(--verde-suave); border-bottom-color: var(--verde); color: #1f5f3d; }
+  .aviso-ia.bien b { color: #174a2f; }
   .badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--alerta); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
   .dot-alerta { width: 8px; height: 8px; border-radius: 50%; background: var(--alerta); }
   @media (prefers-reduced-motion: no-preference) { .item.alerta .dot-alerta { animation: latido 1.6s ease-in-out infinite; } }
@@ -444,6 +451,7 @@
       <a class="salir" href="/admin/logout">Salir</a>
     </div>
   </header>
+  <div id="avisoIA" class="aviso-ia" role="alert"></div>
 
   <main>
     <!-- ============ DASHBOARD ============ -->
@@ -1755,12 +1763,13 @@
   function itemHTML(c, alerta) {
     const nombre = c.nombre || c.waId;
     const pill = c.modo === 'humano' ? `<span class="pill humano">HUMANO</span>` : `<span class="pill bot">BOT</span>`;
+    const sinResp = c.sinRespuestaIA ? `<span class="pill sinresp" title="Valentina no pudo responderle: solo recibió el mensaje de espera">SIN RESPUESTA</span>` : '';
     const badge = c.noLeidos ? `<span class="badge">${c.noLeidos}</span>` : '';
     const dot = alerta ? `<span class="dot-alerta"></span>` : '';
     const activa = c.waId === seleccion ? ' activa' : '';
     return `<div class="item${alerta ? ' alerta' : ''}${activa}" data-wa="${esc(c.waId)}">
       <div class="nom">${esc(nombre)}</div><div class="hora">${fmtHora(c.ultimaActividad)}</div>
-      <div class="prev">${esc(c.ultimoTexto)}</div><div class="marcas">${dot}${badge}${pill}</div></div>`;
+      <div class="prev">${esc(c.ultimoTexto)}</div><div class="marcas">${dot}${badge}${sinResp}${pill}</div></div>`;
   }
   async function abrir(waId) { seleccion = waId; document.getElementById('vistaChats').classList.add('viendo'); await cargarConv(); pintarLista(); }
   async function cargarConv() {
@@ -2224,8 +2233,48 @@
     return html;
   }
 
+  // ---------- Franja global: Valentina (la IA) no esta pudiendo responder ----------
+  let ultimaPruebaIA = '', avisoBienHasta = 0;
+  async function cargarSaludIA() {
+    const el = document.getElementById('avisoIA'); if (!el) return;
+    try {
+      const r = await fetch('/admin/api/ia/estado'); if (!r.ok) return;
+      const s = await r.json();
+      if (!s.caida || !s.explicacion) { if (Date.now() < avisoBienHasta) return; el.classList.remove('bien'); el.style.display = 'none'; return; }
+      el.classList.remove('bien');
+      const desde = s.desde ? new Date(s.desde).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
+      const pasos = (s.explicacion.pasos || []).map((p) => '<li>' + esc(p) + '</li>').join('');
+      const esperan = s.sinRespuesta ? '<b>' + s.sinRespuesta + '</b> ' + (s.sinRespuesta === 1 ? 'cliente espera' : 'clientes esperan') + ' respuesta (Conversaciones → «Necesitan atención»). ' : '';
+      el.innerHTML = '<div><b>⚠️ Valentina no está pudiendo responder' + (desde ? ' desde las ' + esc(desde) : '') + '.</b> ' + esc(s.explicacion.causa) + '</div>' +
+        '<div style="margin-top:3px">' + esperan + 'Mientras tanto los clientes solo reciben un mensaje de espera.</div>' +
+        (pasos ? '<ol style="margin:6px 0 0 18px;padding:0">' + pasos + '</ol>' : '') +
+        '<div class="acc"><button class="btn-mini" onclick="probarIAPanel(this)">🔌 Probar conexión ahora</button><span id="resProbarIA">' + ultimaPruebaIA + '</span></div>';
+      el.style.display = 'block';
+    } catch (_) {}
+  }
+  async function probarIAPanel(btn) {
+    btn.disabled = true; btn.textContent = 'Probando…';
+    try {
+      const r = await fetch('/admin/api/ia/diag', { method: 'POST' });
+      const d = await r.json();
+      const fallo = Object.values(d.intentos || {}).find((x) => !x.ok);
+      ultimaPruebaIA = d.ok ? '✅ La conexión funciona: Valentina ya puede responder.' : '❌ Sigue fallando: ' + esc((fallo && (fallo.mensaje || fallo.tipo)) || d.error || 'sin detalle');
+    } catch (_) { ultimaPruebaIA = '❌ No se pudo hacer la prueba (error de red).'; }
+    const bien = ultimaPruebaIA.startsWith('✅');
+    if (bien) avisoBienHasta = Date.now() + 15000; // la franja roja se apaga: se deja 15 s un aviso verde para que se vea el resultado
+    await cargarSaludIA(); cargarLista();
+    const el = document.getElementById('avisoIA');
+    if (bien && el) {
+      el.classList.add('bien');
+      el.innerHTML = '<div><b>✅ Listo: Valentina ya puede responder.</b> Los chats marcados «SIN RESPUESTA» siguen esperando: contéstales a mano (Conversaciones → «Necesitan atención»).</div>';
+      el.style.display = 'block';
+      setTimeout(() => { avisoBienHasta = 0; ultimaPruebaIA = ''; cargarSaludIA(); }, 15000);
+    } else { const res = document.getElementById('resProbarIA'); if (res) res.innerHTML = ultimaPruebaIA; }
+  }
+
   // Arranque + ciclos de actualización
-  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarOrigenes(); cargarLista();
+  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarOrigenes(); cargarLista(); cargarSaludIA();
+  setInterval(cargarSaludIA, 30000);
   setInterval(() => {
     cargarLista();
     if (vistaActual === 'chats' && seleccion) cargarConv();

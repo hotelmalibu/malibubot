@@ -11,6 +11,7 @@
 //  Sin base de datos, se comporta como antes: se borra al reiniciar.
 // ============================================================
 import { dbActivo, dbGuardarConversacion, dbGuardarMensaje } from './db.js';
+import { sinRespuestaIA } from '../ia/respaldo.js';
 import { diaColombia } from '../util/fechas.js';
 
 const MAX_MENSAJES = 300; // tope por conversacion para acotar memoria
@@ -215,7 +216,9 @@ export const store = {
         modo: c.modo,
         escalado: c.escalado,
         noLeidos: c.noLeidos,
-        necesitaAtencion: c.escalado || c.modo === 'humano',
+        // «Sin respuesta»: lo ultimo que recibio el cliente de la casa fue el mensaje de espera (la IA no pudo contestar).
+        necesitaAtencion: c.escalado || c.modo === 'humano' || sinRespuestaIA(c),
+        sinRespuestaIA: sinRespuestaIA(c),
         ultimaActividad: ultimo ? ultimo.ts : c.ultimaActividad,
         ultimoTexto: ultimo?.texto || '',
         ultimoAutor: ultimo?.autor || '',

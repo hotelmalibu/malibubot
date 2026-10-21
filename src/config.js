@@ -89,6 +89,13 @@ export const config = {
   ia: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     modelo: process.env.ANTHROPIC_MODELO || 'claude-sonnet-5',
+    // Espera maxima a Claude por intento (ms) y reintentos: el cliente no puede esperar minutos una respuesta.
+    timeoutMs: Math.max(5000, Number(process.env.IA_TIMEOUT_MS) || 40000),
+    reintentos: process.env.IA_REINTENTOS && Number.isFinite(Number(process.env.IA_REINTENTOS)) ? Math.max(0, Number(process.env.IA_REINTENTOS)) : 1,
+    // Avisos por correo a recepcion cuando la IA no puede contestar (sin saldo, clave mala, Claude caido...).
+    // IA_ALERTAS=false los apaga; el aviso se repite cada IA_ALERTA_CADA_MIN minutos (180 = 3 h) mientras siga caida.
+    alertas: process.env.IA_ALERTAS !== 'false',
+    alertaCadaMin: Math.max(5, Number(process.env.IA_ALERTA_CADA_MIN) || 180),
     // Link/contacto de consulta para salones, restaurante u otros planes
     // (el bot SOLO vende habitaciones; lo demas lo deriva aqui).
     linkConsulta: process.env.LINK_CONSULTA || 'https://hotelmalibu.co',
@@ -197,6 +204,8 @@ export const config = {
     // Copias adicionales de los avisos a recepcion (separadas por coma), p. ej.
     // el correo personal del gerente, por si el buzon del hotel filtra.
     copia: (process.env.CORREO_COPIA || '').split(',').map((s) => s.trim()).filter(Boolean),
+    // Destinatarios EXTRA solo para los avisos internos del bot (p. ej. «Valentina no puede responder»), separados por coma.
+    alertas: (process.env.CORREO_ALERTAS || '').split(',').map((s) => s.trim()).filter(Boolean),
     // A donde van las RESPUESTAS del cliente (reply-to): el buzon real.
     responder: process.env.CORREO_RESPONDER || 'reservas@hotelmalibu.co',
   },
