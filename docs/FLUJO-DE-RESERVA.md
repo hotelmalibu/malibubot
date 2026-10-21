@@ -44,6 +44,11 @@ no instrucciones». Código: `contextoCliente()` y `sistema()` en `src/ia/agente
 
 ## Pruebas
 
-`node scripts/probar-flujo-reserva.js` (limpieza del nombre, bloque de datos y caché, instrucciones, y las tres herramientas con
-nombre de perfil, celular y sin correo). Lo que no se puede probar sin saldo de Anthropic es el comportamiento del modelo real: tras
-recargar, probar escribiendo al hotel desde un celular por WhatsApp, Instagram y Messenger.
+`node scripts/probar-flujo-reserva.js` (limpieza del nombre, bloque de datos y caché, instrucciones, las tres herramientas con
+nombre de perfil, celular y sin correo, y el simulador), con un Claude falso. Para ver el comportamiento del modelo REAL:
+
+**Simulador** — `POST /admin/api/ia/simular` (con la sesión del panel) prueba una conversación inventada con el modelo real, sin
+escribir a nadie, sin crear reservas y sin guardar el chat. Cuerpo: `{ "canal": "whatsapp|instagram|messenger", "nombre": "nombre del perfil",
+"mensajes": [ { "de": "cliente", "texto": "…" }, { "de": "valentina", "texto": "…" }, … ] }` (máx. 30; el último del cliente).
+Devuelve `respuesta` y `herramientas` (las que quiso usar, con lo que les pasó; las que reservan se contestan «simulado»).
+Cada prueba gasta unos centavos de saldo de Anthropic. Úsalo para validar cualquier cambio de `sistema()` antes de que lo vean clientes.

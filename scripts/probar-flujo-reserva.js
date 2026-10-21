@@ -189,6 +189,20 @@ const simConv = await A.simularIA({ canal: 'messenger', nombre: 'Luis', mensajes
 const msgsSim = peticionesClaude.at(-1).messages;
 ok('una conversación con idas y vueltas llega al modelo en orden y con los roles correctos', simConv.ok && msgsSim.length === 3 && msgsSim[0].role === 'user' && msgsSim[1].role === 'assistant' && msgsSim[2].role === 'user' && /precio/.test(msgsSim[2].content));
 ok('el simulador no cuenta en la salud de la IA', A.saludIA().ok === okAntes);
+guion.push([{ type: 'tool_use', id: 'tu_c', name: 'consultar_disponibilidad', input: { fecha: IN } }], [{ type: 'text', text: 'Sí hay cupo 😊' }]);
+const simConsulta = await silencio(() => A.simularIA({ canal: 'whatsapp', nombre: 'Rita', mensajes: [{ de: 'cliente', texto: '¿hay cupo?' }] }));
+ok('lo que consulta el libro (que no cambia nada) va de verdad y queda en la traza; no cuenta como acción', simConsulta.ok && simConsulta.consultas.length === 1 && simConsulta.consultas[0].herramienta === 'consultar_disponibilidad' && simConsulta.herramientas.length === 0, JSON.stringify(simConsulta));
+
+console.log('\n— Si Claude termina sin escribir nada, se vuelve a pedir UNA vez —');
+store.registrarEntrante({ waId: '573001110009', nombre: 'Rita Gómez', tipo: 'text', texto: 'hola, ¿tienen habitación?' });
+const erroresAntes = A.saludIA().errores, nPetVacio = peticionesClaude.length;
+guion.push([], [{ type: 'text', text: 'Hola de nuevo 😊' }]);
+const rVacio = await silencio(() => A.responderIA('573001110009'));
+ok('primera respuesta vacía y segunda buena: el cliente recibe la buena (no el mensaje de espera)', rVacio === 'Hola de nuevo 😊' && peticionesClaude.length - nPetVacio === 2 && A.saludIA().errores === erroresAntes, `${rVacio} · ${peticionesClaude.length - nPetVacio} peticiones`);
+const nPetVacio2 = peticionesClaude.length;
+guion.push([], []);
+const rVacio2 = await silencio(() => A.responderIA('573001110009'));
+ok('si vuelve a salir vacía, se rinde (solo 2 intentos) y queda anotado el motivo', rVacio2 === null && peticionesClaude.length - nPetVacio2 === 2 && A.saludIA().recientes[0]?.tipo === 'sin_texto', `${rVacio2} · ${peticionesClaude.length - nPetVacio2} peticiones`);
 
 [graphSrv, claudeSrv, resendSrv, rapydSrv].forEach((s) => s.close());
 console.log(fallos === 0 ? '\n🎉 Todas las verificaciones pasaron.' : `\n💥 ${fallos} verificación(es) fallaron.`);
