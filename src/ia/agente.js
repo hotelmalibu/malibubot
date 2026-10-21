@@ -90,8 +90,39 @@ function buscarTipo(nombre) {
   );
 }
 
-const cliente = config.ia.apiKey ? new Anthropic({ apiKey: config.ia.apiKey }) : null;
+// timeout: si Claude no contesta en 45 s se corta (el valor por defecto del SDK es 10 minutos y el cliente esperaria todo ese tiempo).
+const cliente = config.ia.apiKey ? new Anthropic({ apiKey: config.ia.apiKey, timeout: 45000 }) : null;
 const MAX_MENSAJES = 24; // historial que enviamos (acota costo)
+
+// ---- Salud de la IA: que paso en las ultimas llamadas a Claude (en memoria; se ve en el panel) ----
+const salud = { ok: 0, errores: 0, seguidos: 0, ultimoOk: 0, recientes: [] };
+
+/** Detalle legible de un error del SDK de Anthropic (sin datos secretos). */
+function detalleDeError(err) {
+  const cuerpo = err?.error?.error || err?.error || {};
+  return {
+    ts: Date.now(),
+    estado: err?.status ?? null,
+    tipo: String(cuerpo.type || err?.name || 'error').slice(0, 60),
+    mensaje: String(cuerpo.message || err?.message || err).slice(0, 300),
+    idPeticion: String(err?.requestID || err?.request_id || err?.headers?.['request-id'] || '').slice(0, 60),
+  };
+}
+function anotarOkIA() { salud.ok++; salud.seguidos = 0; salud.ultimoOk = Date.now(); }
+function anotarErrorIA(err, waId = '') {
+  const d = detalleDeError(err);
+  salud.errores++;
+  salud.seguidos++;
+  salud.recientes.unshift({ ...d, chat: String(waId).replace(/\d(?=\d{4})/g, '•') });
+  salud.recientes.length = Math.min(salud.recientes.length, 30);
+  console.error(`[ia] No se pudo responder (${d.estado ?? 'sin código'} · ${d.tipo}): ${d.mensaje}${d.idPeticion ? ` · id ${d.idPeticion}` : ''}`);
+  return d;
+}
+
+/** Estado de la IA para el panel: cuantas llamadas salieron bien o mal y los ultimos errores. */
+export function saludIA() {
+  return { ...salud, recientes: salud.recientes.slice(0, 10), modelo: config.ia.modelo, claveConfigurada: !!cliente };
+}
 
 function catalogoTexto() {
   return TIPOS_HABITACION.map(
@@ -623,7 +654,10 @@ function construirMensajes(conv) {
  * @returns {Promise<string|null>} el texto a enviar, o null si no se pudo.
  */
 export async function responderIA(waId) {
-  if (!cliente) return null; // sin API key -> respaldo (eco)
+  if (!cliente) { // sin API key -> respaldo (eco)
+    anotarErrorIA({ name: 'sin_clave', message: 'Falta ANTHROPIC_API_KEY en Render: la IA no puede responder.' }, waId);
+    return null;
+  }
   const conv = store.obtener(waId);
   if (!conv) return null;
 
@@ -670,11 +704,51 @@ export async function responderIA(waId) {
         .join('\n')
         .trim();
       const limpio = limpiarWhatsApp(texto);
-      return (esSocial(waId) ? limpio.replace(/\*+/g, '') : limpio) || null;
+      const final = (esSocial(waId) ? limpio.replace(/\*+/g, '') : limpio) || null;
+      if (!final) {
+        anotarErrorIA({ name: 'sin_texto', message: `Claude terminó (${resp.stop_reason || 'sin motivo'}) sin escribir ningún texto para el cliente.` }, waId);
+        return null;
+      }
+      anotarOkIA();
+      return final;
     }
+    anotarErrorIA({ name: 'sin_respuesta_final', message: 'Claude siguió pidiendo herramientas durante 4 vueltas y no dio una respuesta final.' }, waId);
     return null;
   } catch (err) {
-    console.error('[ia] Error llamando a Claude:', err.message);
+    anotarErrorIA(err, waId);
     return null;
   }
+}
+
+/**
+ * Prueba la conexion con Claude (la usa el panel: POST /admin/api/ia/diag). Hace dos llamadas minimas:
+ * una sin nada (comprueba clave, saldo y modelo) y otra con las instrucciones y herramientas reales
+ * (comprueba que la peticion de Valentina es valida). No ejecuta herramientas ni toca reservas.
+ */
+export async function probarIA() {
+  const base = { modelo: config.ia.modelo, claveConfigurada: !!cliente };
+  if (!cliente) return { ...base, ok: false, intentos: { sinClave: { ok: false, tipo: 'sin_clave', mensaje: 'Falta ANTHROPIC_API_KEY en Render.' } } };
+  const pruebas = {
+    minimo: { model: config.ia.modelo, max_tokens: 16, messages: [{ role: 'user', content: 'Responde solo: ok' }] },
+    completo: {
+      model: config.ia.modelo,
+      max_tokens: 64,
+      system: [{ type: 'text', text: sistema(''), cache_control: { type: 'ephemeral' } }],
+      tools: HERRAMIENTAS,
+      tool_choice: { type: 'auto' },
+      messages: [{ role: 'user', content: 'Hola' }],
+    },
+  };
+  const intentos = {};
+  for (const [nombre, parametros] of Object.entries(pruebas)) {
+    const t0 = Date.now();
+    try {
+      const r = await cliente.messages.create(parametros);
+      intentos[nombre] = { ok: true, ms: Date.now() - t0, parada: r.stop_reason, tokensDeEntrada: r.usage?.input_tokens ?? null };
+    } catch (err) {
+      const { estado, tipo, mensaje, idPeticion } = detalleDeError(err);
+      intentos[nombre] = { ok: false, ms: Date.now() - t0, estado, tipo, mensaje, idPeticion };
+    }
+  }
+  return { ...base, ok: Object.values(intentos).every((x) => x.ok), intentos };
 }

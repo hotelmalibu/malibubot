@@ -33,6 +33,7 @@ import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { estadoSync, sincronizarConVik } from '../vikbooking/sincronizar.js';
 import { estadoDespertador } from '../vikbooking/despertar.js';
+import { saludIA, probarIA } from '../ia/agente.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import { resumenOrigenes, origenDe } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
@@ -604,6 +605,14 @@ adminRouter.post('/api/transferencia/probar', async (req, res) => {
     ? 'Todavía no hay certificados cargados.'
     : `WhatsApp no aceptó el envío${r.detalle ? ': ' + r.detalle : ''}. Si ese número no le ha escrito al bot en las últimas 24 h, escríbele primero y vuelve a probar.`;
   res.status(400).json({ ok: false, error: motivo });
+});
+
+// -------- Salud de Valentina (IA): ultimos errores al llamar a Claude y prueba de conexion --------
+adminRouter.get('/api/ia/estado', (_req, res) => {
+  res.json({ ok: true, ...saludIA() });
+});
+adminRouter.post('/api/ia/diag', async (_req, res) => {
+  res.json({ ...(await probarIA()), salud: saludIA() });
 });
 
 // -------- Diagnostico de canales (primer mensaje -> canal detectado) --------
