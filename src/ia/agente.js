@@ -711,6 +711,63 @@ function construirMensajes(conv) {
 }
 
 /**
+ * Corre a Valentina sobre una conversacion: llama a Claude (con el bucle de herramientas, maximo 4 vueltas) y devuelve el texto.
+ * `ejecutar` es quien corre las herramientas (en la simulacion no hace nada de verdad). Los errores de Claude suben a quien llama.
+ * @returns {Promise<{texto:string|null, motivo?:'sin_mensajes'|'sin_texto'|'sin_respuesta_final', parada?:string}>}
+ */
+async function correrAgente(waId, conv, ejecutar) {
+  const mensajes = construirMensajes(conv);
+  if (mensajes.length === 0) return { texto: null, motivo: 'sin_mensajes' };
+
+  // Bucle de tool-use (maximo 4 vueltas para acotar).
+  for (let vuelta = 0; vuelta < 4; vuelta++) {
+    const resp = await cliente.messages.create({
+      model: config.ia.modelo,
+      max_tokens: 1024,
+      // Cachea el prompt de sistema (grande y estable): ahorra ~90% en esos tokens de entrada en las llamadas
+      // siguientes. Los datos de ESTE cliente (su nombre de perfil, su celular) van en un segundo bloque, sin cache.
+      system: [
+        { type: 'text', text: sistema(canalSocialDe(waId)), cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: contextoCliente(conv, waId) },
+      ],
+      tools: HERRAMIENTAS,
+      tool_choice: { type: 'auto' },
+      messages: mensajes,
+    });
+    registrarUso(config.ia.modelo, resp.usage);
+
+    if (resp.stop_reason === 'tool_use') {
+      // Agrega el turno del asistente (con los tool_use) y ejecuta.
+      mensajes.push({ role: 'assistant', content: resp.content });
+      const resultados = [];
+      for (const bloque of resp.content) {
+        if (bloque.type === 'tool_use') {
+          const salida = await ejecutar(waId, bloque.name, bloque.input);
+          resultados.push({
+            type: 'tool_result',
+            tool_use_id: bloque.id,
+            content: JSON.stringify(salida),
+          });
+        }
+      }
+      mensajes.push({ role: 'user', content: resultados });
+      continue; // vuelve a llamar con los resultados
+    }
+
+    // Respuesta final: junta el texto.
+    const texto = resp.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+    const limpio = limpiarWhatsApp(texto);
+    const final = (esSocial(waId) ? limpio.replace(/\*+/g, '') : limpio) || null;
+    return final ? { texto: final } : { texto: null, motivo: 'sin_texto', parada: resp.stop_reason };
+  }
+  return { texto: null, motivo: 'sin_respuesta_final' };
+}
+
+/**
  * Genera la respuesta del bot para una conversacion (por waId).
  * @returns {Promise<string|null>} el texto a enviar, o null si no se pudo.
  */
@@ -722,65 +779,57 @@ export async function responderIA(waId) {
   const conv = store.obtener(waId);
   if (!conv) return null;
 
-  let mensajes = construirMensajes(conv);
-  if (mensajes.length === 0) return null;
-
   try {
-    // Bucle de tool-use (maximo 4 vueltas para acotar).
-    for (let vuelta = 0; vuelta < 4; vuelta++) {
-      const resp = await cliente.messages.create({
-        model: config.ia.modelo,
-        max_tokens: 1024,
-        // Cachea el prompt de sistema (grande y estable): ahorra ~90% en esos tokens de entrada en las llamadas
-        // siguientes. Los datos de ESTE cliente (su nombre de perfil, su celular) van en un segundo bloque, sin cache.
-        system: [
-          { type: 'text', text: sistema(canalSocialDe(waId)), cache_control: { type: 'ephemeral' } },
-          { type: 'text', text: contextoCliente(conv, waId) },
-        ],
-        tools: HERRAMIENTAS,
-        tool_choice: { type: 'auto' },
-        messages: mensajes,
-      });
-      registrarUso(config.ia.modelo, resp.usage);
-
-      if (resp.stop_reason === 'tool_use') {
-        // Agrega el turno del asistente (con los tool_use) y ejecuta.
-        mensajes.push({ role: 'assistant', content: resp.content });
-        const resultados = [];
-        for (const bloque of resp.content) {
-          if (bloque.type === 'tool_use') {
-            const salida = await ejecutarHerramienta(waId, bloque.name, bloque.input);
-            resultados.push({
-              type: 'tool_result',
-              tool_use_id: bloque.id,
-              content: JSON.stringify(salida),
-            });
-          }
-        }
-        mensajes.push({ role: 'user', content: resultados });
-        continue; // vuelve a llamar con los resultados
-      }
-
-      // Respuesta final: junta el texto.
-      const texto = resp.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n')
-        .trim();
-      const limpio = limpiarWhatsApp(texto);
-      const final = (esSocial(waId) ? limpio.replace(/\*+/g, '') : limpio) || null;
-      if (!final) {
-        anotarErrorIA({ name: 'sin_texto', message: `Claude terminó (${resp.stop_reason || 'sin motivo'}) sin escribir ningún texto para el cliente.` }, waId);
-        return null;
-      }
-      anotarOkIA();
-      return final;
+    const r = await correrAgente(waId, conv, ejecutarHerramienta);
+    if (r.motivo === 'sin_mensajes') return null;
+    if (r.motivo === 'sin_texto') {
+      anotarErrorIA({ name: 'sin_texto', message: `Claude terminó (${r.parada || 'sin motivo'}) sin escribir ningún texto para el cliente.` }, waId);
+      return null;
     }
-    anotarErrorIA({ name: 'sin_respuesta_final', message: 'Claude siguió pidiendo herramientas durante 4 vueltas y no dio una respuesta final.' }, waId);
-    return null;
+    if (r.motivo === 'sin_respuesta_final') {
+      anotarErrorIA({ name: 'sin_respuesta_final', message: 'Claude siguió pidiendo herramientas durante 4 vueltas y no dio una respuesta final.' }, waId);
+      return null;
+    }
+    anotarOkIA();
+    return r.texto;
   } catch (err) {
     anotarErrorIA(err, waId);
     return null;
+  }
+}
+
+/**
+ * Simula una conversacion con el modelo REAL sin tocar nada: no escribe a ningun cliente, no crea reservas ni guarda la
+ * conversacion. Sirve para probar cambios de las instrucciones (POST /admin/api/ia/simular, solo con la sesion del panel).
+ * Las herramientas que reservan o mandan mensajes responden con un resultado SIMULADO (y se devuelven en `herramientas`);
+ * consultar_disponibilidad lee el libro de verdad. No cuenta en la salud de la IA ni manda avisos.
+ * @param {{canal?:string, nombre?:string, mensajes:Array<{de:'cliente'|'valentina', texto:string}>}} p
+ */
+export async function simularIA({ canal = 'whatsapp', nombre = '', mensajes = [] }) {
+  if (!cliente) return { ok: false, herramientas: [], error: { tipo: 'sin_clave', mensaje: 'Falta ANTHROPIC_API_KEY en Render.' } };
+  const c = String(canal).toLowerCase();
+  const waId = c === 'instagram' ? 'ig:SIMULACION' : c === 'messenger' ? 'fb:SIMULACION' : '573001234567';
+  const ahora = Date.now();
+  const conv = { waId, nombre, mensajes: mensajes.map((m, i) => ({ autor: m.de === 'valentina' ? 'bot' : 'cliente', texto: String(m.texto || ''), ts: ahora + i })) };
+  const herramientas = [];
+  const ejecutar = async (id, nombreHerramienta, entrada) => {
+    // Lo que no cambia nada (leer el libro) o ya se rechaza antes de hacer algo (transferencia por Instagram/Messenger) va de verdad.
+    if (nombreHerramienta === 'consultar_disponibilidad' || (nombreHerramienta === 'reservar_pago_transferencia' && esSocial(id))) {
+      return ejecutarHerramienta(id, nombreHerramienta, entrada);
+    }
+    herramientas.push({ herramienta: nombreHerramienta, entrada });
+    if (nombreHerramienta !== 'reservar_pago_transferencia' && celularDe(id, entrada?.celular) === null) {
+      return { ok: false, error: 'Falta el celular del cliente (este chat es de Messenger o Instagram). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.' };
+    }
+    if (!String(entrada?.nombre || '').trim() && !nombrePerfil(nombre)) return { ok: false, error: ERROR_SIN_NOMBRE };
+    return { ok: true, simulado: true, instruccion: 'SIMULACIÓN: la acción no se ejecutó de verdad. Responde al cliente como si hubiera quedado lista: confirmación breve y cálida, sin repetir todos los datos.' };
+  };
+  try {
+    const r = await correrAgente(waId, conv, ejecutar);
+    return { ok: !!r.texto, respuesta: r.texto, herramientas, ...(r.motivo ? { motivo: r.motivo } : {}) };
+  } catch (err) {
+    const { estado, tipo, mensaje } = detalleDeError(err);
+    return { ok: false, herramientas, error: { estado, tipo, mensaje } };
   }
 }
 

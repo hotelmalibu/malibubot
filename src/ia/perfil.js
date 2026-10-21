@@ -12,7 +12,9 @@
 export function nombrePerfil(nombre) {
   const limpio = String(nombre ?? '')
     .normalize('NFC')
+    .replace(/[︀-️⃣]/g, '') // selectores de variacion de los emojis (❤️, ✌️): son «marcas» invisibles
     .replace(/[^\p{L}\p{M}'’ .-]+/gu, ' ')
+    .replace(/(^|\s)\p{M}+/gu, '$1') // una marca suelta (sin letra delante) no es parte de un nombre
     .replace(/\s+/g, ' ')
     .replace(/^[\s.'’-]+|[\s.'’-]+$/g, '')
     .slice(0, 40)

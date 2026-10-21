@@ -113,6 +113,15 @@ ok('...y Claude no vio el mensaje de espera (no lo imita)', !ultimaPeticion.incl
 const lista2 = (await get('/admin/api/conversaciones')).conversaciones;
 ok('su chat deja de estar «sin respuesta» (el de Maryin sigue esperando)', lista2.find((c) => c.waId === BERNARDO)?.sinRespuestaIA === false && lista2.find((c) => c.waId === MARYIN)?.sinRespuestaIA === true);
 
+console.log('\n— Simulador del panel (POST /admin/api/ia/simular) —');
+const nWAantes = whatsapp.length, nChatsAntes = (await get('/admin/api/conversaciones')).conversaciones.length, nCorreosAntes = correos.length;
+const simulacion = await (await post('/admin/api/ia/simular', { canal: 'instagram', nombre: 'Fabian Muñoz B', mensajes: [{ de: 'cliente', texto: '¿Cuánto cuesta?' }] }, cookie)).json();
+ok('con la sesión del panel devuelve la respuesta de Valentina', simulacion.ok === true && /Con gusto te ayudo/.test(simulacion.respuesta), JSON.stringify(simulacion));
+ok('no escribe a nadie, no crea chats ni manda correos', whatsapp.length === nWAantes && (await get('/admin/api/conversaciones')).conversaciones.length === nChatsAntes && correos.length === nCorreosAntes);
+const mala = await post('/admin/api/ia/simular', { mensajes: [{ de: 'valentina', texto: 'hola' }] }, cookie);
+ok('si el último mensaje no es del cliente, o falta algo, responde 400', mala.status === 400 && (await post('/admin/api/ia/simular', {}, cookie)).status === 400);
+ok('sin sesión no se puede usar (gastaría saldo)', (await fetch(`${BASE}/admin/api/ia/simular`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mensajes: [{ de: 'cliente', texto: 'hola' }] }), redirect: 'manual' })).status !== 200);
+
 console.log('\n— Una persona toma el chat —');
 store.registrarSaliente({ waId: MARYIN, autor: 'humano', texto: 'Hola Maryin, soy Laura de recepción.' });
 ok('al contestar una persona, el chat de Maryin sale de «sin respuesta»', (await get('/admin/api/conversaciones')).conversaciones.find((c) => c.waId === MARYIN)?.sinRespuestaIA === false);

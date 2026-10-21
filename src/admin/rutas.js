@@ -33,7 +33,7 @@ import { enviarRecordatorio, puedeRecordar } from '../ia/recordatorio.js';
 import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { estadoSync, sincronizarConVik } from '../vikbooking/sincronizar.js';
 import { estadoDespertador } from '../vikbooking/despertar.js';
-import { saludIA, probarIA } from '../ia/agente.js';
+import { saludIA, probarIA, simularIA } from '../ia/agente.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import { resumenOrigenes, origenDe } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
@@ -615,6 +615,15 @@ adminRouter.get('/api/ia/estado', (_req, res) => {
 });
 adminRouter.post('/api/ia/diag', async (_req, res) => {
   res.json({ ...(await probarIA()), salud: saludIA() });
+});
+// Simulador: prueba a Valentina (modelo real) con una conversacion inventada. No escribe a nadie, no reserva, no guarda nada.
+adminRouter.post('/api/ia/simular', async (req, res) => {
+  const { canal, nombre, mensajes } = req.body || {};
+  const lista = Array.isArray(mensajes) ? mensajes : [];
+  const valida = lista.length > 0 && lista.length <= 30 && lista.at(-1)?.de === 'cliente'
+    && lista.every((m) => ['cliente', 'valentina'].includes(m?.de) && typeof m?.texto === 'string' && m.texto.length <= 1000);
+  if (!valida) return res.status(400).json({ ok: false, error: 'Manda "mensajes": [{ "de": "cliente"|"valentina", "texto": "..." }] (máx. 30; el último del cliente).' });
+  res.json(await simularIA({ canal, nombre: String(nombre || '').slice(0, 80), mensajes: lista }));
 });
 
 // -------- Diagnostico de canales (primer mensaje -> canal detectado) --------
