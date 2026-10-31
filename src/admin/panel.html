@@ -357,6 +357,28 @@
   .pill.bot { background: var(--oro-suave); color: var(--oro-profundo); }
   .pill.humano { background: var(--alerta-suave); color: var(--alerta); }
   .pill.sinresp { background: var(--alerta); color: #fff; }
+  /* Retomar chats sin respuesta */
+  .ret-barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
+  .ret-prog { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--espuma); border: 1px solid var(--linea); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 13.5px; line-height: 1.5; }
+  .ret-prog input[type=datetime-local] { font-family: var(--ui); font-size: 13.5px; padding: 7px 10px; border: 1px solid var(--linea); border-radius: 10px; background: #fff; color: var(--tinta); }
+  .ret-lista { display: grid; gap: 12px; }
+  .ret-item { background: var(--espuma); border: 1px solid var(--linea); border-left: 4px solid var(--verde); border-radius: 16px; padding: 14px 16px; box-shadow: var(--sombra); display: grid; gap: 10px; }
+  .ret-item.no { border-left-color: #cfc8b8; }
+  .ret-item .cab { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+  .ret-item .quien { font-weight: 700; font-size: 15px; }
+  .ret-item .meta { font-size: 12px; color: var(--gris); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .ret-item .cita { font-size: 13.5px; color: var(--tinta-2); font-style: italic; background: var(--espuma-2); border-radius: 10px; padding: 8px 11px; }
+  .ret-item textarea { width: 100%; min-height: 96px; resize: vertical; font-family: var(--ui); font-size: 14px; line-height: 1.5; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 12px; background: #fff; color: var(--tinta); box-sizing: border-box; }
+  .ret-item textarea:focus { outline: 2px solid var(--oro); border-color: transparent; }
+  .ret-item .acciones { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ret-ventana { font-weight: 700; }
+  .ret-ventana.ok { color: var(--verde); } .ret-ventana.pronto { color: #a06b00; } .ret-ventana.ya { color: var(--alerta); }
+  .ret-estado { font-size: 12.5px; font-weight: 600; color: var(--gris); }
+  .ret-estado.ret-hecho { color: var(--verde); } .ret-estado.ret-error { color: var(--alerta); }
+  .ret-hechos { display: grid; gap: 8px; margin-top: 6px; }
+  .ret-hecho-fila { background: var(--verde-suave); border: 1px solid #cbe6d6; border-radius: 12px; padding: 9px 12px; font-size: 13px; }
+  .ret-hecho-fila b { color: var(--verde); }
+  .btn:disabled, .btn-mini:disabled { opacity: .5; cursor: not-allowed; }
   /* Franja roja global: Valentina (la IA) no esta pudiendo responder */
   .aviso-ia { display: none; background: var(--alerta-suave); border-bottom: 2px solid var(--alerta); color: #6e2a15; padding: 11px 22px; font-size: 13.5px; line-height: 1.5; flex: none; max-height: 45vh; overflow-y: auto; }
   .aviso-ia b { color: #55200f; }
@@ -444,6 +466,7 @@
       <button id="tabMonitor" onclick="mostrarVista('monitor')">Monitor conversaciones</button>
       <button id="tabTokens" onclick="mostrarVista('tokens')">Monitor de tokens</button>
       <button id="tabFinanzas" onclick="mostrarVista('finanzas')">Monitor financiero</button>
+      <button id="tabRetomar" onclick="mostrarVista('retomar')">Retomar chats<span class="contador" id="contRetomar" style="display:none">0</span></button>
     </nav>
     <div class="acciones-top">
       <div class="estado"><span class="punto"></span> En vivo</div>
@@ -697,6 +720,21 @@
       </div>
     </section>
 
+    <!-- ============ RETOMAR CHATS SIN RESPUESTA ============ -->
+    <section id="vistaRetomar" class="vista pagina">
+      <div class="dash">
+        <div class="seccion-cab">
+          <div><div class="eyebrow">Atención al cliente</div><h2>↩️ Retomar chats sin respuesta</h2></div>
+          <div class="nota">Si Valentina no pudo contestar (sin saldo, falla de la IA…), aquí le escribe a cada cliente pidiendo disculpas y respondiendo lo que preguntó. Solo se puede dentro de las 24 h del último mensaje del cliente. <b>Nada se envía sin que tú lo confirmes.</b></div>
+        </div>
+        <div class="kpis" id="kpisRetomar"></div>
+        <div class="ret-barra" id="retBarra"></div>
+        <div class="ret-prog" id="retProg"></div>
+        <div class="ret-lista" id="retLista"><div class="vacio-tabla">Cargando…</div></div>
+        <div id="retResumen"></div>
+      </div>
+    </section>
+
     <!-- ============ MONITOR FINANCIERO ============ -->
     <section id="vistaFinanzas" class="vista pagina">
       <div class="dash">
@@ -746,6 +784,16 @@
     </div>
   </dialog>
 
+  <!-- Confirmar el envío a varios clientes (Retomar chats) -->
+  <dialog id="dlgRetomar">
+    <div class="dlg-cab" id="dlgRetTitulo">Confirmar envío</div>
+    <div class="dlg-cuerpo"><div class="campo full" id="dlgRetTexto" style="font-size:14px;line-height:1.5"></div></div>
+    <div class="dlg-pie">
+      <button class="btn" onclick="document.getElementById('dlgRetomar').close()">Cancelar</button>
+      <button class="btn primario" id="dlgRetOk">Enviar</button>
+    </div>
+  </dialog>
+
 <script>
   const API = '/admin/api/conversaciones';
   let seleccion = null, listaCache = [], convCache = null, vistaActual = 'dashboard';
@@ -763,8 +811,8 @@
   const esc = (s) => (s || '').replace(/�/g, '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
   // ---------- Navegación ----------
-  const VISTAS = { dashboard: 'vistaDashboard', chats: 'vistaChats', monitor: 'vistaMonitor', tokens: 'vistaTokens', finanzas: 'vistaFinanzas' };
-  const TABS = { dashboard: 'tabDashboard', chats: 'tabChats', monitor: 'tabMonitor', tokens: 'tabTokens', finanzas: 'tabFinanzas' };
+  const VISTAS = { dashboard: 'vistaDashboard', chats: 'vistaChats', monitor: 'vistaMonitor', tokens: 'vistaTokens', finanzas: 'vistaFinanzas', retomar: 'vistaRetomar' };
+  const TABS = { dashboard: 'tabDashboard', chats: 'tabChats', monitor: 'tabMonitor', tokens: 'tabTokens', finanzas: 'tabFinanzas', retomar: 'tabRetomar' };
   function mostrarVista(v) {
     vistaActual = v;
     for (const k in VISTAS) {
@@ -775,6 +823,7 @@
     if (v === 'monitor') { cargarMonitor(); cargarTransferencia(); }
     if (v === 'tokens') cargarMetricas();
     if (v === 'finanzas') cargarFinanzas();
+    if (v === 'retomar') cargarRetomar();
   }
 
   // ---------- Helpers de rango de fechas ----------
@@ -2272,8 +2321,175 @@
     } else { const res = document.getElementById('resProbarIA'); if (res) res.innerHTML = ultimaPruebaIA; }
   }
 
+  // ---------- Retomar chats sin respuesta ----------
+  // Valentina les escribe (con disculpas) a los clientes que solo recibieron el mensaje de espera. Cada mensaje se prepara,
+  // se puede editar y SOLO se envía cuando se pulsa «Enviar»; también se puede programar a una hora. Código: src/ia/retomar.js.
+  let retDatos = { pendientes: [], programada: null };
+  const retBorradores = {};  // waId -> texto del recuadro (se conserva aunque se refresque la lista)
+  const retFila = {};        // waId -> { msg, tipo: 'ok' | 'error' | '' }
+  const retEnviados = [];    // lo retomado en esta sesión: { nombre, texto, ts }
+  let retOcupado = false, retTextoOcupado = '', retCuandoValor = '';
+  const retCanal = (waId) => (/^fb:/.test(waId) ? ['Messenger', '✉️'] : /^ig:/.test(waId) ? ['Instagram', '📷'] : ['WhatsApp', '💬']);
+  const retFecha = (ts) => new Date(ts).toLocaleString('es-CO', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const retDura = (ms) => { const h = Math.floor(ms / 36e5), m = Math.floor((ms % 36e5) / 6e4); return h >= 1 ? h + ' h ' + m + ' min' : Math.max(1, m) + ' min'; };
+  function retVentana(hasta) {
+    const falta = hasta - Date.now();
+    if (falta <= 0) return { txt: 'la ventana de 24 h ya cerró', clase: 'ya' };
+    return { txt: 'le puedes escribir ' + retDura(falta) + ' más', clase: falta > 6 * 36e5 ? 'ok' : falta > 2 * 36e5 ? 'pronto' : 'ya' };
+  }
+  function retSiguiente8() { // próxima 8:00 a. m. (hoy si faltan más de 5 min, si no mañana), en el formato de <input type="datetime-local">
+    const d = new Date(); d.setSeconds(0, 0); d.setHours(8, 0);
+    if (d.getTime() < Date.now() + 5 * 60000) d.setDate(d.getDate() + 1);
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  const retElegibles = () => (retDatos.pendientes || []).filter((p) => p.elegible);
+  const retListos = () => retElegibles().filter((p) => (retBorradores[p.waId] || '').trim());
+  const retWa = (el) => ((el.closest('.ret-item') || {}).dataset || {}).wa;
+
+  async function cargarRetomar() {
+    try {
+      const r = await fetch('/admin/api/ia/retomar'); if (!r.ok) return;
+      retDatos = await r.json();
+      pintarRetomar();
+      const c = document.getElementById('contRetomar'), n = retElegibles().length;
+      if (c) { c.textContent = n; c.style.display = n ? 'inline-flex' : 'none'; }
+    } catch (_) {}
+  }
+  function itemRetomar(p) {
+    const [canal, ico] = retCanal(p.waId), v = retVentana(p.ventanaHasta), st = retFila[p.waId] || {};
+    const cab = '<div class="cab"><div><div class="quien">' + ico + ' ' + esc(p.nombre || p.waId) + '</div><div class="meta"><span class="pill canal">' + canal + '</span><span>escribió ' + haceCuanto(p.ultimoDelCliente) + '</span><span class="ret-ventana ' + v.clase + '">' + esc(v.txt) + '</span></div></div>'
+      + (p.elegible ? '<span class="pill ok">Se puede retomar</span>' : '<span class="pill fuera">No se le escribe</span>') + '</div>';
+    const cita = '<div class="cita">«' + (esc(p.ultimoTexto) || 'envió un archivo, un enlace o un audio') + '»</div>';
+    const ver = '<button class="btn-mini" onclick="retVerChat(this)">💬 Ver chat</button>';
+    if (!p.elegible) return '<div class="ret-item no" data-wa="' + esc(p.waId) + '">' + cab + cita + '<div class="acciones"><span class="ret-estado">' + esc(p.motivo) + '.</span>' + ver + '</div></div>';
+    const b = retBorradores[p.waId] || '';
+    return '<div class="ret-item" data-wa="' + esc(p.waId) + '">' + cab + cita
+      + '<textarea oninput="retEditar(this)" placeholder="Pulsa «Preparar mensaje»: Valentina lo redacta pidiendo disculpas y respondiendo lo que preguntó. Puedes editarlo antes de enviar.">' + esc(b) + '</textarea>'
+      + '<div class="acciones"><button class="btn-mini" ' + (retOcupado ? 'disabled' : '') + ' onclick="retPreparar(this)">' + (b ? '↻ Volver a redactar' : '✨ Preparar mensaje') + '</button>'
+      + '<button class="btn primario" data-accion="enviar" ' + (retOcupado || !b.trim() ? 'disabled' : '') + ' onclick="retEnviar(this)">📤 Enviar</button>' + ver
+      + '<span class="ret-estado ' + (st.tipo === 'ok' ? 'ret-hecho' : st.tipo === 'error' ? 'ret-error' : '') + '">' + esc(st.msg || '') + '</span></div></div>';
+  }
+  function pintarRetomar() {
+    const lista = retDatos.pendientes || [], prog = retDatos.programada;
+    const elegibles = retElegibles(), fuera = lista.filter((p) => !p.elegible), listos = retListos();
+    const pendiente = !!(prog && !prog.hecho);
+    document.getElementById('kpisRetomar').innerHTML =
+      tarjeta('alerta', '💬', 'Sin respuesta', lista.length, 'solo recibieron el mensaje de espera') +
+      tarjeta('verde', '✅', 'Se pueden retomar', elegibles.length, 'dentro de las 24 h, sin reserva y sin persona atendiendo') +
+      tarjeta('gris', '⏳', 'No se les puede escribir', fuera.length, fuera.length ? 'fuera de plazo, con reserva o atendidos por una persona' : 'ninguno') +
+      tarjeta('azul', '⏰', 'Envío programado', pendiente ? 'Sí' : 'No', pendiente ? esc(retFecha(prog.cuando)) : 'puedes programarlo abajo');
+    document.getElementById('retBarra').innerHTML =
+      '<button class="btn primario" ' + (retOcupado || !elegibles.length ? 'disabled' : '') + ' onclick="retPrepararTodos()">✨ Preparar los mensajes de Valentina</button>'
+      + '<button class="btn" id="retBtnEnviarTodos" ' + (retOcupado || !listos.length ? 'disabled' : '') + ' onclick="retEnviarTodos()">📤 ' + (listos.length ? 'Enviar los ' + listos.length + ' preparados' : 'Enviar los preparados') + '</button>'
+      + '<button class="btn" ' + (retOcupado ? 'disabled' : '') + ' onclick="cargarRetomar()">↻ Actualizar</button>'
+      + (retTextoOcupado ? '<span class="ret-estado">' + esc(retTextoOcupado) + '</span>' : '');
+    let html;
+    if (pendiente) {
+      html = '⏰ <b>Programado para ' + esc(retFecha(prog.cuando)) + '</b> — a esa hora Valentina redacta y envía sola los mensajes a quienes se pueda (una sola vez a cada uno) y te llega un correo con el resumen. <button class="btn-mini" onclick="retCancelarProgramacion()">Cancelar programación</button>';
+    } else {
+      html = '⏰ <b>Programar el envío:</b> <input type="datetime-local" id="retCuando" value="' + (retCuandoValor || retSiguiente8()) + '" oninput="retCuandoValor = this.value" /> <button class="btn" onclick="retProgramar()">Programar</button> <span style="color:var(--gris)">Valentina escribe sola a esa hora (máximo dentro de las próximas 23 h) y llega un correo con el resumen.</span>';
+      if (prog && prog.hecho && prog.resumen) html += '<div style="flex-basis:100%;color:var(--gris);font-size:12.5px">Última programación (' + esc(retFecha(prog.inicio || prog.cuando)) + '): ' + (prog.resumen.abortado ? esc(prog.resumen.abortado) : prog.resumen.enviados + ' enviados, ' + prog.resumen.omitidos + ' no se retomaron, ' + prog.resumen.fallos + ' fallaron') + '.</div>';
+      else if (prog && prog.vencida) html += '<div style="flex-basis:100%;color:var(--gris);font-size:12.5px">La última programación se venció sin correr (el servidor estuvo apagado a esa hora).</div>';
+    }
+    document.getElementById('retProg').innerHTML = html + '<span id="retProgMsg" class="ret-estado ret-error"></span>';
+    document.getElementById('retLista').innerHTML = lista.length
+      ? lista.map(itemRetomar).join('')
+      : '<div class="vacio-tabla">🎉 No hay chats sin respuesta. Si algún día la IA falla, aquí aparecen los clientes que quedaron esperando.</div>';
+    document.getElementById('retResumen').innerHTML = retEnviados.length
+      ? '<div class="seccion-cab"><div><div class="eyebrow">Hecho</div><h2>Retomados en esta sesión</h2></div></div><div class="ret-hechos">'
+        + retEnviados.slice(0, 20).map((x) => '<div class="ret-hecho-fila"><b>✓ ' + esc(x.nombre) + '</b> · ' + new Date(x.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + ' · «' + esc(x.texto.slice(0, 140)) + (x.texto.length > 140 ? '…' : '') + '»</div>').join('') + '</div>'
+      : '';
+  }
+  function retEditar(el) { // al escribir en un recuadro: solo se actualizan los botones (no se redibuja, para no perder el cursor)
+    const waId = retWa(el); retBorradores[waId] = el.value;
+    const fila = el.closest('.ret-item');
+    if (!el.value.trim()) { delete retFila[waId]; const s = fila.querySelector('.ret-estado'); if (s) s.textContent = ''; } // vacío: ya no hay «borrador listo»
+    const b = fila.querySelector('[data-accion="enviar"]'); if (b) b.disabled = retOcupado || !el.value.trim();
+    const n = retListos().length, bt = document.getElementById('retBtnEnviarTodos');
+    if (bt) { bt.disabled = retOcupado || !n; bt.textContent = '📤 ' + (n ? 'Enviar los ' + n + ' preparados' : 'Enviar los preparados'); }
+  }
+  async function retLlamar(cuerpo) {
+    try {
+      const r = await fetch('/admin/api/ia/retomar/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+      return await r.json();
+    } catch (_) { return { ok: false, estado: 'fallo', motivo: 'No se pudo conectar con el servidor.' }; }
+  }
+  async function retPreparar(btn) {
+    const waId = retWa(btn);
+    retFila[waId] = { msg: 'Valentina está redactando…', tipo: '' }; retOcupado = true; pintarRetomar();
+    const r = await retLlamar({ waId, accion: 'borrador' });
+    if (r.ok) { retBorradores[waId] = r.texto; retFila[waId] = { msg: 'Borrador listo: revísalo, edítalo si quieres y envíalo.', tipo: '' }; }
+    else retFila[waId] = { msg: r.motivo || 'No se pudo preparar el mensaje.', tipo: 'error' };
+    retOcupado = false; pintarRetomar();
+  }
+  async function retEnviarUno(waId) {
+    const nombre = ((retDatos.pendientes || []).find((p) => p.waId === waId) || {}).nombre || waId;
+    const texto = (retBorradores[waId] || '').trim();
+    const r = await retLlamar({ waId, accion: 'enviar', texto });
+    if (r.ok) { retEnviados.unshift({ nombre, texto: r.texto || texto, ts: Date.now() }); delete retBorradores[waId]; retFila[waId] = { msg: '✅ Enviado', tipo: 'ok' }; }
+    else retFila[waId] = { msg: r.motivo || 'No se pudo enviar.', tipo: 'error' };
+    return !!r.ok;
+  }
+  async function retEnviar(btn) {
+    const waId = retWa(btn); retOcupado = true; retFila[waId] = { msg: 'Enviando…', tipo: '' }; pintarRetomar();
+    await retEnviarUno(waId);
+    retOcupado = false; await cargarRetomar();
+  }
+  async function retPrepararTodos() {
+    retOcupado = true; retTextoOcupado = 'Valentina está redactando los mensajes… (puede tardar un minuto)'; pintarRetomar();
+    let r = null;
+    try { r = await (await fetch('/admin/api/ia/retomar/vista-previa', { method: 'POST' })).json(); } catch (_) {}
+    for (const x of (r && r.resultados) || []) {
+      if (x.estado === 'borrador' && !(retBorradores[x.waId] || '').trim()) { retBorradores[x.waId] = x.texto; retFila[x.waId] = { msg: 'Borrador listo: revísalo y envíalo.', tipo: '' }; }
+      else if (x.estado === 'fallo') retFila[x.waId] = { msg: x.motivo, tipo: 'error' };
+    }
+    retOcupado = false; retTextoOcupado = !r ? 'No se pudieron preparar los mensajes (error de conexión).' : (r.abortado || '');
+    pintarRetomar();
+  }
+  function retConfirmar(titulo, html, textoOk, fn) {
+    document.getElementById('dlgRetTitulo').textContent = titulo;
+    document.getElementById('dlgRetTexto').innerHTML = '<div>' + html + '</div>';
+    const ok = document.getElementById('dlgRetOk'); ok.textContent = textoOk;
+    ok.onclick = () => { document.getElementById('dlgRetomar').close(); fn(); };
+    document.getElementById('dlgRetomar').showModal();
+  }
+  function retEnviarTodos() {
+    const listos = retListos(); if (!listos.length) return;
+    retConfirmar('Enviar ' + listos.length + ' mensaje' + (listos.length === 1 ? '' : 's'),
+      'Valentina escribirá a <b>' + listos.length + '</b> cliente' + (listos.length === 1 ? '' : 's') + ' con el texto que ves en cada recuadro:<ul style="margin:8px 0 0 18px;padding:0">'
+      + listos.map((p) => '<li>' + esc(p.nombre || p.waId) + '</li>').join('') + '</ul>', '📤 Enviar ahora', retEnviarListos);
+  }
+  async function retEnviarListos() {
+    const listos = retListos(); retOcupado = true; let n = 0;
+    for (const p of listos) {
+      retTextoOcupado = 'Enviando ' + (n + 1) + ' de ' + listos.length + '…'; retFila[p.waId] = { msg: 'Enviando…', tipo: '' }; pintarRetomar();
+      await retEnviarUno(p.waId); n++;
+      if (n < listos.length) await new Promise((r) => setTimeout(r, 2500)); // una pausa entre mensajes: no salen en ráfaga
+    }
+    retOcupado = false; retTextoOcupado = ''; await cargarRetomar();
+  }
+  async function retProgramar() {
+    const v = retCuandoValor || (document.getElementById('retCuando') || {}).value, t = Date.parse(v); // sin zona = hora local del navegador
+    const msg = document.getElementById('retProgMsg');
+    if (!v || !Number.isFinite(t)) { if (msg) msg.textContent = ' Elige la fecha y la hora.'; return; }
+    try {
+      const r = await (await fetch('/admin/api/ia/retomar/programar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cuando: new Date(t).toISOString() }) })).json();
+      if (!r.ok) { if (msg) msg.textContent = ' ' + (r.error || 'No se pudo programar.'); return; }
+    } catch (_) { if (msg) msg.textContent = ' No se pudo conectar con el servidor.'; return; }
+    retCuandoValor = ''; await cargarRetomar();
+  }
+  async function retCancelarProgramacion() { try { await fetch('/admin/api/ia/retomar/cancelar', { method: 'POST' }); } catch (_) {} await cargarRetomar(); }
+  function retVerChat(btn) { const waId = retWa(btn); mostrarVista('chats'); abrir(waId); }
+  // Cada minuto: refresca la lista y el contador de la pestaña (sin pisar lo que se está escribiendo o enviando).
+  setInterval(() => {
+    const escribiendo = document.activeElement && document.activeElement.tagName === 'TEXTAREA';
+    if (retOcupado || (vistaActual === 'retomar' && escribiendo)) return;
+    cargarRetomar();
+  }, 60000);
+
   // Arranque + ciclos de actualización
-  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarOrigenes(); cargarLista(); cargarSaludIA();
+  pintarAniosTabs(); cargarEstadisticas(); cargarReservas(); cargarGrafico(); cargarOrigenes(); cargarLista(); cargarSaludIA(); cargarRetomar();
   setInterval(cargarSaludIA, 30000);
   setInterval(() => {
     cargarLista();

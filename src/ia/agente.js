@@ -14,7 +14,9 @@
 // ============================================================
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
-import { TIPOS_HABITACION, precioCOP, tipoVigente } from '../datos/habitaciones.js';
+import { TIPOS_HABITACION, precioCOP, tipoVigente, enNavidad } from '../datos/habitaciones.js';
+import { twinsDisponiblesEn, nocheSinCupoTwins } from '../datos/cupo.js';
+import { diaSemana, calendarioSemanas, diaColombia } from '../util/fechas.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { reservasStore, cantidadValida } from '../almacen/reservas.js';
 import { esSocial, canalSocialDe } from '../whatsapp/social.js';
@@ -81,6 +83,14 @@ const ERROR_SIN_NOMBRE = 'Falta el nombre del cliente (su perfil no trae uno). P
 function errorDeTipoYFechas(tipo, entrada) {
   if (!tipoVigente(tipo, entrada.checkIn)) {
     return `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`;
+  }
+  // La Twins (tarifa de Navidad) tiene pocas habitaciones por noche: si ya no caben, se rechaza y se ofrece la Estándar al mismo precio.
+  if (tipo.id === 'junior_twins') {
+    const sin = nocheSinCupoTwins(entrada.checkIn, entrada.checkOut, cantidadValida(entrada.cantidadHabitaciones));
+    if (sin) {
+      const estandar = TIPOS_HABITACION.find((x) => x.id === 'estandar');
+      return `La promoción de Navidad (Junior Suite Twins) ya no tiene cupo para la noche del ${sin}. Dile con amabilidad que esa promoción se agotó para esas fechas y ofrécele la Habitación Estándar (${precioCOP(estandar.precioDesde)} la noche, el mismo precio).`;
+    }
   }
   if (tipo.id === 'estandar_ubique' && entrada.checkIn) {
     const dia = new Date(entrada.checkIn + 'T12:00:00').getDay(); // 0=dom, 5=vie, 6=sáb
@@ -221,19 +231,22 @@ export function sistema(canalSocial = '') {
     `- Si dicen que es PARA HOY, confírmalo con seguridad y entusiasmo (no lo pongas en duda): "¡Perfecto, para hoy mismo!".`,
     `- Si no dan salida, pregunta cuántas noches (o confirma si es 1 noche, con salida al día siguiente).`,
     `- Fechas sin año → asume 2026.`,
+    `- DÍA DE LA SEMANA: NUNCA lo calcules de memoria (te equivocaste con el 28 de diciembre: es lunes). Si necesitas o vas a decir qué día de la semana cae una fecha, búscalo en este CALENDARIO (cada línea trae los días del mes que caen en cada día de la semana). Y si no hace falta, no lo menciones. Si el cliente te corrige una fecha o un día, créele, discúlpate en una frase y sigue.`,
+    ...calendarioSemanas(hoy.iso).map((linea) => `  CALENDARIO · ${linea}`),
     ``,
     `QUÉ VENDES (SOLO habitaciones). Tipos (precios "desde" en COP; el valor final se confirma al reservar):`,
     catalogoTexto(),
     `- Si es para 1 SOLA persona, ofrece DIRECTAMENTE la Habitación Estándar (hotel corporativo, ideal para ejecutivos).`,
-    `- Si es para 2 PERSONAS (o preguntan precio "para dos" / "en pareja"), da SIEMPRE el valor de la Habitación Estándar; y si las fechas caen en FIN DE SEMANA (check-in viernes, sábado o domingo), da el de la Habitación Estándar Ubique, que es la tarifa que mejor se acomoda a los clientes. No ofrezcas suites a menos que las pidan.`,
+    `- Si es para 2 PERSONAS (o preguntan precio "para dos" / "en pareja" / "habitación doble"), da SIEMPRE el valor de la Habitación Estándar; y si las fechas caen en FIN DE SEMANA (check-in viernes, sábado o domingo), da el de la Habitación Estándar Ubique, que es la tarifa que mejor se acomoda a los clientes. No ofrezcas suites a menos que las pidan. ⚠️ EXCEPCIÓN: si la llegada cae del 15 de diciembre de 2026 al 6 de enero de 2027 NO uses esta regla: aplica la TARIFA DE DICIEMBRE (más abajo).`,
     `- Para 3 o más personas (sin contar niños menores de 12, ver regla de niños abajo), recomienda la más adecuada (Junior Suite Triple para 3).`,
     `- La "Habitación Estándar Ubique" SOLO está disponible de VIERNES a DOMINGO. Si la piden entre semana, avisa con amabilidad y ofrece la Estándar o ajustar a un fin de semana.`,
     ``,
-    `PROMOCIÓN NAVIDEÑA (Junior Suite Twins, del 15 de diciembre de 2026 al 6 de enero de 2027):`,
+    `TARIFA DE DICIEMBRE y PROMOCIÓN NAVIDEÑA (Junior Suite Twins, del 15 de diciembre de 2026 al 6 de enero de 2027):`,
     `- Es una promoción que el hotel anuncia en redes y Google: *Junior Suite Twins* a *$309.000 impuestos incluidos*, con 2 camas Queen, máximo 3 adultos, niños menores de 12 años GRATIS, baño privado, aire acondicionado, TV digital y WiFi gratis; incluye desayuno como todas las habitaciones.`,
     `- Aplica SOLO si la llegada (check-in) cae entre el 15 de diciembre de 2026 y el 6 de enero de 2027. Para otras fechas NO la ofrezcas; si la piden, explica con amabilidad las fechas de la promo y ofrece otra habitación.`,
-    `- Si el cliente escribe algo como "vi la promo navideña" o pregunta por Navidad / fin de año / diciembre, salúdalo con la apertura normal (por su nombre) y luego, según fechas y personas, ofrécele esta suite: es ideal para FAMILIAS y grupos de 3 (2 camas Queen) y es la que él vio en el anuncio.`,
-    `- Para 2 personas sin niños sigue la regla de siempre (Estándar / Estándar Ubique); para 3 adultos, o familias con niños, en esas fechas prioriza la Junior Suite Twins. Si piden más gente de la que admite, recomienda dos habitaciones.`,
+    `- Si el cliente escribe algo como "vi la promo navideña" o pregunta por Navidad / fin de año / diciembre, salúdalo con la apertura normal (por su nombre) y luego, según fechas y personas, ofrécele esta suite: es ideal para parejas, FAMILIAS y grupos de 3 (2 camas Queen) y es la que él vio en el anuncio.`,
+    `- ⭐ TARIFA DE DICIEMBRE (NO LA OLVIDES): cuando la llegada cae dentro de esas fechas y piden habitación para 2 personas (pareja, "habitación doble", "para dos"), para 3 adultos o para una familia con niños, la PRIMERA y principal opción que ofreces es la *Junior Suite Twins a $309.000 por noche, impuestos incluidos* (la tarifa de Navidad): es una habitación doble (2 camas Queen) con aire acondicionado, TV, baño privado, WiFi y desayuno incluido. En esas fechas el precio es UNO solo: NO ofrezcas la Estándar Ubique, NO hables de tarifas distintas entre semana y fin de semana y NO menciones el día de la semana. Solo si viaja 1 persona sola, ofrécele la Habitación Estándar (mismo precio, $309.000). Si pide otra habitación (King, Triple, Suite de Lujo), dale el precio de esa. Si piden más gente de la que admite, recomienda dos habitaciones.`,
+    `- CUPO LIMITADO: la Twins tiene pocas habitaciones por noche. Al consultar disponibilidad para fechas de Navidad fíjate en "twinsDisponibles": si es 0, dile con amabilidad que la promoción de esas fechas ya se agotó y ofrécele la Habitación Estándar al mismo precio ($309.000). Puedes crear urgencia suave y honesta ("son pocas y se agotan"). Si la herramienta de reserva dice que no hay cupo, haz lo mismo.`,
     `- Si el mensaje trae "(Google)" o "(Facebook)" es solo la fuente del anuncio: no lo repitas ni lo menciones.`,
     ``,
     `NIÑOS MENORES DE 12 AÑOS (regla importante de ocupación y precio):`,
@@ -437,8 +450,12 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     const fecha = (entrada?.fecha || '').trim() || null;
     const libro = await ocupacionDelLibro(fecha);
     const tipos = TIPOS_HABITACION.map((t) => ({ nombre: t.nombre, precioDesde: t.precioDesde, capacidad: t.capacidad, ...(t.vigencia ? { soloLlegadasDel: t.vigencia.desde, al: t.vigencia.hasta } : {}) }));
+    // El dia de la semana lo calcula el codigo (la IA se equivocaba) y, en la temporada de Navidad, cuantas Twins quedan esa noche.
+    const dia = /^\d{4}-\d{2}-\d{2}$/.test(fecha || '') ? fecha : diaColombia();
+    const extra = { diaSemana: diaSemana(dia), ...(enNavidad(dia) ? { twinsDisponibles: twinsDisponiblesEn(dia), nota_twins: 'Cupo limitado de la promoción de Navidad (Junior Suite Twins). Si twinsDisponibles es 0, ofrece la Habitación Estándar al mismo precio.' } : {}) };
     if (libro) {
       return {
+        ...extra,
         fecha: libro.fecha,
         disponibles: libro.disponibles,
         totalHabitaciones: libro.totalHabitaciones,
@@ -448,6 +465,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     // Sin libro conectado: estimacion desde memoria.
     const est = reservasStore.estadisticas(fecha, fecha);
     return {
+      ...extra,
       fecha: fecha || 'hoy',
       disponibles: est.disponibles,
       totalHabitaciones: est.totalHabitaciones,
@@ -715,9 +733,16 @@ function construirMensajes(conv) {
  * `ejecutar` es quien corre las herramientas (en la simulacion no hace nada de verdad). Los errores de Claude suben a quien llama.
  * @returns {Promise<{texto:string|null, motivo?:'sin_mensajes'|'sin_texto'|'sin_respuesta_final', parada?:string}>}
  */
-async function correrAgente(waId, conv, ejecutar) {
+async function correrAgente(waId, conv, ejecutar, { nota = '', terminarEnCliente = false } = {}) {
   const mensajes = construirMensajes(conv);
+  // Para retomar un chat: si lo ultimo fue un aviso automatico de la casa (seguimiento, llamadas), se contesta al ultimo mensaje del cliente.
+  if (terminarEnCliente) while (mensajes.length && mensajes.at(-1).role === 'assistant') mensajes.pop();
   if (mensajes.length === 0) return { texto: null, motivo: 'sin_mensajes' };
+  const bloquesSistema = [
+    { type: 'text', text: sistema(canalSocialDe(waId)), cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: contextoCliente(conv, waId) },
+    ...(nota ? [{ type: 'text', text: nota }] : []),
+  ];
 
   // Bucle de tool-use (maximo 4 vueltas para acotar).
   let vacios = 0;
@@ -727,10 +752,7 @@ async function correrAgente(waId, conv, ejecutar) {
       max_tokens: 1024,
       // Cachea el prompt de sistema (grande y estable): ahorra ~90% en esos tokens de entrada en las llamadas
       // siguientes. Los datos de ESTE cliente (su nombre de perfil, su celular) van en un segundo bloque, sin cache.
-      system: [
-        { type: 'text', text: sistema(canalSocialDe(waId)), cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: contextoCliente(conv, waId) },
-      ],
+      system: bloquesSistema,
       tools: HERRAMIENTAS,
       tool_choice: { type: 'auto' },
       messages: mensajes,
@@ -799,6 +821,35 @@ export async function responderIA(waId) {
   } catch (err) {
     anotarErrorIA(err, waId);
     return null;
+  }
+}
+
+// Aviso para retomar un chat que se quedo sin respuesta por una falla nuestra (ver retomar.js).
+const NOTA_RETRASO =
+  'AVISO PARA ESTA RESPUESTA: el último mensaje de este cliente se quedó SIN RESPONDER varias horas por un inconveniente de nuestro sistema (no es culpa del cliente). ' +
+  'Empieza pidiéndole disculpas por la demora, de forma breve, cálida y sincera (una frase; sin detalles técnicos ni excusas largas) y enseguida responde a lo que escribió siguiendo las reglas de siempre ' +
+  '(si solo saludó, escribió algo suelto o mandó un enlace, pregúntale en qué lo ayudas o para qué fechas y cuántas personas). ' +
+  'Es UN solo mensaje corto. NO crees reservas en este mensaje: aunque ya tengas todos los datos, confírmaselos y pídele que responda para dejarla lista. No repitas el mensaje de espera anterior.';
+
+/**
+ * Redacta (sin enviar) el mensaje con disculpas para un chat que se quedo sin respuesta. Solo puede consultar disponibilidad:
+ * las herramientas que reservan se rechazan para que este mensaje nunca cree una reserva por si solo.
+ * @returns {Promise<{ok:true, texto:string}|{ok:false, motivo:string}>}
+ */
+export async function redactarRetomada(waId) {
+  if (!cliente) return { ok: false, motivo: 'Falta ANTHROPIC_API_KEY en Render.' };
+  const conv = store.obtener(waId);
+  if (!conv) return { ok: false, motivo: 'No existe la conversación.' };
+  const ejecutar = async (id, nombreHerramienta, entrada) => {
+    if (nombreHerramienta === 'consultar_disponibilidad') return ejecutarHerramienta(id, nombreHerramienta, entrada);
+    return { ok: false, error: 'Todavía no reserves: este mensaje es solo para pedir disculpas y retomar la conversación. Confírmale al cliente los datos y pídele que responda para dejar la reserva lista.' };
+  };
+  try {
+    const r = await correrAgente(waId, conv, ejecutar, { nota: NOTA_RETRASO, terminarEnCliente: true });
+    return r.texto ? { ok: true, texto: r.texto } : { ok: false, motivo: `La IA no escribió ningún texto (${r.motivo || 'sin motivo'}).` };
+  } catch (err) {
+    const { estado, tipo, mensaje } = detalleDeError(err);
+    return { ok: false, motivo: `La IA falló (${estado ?? 'sin código'} · ${tipo}): ${mensaje}` };
   }
 }
 

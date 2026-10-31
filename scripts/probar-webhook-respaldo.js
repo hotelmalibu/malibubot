@@ -122,6 +122,30 @@ const mala = await post('/admin/api/ia/simular', { mensajes: [{ de: 'valentina',
 ok('si el último mensaje no es del cliente, o falta algo, responde 400', mala.status === 400 && (await post('/admin/api/ia/simular', {}, cookie)).status === 400);
 ok('sin sesión no se puede usar (gastaría saldo)', (await fetch(`${BASE}/admin/api/ia/simular`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mensajes: [{ de: 'cliente', texto: 'hola' }] }), redirect: 'manual' })).status !== 200);
 
+console.log('\n— Retomar chats desde el panel (módulo «Retomar chats») —');
+const { textoRespaldo } = await import('../src/ia/respaldo.js');
+const RETO = '573001110050';
+store.registrarEntrante({ waId: RETO, nombre: 'Rita Gómez', tipo: 'text', texto: '¿Cuánto cuesta?' });
+store.registrarSaliente({ waId: RETO, autor: 'bot', texto: textoRespaldo('Rita Gómez') });
+const lr = await get('/admin/api/ia/retomar');
+const pr1 = (lr.pendientes || []).find((x) => x.waId === RETO);
+ok('la lista del módulo trae el chat sin respuesta, elegible y con su ventana de 24 h', lr.ok && pr1?.elegible === true && pr1.ventanaHasta > Date.now() && pr1.ultimoTexto === '¿Cuánto cuesta?', JSON.stringify(pr1));
+const bor = await (await post('/admin/api/ia/retomar/chat', { waId: RETO, accion: 'borrador' }, cookie)).json();
+ok('pedir el borrador devuelve el texto de Valentina y NO envía nada', bor.ok === true && bor.estado === 'borrador' && /Con gusto te ayudo/.test(bor.texto) && !aTexto(RETO).length, JSON.stringify(bor));
+const env = await (await post('/admin/api/ia/retomar/chat', { waId: RETO, accion: 'enviar', texto: 'Hola Rita, disculpa la demora 🙏 (texto editado a mano)' }, cookie)).json();
+ok('enviar manda el texto que llegó (el editado) al cliente', env.ok === true && env.estado === 'enviado' && aTexto(RETO).join('|') === 'Hola Rita, disculpa la demora 🙏 (texto editado a mano)', JSON.stringify(env));
+ok('...y el chat deja de estar «sin respuesta» en Conversaciones', (await get('/admin/api/conversaciones')).conversaciones.find((c) => c.waId === RETO)?.sinRespuestaIA === false);
+const otra = await (await post('/admin/api/ia/retomar/chat', { waId: RETO, accion: 'enviar', texto: 'otra vez' }, cookie)).json();
+ok('no se le escribe dos veces al mismo cliente', otra.ok === false && otra.estado === 'omitido' && aTexto(RETO).length === 1, JSON.stringify(otra));
+ok('pedidos mal hechos responden 400', (await post('/admin/api/ia/retomar/chat', { waId: RETO }, cookie)).status === 400 && (await post('/admin/api/ia/retomar/chat', { accion: 'enviar' }, cookie)).status === 400 && (await post('/admin/api/ia/retomar/chat', { waId: RETO, accion: 'enviar', texto: 123 }, cookie)).status === 400);
+ok('«ahora» exige confirmar (esa SÍ les escribe a todos)', (await post('/admin/api/ia/retomar/ahora', {}, cookie)).status === 400 && (await post('/admin/api/ia/retomar/ahora', { confirmar: 'si' }, cookie)).status === 400);
+const en5h = new Date(Date.now() + 5 * 3600e3).toISOString();
+ok('programar rechaza fechas inválidas, pasadas o a más de 23 h', (await post('/admin/api/ia/retomar/programar', { cuando: 'mañana' }, cookie)).status === 400 && (await post('/admin/api/ia/retomar/programar', { cuando: new Date(Date.now() - 3600e3).toISOString() }, cookie)).status === 400 && (await post('/admin/api/ia/retomar/programar', { cuando: new Date(Date.now() + 30 * 3600e3).toISOString() }, cookie)).status === 400);
+const pg = await (await post('/admin/api/ia/retomar/programar', { cuando: en5h }, cookie)).json();
+ok('programar una hora válida la guarda y se ve en la lista', pg.ok === true && (await get('/admin/api/ia/retomar')).programada?.cuando === Date.parse(en5h));
+ok('cancelar la quita', (await (await post('/admin/api/ia/retomar/cancelar', {}, cookie)).json()).ok === true && (await get('/admin/api/ia/retomar')).programada === null);
+ok('sin sesión no se puede usar ninguna de las rutas del módulo', (await fetch(`${BASE}/admin/api/ia/retomar`, { redirect: 'manual' })).status !== 200 && (await fetch(`${BASE}/admin/api/ia/retomar/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ waId: RETO, accion: 'enviar', texto: 'x' }), redirect: 'manual' })).status !== 200 && (await fetch(`${BASE}/admin/api/ia/retomar/ahora`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmar: true }), redirect: 'manual' })).status !== 200);
+
 console.log('\n— Una persona toma el chat —');
 store.registrarSaliente({ waId: MARYIN, autor: 'humano', texto: 'Hola Maryin, soy Laura de recepción.' });
 ok('al contestar una persona, el chat de Maryin sale de «sin respuesta»', (await get('/admin/api/conversaciones')).conversaciones.find((c) => c.waId === MARYIN)?.sinRespuestaIA === false);

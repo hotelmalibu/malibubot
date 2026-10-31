@@ -211,7 +211,7 @@ const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m
 let sintaxisOk = true; try { scripts.forEach((js) => new vm.Script(js)); } catch (e) { sintaxisOk = false; console.log('   error de sintaxis en el panel:', e.message); }
 ok('el panel sigue sin errores de sintaxis', sintaxisOk && scripts.length >= 1);
 ok('tiene la franja, la marca «SIN RESPUESTA» y el botón de prueba', /id="avisoIA"/.test(html) && /pill sinresp/.test(html) && /probarIAPanel/.test(html));
-const trozo = html.slice(html.indexOf('let ultimaPruebaIA'), html.indexOf('// Arranque + ciclos de actualización'));
+const trozo = html.slice(html.indexOf('let ultimaPruebaIA'), html.indexOf('// ---------- Retomar chats sin respuesta ----------')); // solo la franja roja (lo de «Retomar chats» tiene su propia prueba)
 const clases = new Set();
 const el = { style: { display: 'none' }, innerHTML: '', classList: { add: (c) => clases.add(c), remove: (c) => clases.delete(c) } };
 const respuestas = {};

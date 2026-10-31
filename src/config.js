@@ -52,6 +52,8 @@ export const config = {
     horaCheckIn: (process.env.HORA_CHECKIN || '3:00 p. m.').trim(),
     horaCheckOut: (process.env.HORA_CHECKOUT || '1:00 p. m.').trim(),
     horaPiscina: (process.env.HORARIO_PISCINA || '11:00 a. m. a 8:00 p. m.').trim(),
+    // Cupo de la promocion de Navidad (Junior Suite Twins): habitaciones por noche. Ver src/datos/cupo.js.
+    cupoTwins: Math.max(1, parseInt(process.env.CUPO_TWINS || '5', 10) || 5),
     get horarioTexto() {
       const fin = this.horaCheckOut;
       return `Check-in desde las ${this.horaCheckIn} y check-out hasta la ${fin}${fin.endsWith('.') ? '' : '.'}`;

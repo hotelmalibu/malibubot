@@ -34,6 +34,7 @@ import { estadoVik, probarPlantilla } from '../vikbooking/confirmada.js';
 import { estadoSync, sincronizarConVik } from '../vikbooking/sincronizar.js';
 import { estadoDespertador } from '../vikbooking/despertar.js';
 import { saludIA, probarIA, simularIA } from '../ia/agente.js';
+import { listarPendientes, retomarPendientes, retomarChat, estadoRetomada, programarRetomada, cancelarRetomada } from '../ia/retomar.js';
 import { resumenMeta, fijarMetaSemanal, waIdsConReserva } from '../datos/meta.js';
 import { resumenOrigenes, origenDe } from '../datos/origenes.js';
 import { modeloActual, parsearModelo, guardarModelo, restablecerModelo, seguimientoAnio, aplicarAjuste, ajusteActual, fijarAjuste } from '../datos/modelo.js';
@@ -615,6 +616,39 @@ adminRouter.get('/api/ia/estado', (_req, res) => {
 });
 adminRouter.post('/api/ia/diag', async (_req, res) => {
   res.json({ ...(await probarIA()), salud: saludIA() });
+});
+// Retomar los chats que se quedaron SIN RESPUESTA: Valentina les escribe con disculpas (una vez a cada uno).
+adminRouter.get('/api/ia/retomar', (_req, res) => {
+  res.json({ ok: true, programada: estadoRetomada(), pendientes: listarPendientes() });
+});
+adminRouter.post('/api/ia/retomar/vista-previa', async (_req, res) => {
+  res.json({ ok: true, ...(await retomarPendientes({ enviar: false })) }); // solo redacta: no envia ni cambia nada
+});
+// Un solo chat: accion "borrador" (Valentina redacta, no envia) o "enviar" (manda el `texto` que se revisó/editó; si no viene, lo redacta la IA).
+adminRouter.post('/api/ia/retomar/chat', async (req, res) => {
+  const { waId, accion, texto } = req.body || {};
+  if (typeof waId !== 'string' || !waId || !['borrador', 'enviar'].includes(accion)) {
+    return res.status(400).json({ ok: false, error: 'Manda "waId" y "accion": "borrador" | "enviar".' });
+  }
+  if (texto !== undefined && typeof texto !== 'string') return res.status(400).json({ ok: false, error: '"texto" debe ser un texto.' });
+  const r = await retomarChat(waId, { enviar: accion === 'enviar', texto: texto || '' });
+  res.json({ ok: r.estado === 'enviado' || r.estado === 'borrador', ...r });
+});
+adminRouter.post('/api/ia/retomar/programar', (req, res) => {
+  const cuando = Date.parse(req.body?.cuando);
+  const ahora = Date.now();
+  if (!Number.isFinite(cuando) || cuando < ahora - 60_000 || cuando > ahora + 23 * 3600 * 1000) {
+    return res.status(400).json({ ok: false, error: '«cuando» debe ser una fecha con hora y zona (ISO, p. ej. 2026-10-21T08:00:00-05:00) dentro de las próximas 23 horas.' });
+  }
+  res.json({ ok: true, programada: programarRetomada(cuando) });
+});
+adminRouter.post('/api/ia/retomar/cancelar', (_req, res) => {
+  cancelarRetomada();
+  res.json({ ok: true, programada: null });
+});
+adminRouter.post('/api/ia/retomar/ahora', async (req, res) => {
+  if (req.body?.confirmar !== true) return res.status(400).json({ ok: false, error: 'Falta "confirmar": true (esto SÍ les escribe a los clientes).' });
+  res.json({ ok: true, ...(await retomarPendientes({ enviar: true })) });
 });
 // Simulador: prueba a Valentina (modelo real) con una conversacion inventada. No escribe a nadie, no reserva, no guarda nada.
 adminRouter.post('/api/ia/simular', async (req, res) => {

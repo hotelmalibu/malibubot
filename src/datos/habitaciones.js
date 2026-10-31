@@ -65,6 +65,14 @@ export function tipoVigente(tipo, checkIn) {
   return d >= tipo.vigencia.desde && d <= tipo.vigencia.hasta;
 }
 
+/** La Junior Suite Twins: la tarifa de Navidad / de diciembre. */
+export const TWINS = TIPOS_HABITACION.find((t) => t.id === 'junior_twins');
+
+/** ¿Esta llegada (YYYY-MM-DD) cae en la temporada de la tarifa de diciembre (15-dic-2026 al 6-ene-2027)? */
+export function enNavidad(checkIn) {
+  return tipoVigente(TWINS, checkIn);
+}
+
 /** Formato corto en pesos colombianos, p. ej. "$309.000". */
 export function precioCOP(valor) {
   if (!valor && valor !== 0) return '';
