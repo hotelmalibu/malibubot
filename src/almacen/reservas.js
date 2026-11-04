@@ -18,6 +18,7 @@
 // ============================================================
 import { config } from '../config.js';
 import { dbActivo, dbGuardarReserva, dbEliminarReservas } from './db.js';
+import { limpiarComentarios } from '../datos/torre.js';
 
 // Estados de una reserva:
 //   'pagado'          -> pago en línea confirmado (ocupa habitación).
@@ -93,6 +94,7 @@ export const reservasStore = {
       fuente: datos.fuente || 'manual',         // manual | bot | rapyd
       referenciaPago: datos.referenciaPago || '',
       checkoutId: datos.checkoutId || '',
+      comentarios: limpiarComentarios(datos.comentarios), // comentarios de la reserva (p. ej. «escogió la NUEVA TORRE»): salen en el correo a recepcion
       recordatorioEnviado: 0,                   // ts del recordatorio pre-llegada (0 = aun no)
       creado: Number(datos.creado) > 0 ? Number(datos.creado) : Date.now(),
     };
@@ -139,9 +141,11 @@ export const reservasStore = {
    * Cambia la cantidad de habitaciones y/o de personas de una reserva. Si la reserva
    * tiene valor, lo reescala por la nueva cantidad de habitaciones.
    */
-  modificar(id, { cantidad, personas } = {}) {
+  modificar(id, { cantidad, personas, comentarios } = {}) {
     const r = reservas.find((x) => x.id === Number(id));
     if (!r) return null;
+    // Los comentarios se pueden reescribir o BORRAR (texto vacio); `undefined` = no tocarlos.
+    if (comentarios !== undefined && comentarios !== null) r.comentarios = limpiarComentarios(comentarios);
     if (cantidad !== undefined && cantidad !== null && cantidad !== '') {
       const nueva = cantidadValida(cantidad);
       const antes = cantidadValida(r.cantidad);
@@ -269,6 +273,7 @@ export function hidratarReservas(reservaRows = []) {
       fuente: r.fuente || 'manual',
       referenciaPago: r.referencia_pago || '',
       checkoutId: r.checkout_id || '',
+      comentarios: r.comentarios || '',
       recordatorioEnviado: Number(r.recordatorio_enviado) || 0,
       creado: Number(r.creado) || Date.now(),
     });

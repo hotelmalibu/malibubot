@@ -22,7 +22,9 @@ import { Router } from 'express';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { store } from '../almacen/conversaciones.js';
+import { store, mensajesSinDuenio } from '../almacen/conversaciones.js';
+import { esBsuid } from '../whatsapp/bsuid.js';
+import { sinDestinoRecientes, enviosFallidosRecientes } from '../whatsapp/sindestino.js';
 import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
 import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
@@ -486,6 +488,7 @@ adminRouter.post('/api/reservas', (req, res) => {
     checkIn: b.checkIn,
     checkOut: b.checkOut,
     estado: b.estado,
+    comentarios: b.comentarios,
     fuente: 'manual',
   });
   res.json({ ok: true, reserva });
@@ -499,11 +502,14 @@ adminRouter.post('/api/reservas/:id/modificar', (req, res) => {
   if (ESTADOS_ANULADOS.includes(r.estado)) {
     return res.status(400).json({ ok: false, error: 'La reserva está cancelada o rechazada.' });
   }
-  const { cantidad, personas } = req.body || {};
+  const { cantidad, personas, comentarios } = req.body || {};
   if (cantidad !== undefined && !(parseInt(cantidad, 10) >= 1)) {
     return res.status(400).json({ ok: false, error: 'La cantidad de habitaciones debe ser 1 o más.' });
   }
-  const nueva = reservasStore.modificar(r.id, { cantidad, personas });
+  if (comentarios !== undefined && typeof comentarios !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Los comentarios deben ser un texto.' });
+  }
+  const nueva = reservasStore.modificar(r.id, { cantidad, personas, comentarios });
   console.log(`[admin] Reserva ${r.id} modificada: ${nueva.cantidad} habitación(es), ${nueva.personas || '—'} persona(s).`);
   res.json({ ok: true, reserva: nueva });
 });
@@ -665,6 +671,22 @@ adminRouter.get('/api/canales/diag', (_req, res) => {
   res.json({ ok: true, grupos: store.diagCanales() });
 });
 
+// -------- Clientes de WhatsApp a los que Meta no les manda el numero (nombre de usuario) --------
+// `chatsSinNumero`: chats «bs:» (se les contesta a su identificador de WhatsApp, ver whatsapp/bsuid.js).
+// `antiguos`: mensajes guardados SIN id de chat antes de reconocerlos (ya no se pueden contestar).
+// `recientes`: mensajes que llegaron sin numero NI identificador (que campos mando Meta, para entender por que).
+// `envioFallido`: respuestas a esos clientes que WhatsApp no acepto (con el motivo que dio).
+adminRouter.get('/api/whatsapp/sin-numero', (_req, res) => {
+  const antiguos = mensajesSinDuenio();
+  res.json({
+    ok: true,
+    chatsSinNumero: store.listar().filter((c) => esBsuid(c.waId)).length,
+    antiguos: { total: antiguos.length, mensajes: antiguos.slice(-300) },
+    recientes: sinDestinoRecientes(),
+    envioFallido: enviosFallidosRecientes(),
+  });
+});
+
 // -------- Aviso "Reserva confirmada" de la pagina web (Vik Booking) --------
 adminRouter.get('/api/vik/estado', (_req, res) => {
   res.json({ ok: true, ...estadoVik(), sincronizacion: estadoSync() });
@@ -768,6 +790,7 @@ adminRouter.post('/api/conversaciones/:waId/confirmar-reserva', async (req, res)
     checkOut: salida,
     monto,
     estado: 'pendiente_hotel',
+    comentarios: b.comentarios,
     fuente: 'humano',
   });
   try {

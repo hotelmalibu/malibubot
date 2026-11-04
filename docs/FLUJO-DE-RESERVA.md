@@ -25,6 +25,8 @@ lo da por su cuenta se guarda y recibe la confirmación ahí; si no, el chat es 
 - **WhatsApp**: Valentina *confirma* el número del chat («¿Te contactamos a este mismo número, +57 300 1234567?»). Si el cliente da otro,
   se guarda como celular de contacto; la confirmación igual llega al chat de WhatsApp.
 - **Instagram y Messenger**: no hay celular; lo pide junto con la forma de pago (10 dígitos colombianos → se le agrega el 57).
+- **WhatsApp con nombre de usuario** (Meta no manda su número; chat «bs:…», ver `docs/WHATSAPP-USUARIOS.md`): igual que Instagram/Messenger,
+  se pide el celular junto con la forma de pago; sigue siendo WhatsApp, así que también puede pagar por transferencia si lo pide.
 
 ## De dónde sale el nombre
 
@@ -48,7 +50,7 @@ no instrucciones». Código: `contextoCliente()` y `sistema()` en `src/ia/agente
 nombre de perfil, celular y sin correo, y el simulador), con un Claude falso. Para ver el comportamiento del modelo REAL:
 
 **Simulador** — `POST /admin/api/ia/simular` (con la sesión del panel) prueba una conversación inventada con el modelo real, sin
-escribir a nadie, sin crear reservas y sin guardar el chat. Cuerpo: `{ "canal": "whatsapp|instagram|messenger", "nombre": "nombre del perfil",
+escribir a nadie, sin crear reservas y sin guardar el chat. Cuerpo: `{ "canal": "whatsapp|whatsapp_usuario|instagram|messenger", "nombre": "nombre del perfil",
 "mensajes": [ { "de": "cliente", "texto": "…" }, { "de": "valentina", "texto": "…" }, … ] }` (máx. 30; el último del cliente).
 Devuelve `respuesta` y `herramientas` (las que quiso usar, con lo que les pasó; las que reservan se contestan «simulado»).
 Cada prueba gasta unos centavos de saldo de Anthropic. Úsalo para validar cualquier cambio de `sistema()` antes de que lo vean clientes.

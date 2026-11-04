@@ -13,6 +13,7 @@
 // ============================================================
 import { config } from '../config.js';
 import { esSocial } from '../whatsapp/social.js';
+import { esBsuid } from '../whatsapp/bsuid.js';
 import { store } from '../almacen/conversaciones.js';
 import { reservasStore } from '../almacen/reservas.js';
 import { enviarTexto, enviarPlantilla } from '../whatsapp/enviar.js';
@@ -27,8 +28,8 @@ function confirmada(r) {
 
 /** Número de WhatsApp de la reserva (wa_id o el celular en dígitos). */
 export function destinoDe(r) {
-  // Messenger / Instagram: se le escribe por ese mismo chat (dentro de las 24 h).
-  if (esSocial(r.waId)) return r.waId;
+  // Messenger / Instagram / WhatsApp con nombre de usuario (sin numero): se le escribe por ese mismo chat (dentro de las 24 h).
+  if (esSocial(r.waId) || esBsuid(r.waId)) return r.waId;
   const d = (r.waId || '').replace(/\D/g, '') || (r.celular || '').replace(/\D/g, '');
   if (!d) return '';
   if (d.length === 10 && d.startsWith('3')) return '57' + d; // celular colombiano sin indicativo
@@ -89,7 +90,8 @@ export async function enviarRecordatorio(id) {
   let ultimo = store.ultimoEntrante(destino);
   let enVentana = !!ultimo && Date.now() - ultimo < VENTANA_WA_MS;
   // Messenger / Instagram fuera de las 24 h: no hay plantillas, asi que se usa su celular por WhatsApp.
-  if (esSocial(destino) && !enVentana) {
+  // (Un WhatsApp con nombre de usuario si admite plantillas a su identificador, pero con el celular que dio tambien llega.)
+  if ((esSocial(destino) || esBsuid(destino)) && !enVentana) {
     const d = (r.celular || '').replace(/\D/g, '');
     const wa = d.length === 10 && d.startsWith('3') ? '57' + d : d.length >= 11 ? d : '';
     if (wa) {

@@ -7,6 +7,7 @@ import { reservasStore, textoHabitaciones } from '../almacen/reservas.js';
 import { store } from '../almacen/conversaciones.js';
 import { enviarTexto } from '../whatsapp/enviar.js';
 import { confirmarReservaPorCorreo } from '../correo/enviar.js';
+import { lineaNuevaTorre } from '../datos/torre.js';
 import { config } from '../config.js';
 
 const horarios = () => `${config.hotel.horarioTexto} `;
@@ -24,7 +25,8 @@ export async function confirmarPago(reserva) {
       `¡Tu pago fue confirmado! ✅ Tu reserva en el Hotel Malibú (${textoHabitaciones(reserva)}) quedó lista. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
       horarios() +
-      `¡Te esperamos! 🌴`;
+      `¡Te esperamos! 🌴` +
+      lineaNuevaTorre(reserva);
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });
   }
@@ -53,7 +55,8 @@ export async function confirmarAbonoTransferencia(reserva) {
       `El saldo se paga directamente en el hotel al llegar. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
       horarios() +
-      `¡Te esperamos! 🌴`;
+      `¡Te esperamos! 🌴` +
+      lineaNuevaTorre(reserva);
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });
   }
@@ -82,7 +85,8 @@ export async function confirmarReservaEnHotel(reserva) {
       `PAGO PENDIENTE: el valor${valor} se paga directamente en el hotel al llegar. ` +
       (reserva.email ? `Te enviamos la confirmación a ${reserva.email}. ` : `Este mensaje es tu confirmación; muéstralo al llegar. `) +
       horarios() +
-      `¡Te esperamos! 🌴`;
+      `¡Te esperamos! 🌴` +
+      lineaNuevaTorre(reserva);
     enviarTexto(reserva.waId, msg).catch(() => {});
     store.registrarSaliente({ waId: reserva.waId, autor: 'bot', texto: msg });
   }

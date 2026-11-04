@@ -12,6 +12,7 @@
 // ============================================================
 import { config } from '../config.js';
 import { precioCOP } from '../datos/habitaciones.js';
+import { pidioNuevaTorre } from '../datos/torre.js';
 import { dbActivo, dbGuardarCorreo } from '../almacen/db.js';
 
 function activo() {
@@ -116,6 +117,8 @@ export async function estadoEnResend(id) {
 function nombreCanal(fuente, waId) {
   if (fuente === 'bot' && /^fb:/.test(waId || '')) return 'Messenger (bot)';
   if (fuente === 'bot' && /^ig:/.test(waId || '')) return 'Instagram (bot)';
+  // WhatsApp con nombre de usuario: Meta no mando su numero; el «Celular» del correo es el que el cliente dio en el chat.
+  if (fuente === 'bot' && /^bs:/.test(waId || '')) return 'WhatsApp con nombre de usuario (bot)';
   const m = {
     'vikbooking': 'Página web',
     'vikbooking-booking': 'Booking.com',
@@ -166,6 +169,7 @@ function plantilla(reserva, paraRecepcion) {
     </div>
     <p style="font-size:15px;line-height:1.5">${intro}</p>
     ${avisoPago}
+    ${paraRecepcion ? avisoComentarios(reserva) : ''}
     <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
       ${fila('Reserva N°', reserva.id)}
       ${fila('Canal', canal)}
@@ -186,6 +190,16 @@ function plantilla(reserva, paraRecepcion) {
 
 const escaparHtml = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/** Aviso destacado para RECEPCION con los comentarios de la reserva (p. ej. «escogió la NUEVA TORRE»). '' si no hay. Va escapado. */
+function avisoComentarios(reserva) {
+  const texto = String(reserva?.comentarios || '').trim();
+  if (!texto) return '';
+  return `<div style="margin:14px 0;padding:10px 14px;background:#fbf3e2;border:1px solid #ecd9a8;border-radius:10px;color:#85601f;font-size:14px;font-weight:700">COMENTARIOS DE LA RESERVA: ${escaparHtml(texto)}</div>`;
+}
+
+/** Etiqueta para el asunto del correo a recepcion cuando el cliente escogio la nueva torre (para verla sin abrir el correo). */
+const etiquetaTorre = (reserva) => (pidioNuevaTorre(reserva) ? ' · NUEVA TORRE' : '');
 
 function pesoLegible(bytes) {
   const n = Number(bytes) || 0;
@@ -219,6 +233,7 @@ function plantillaComprobante(reserva, archivo, { numero = 1, mensajeCliente = '
     </div>
     <p style="font-size:15px;line-height:1.5">El cliente envió por WhatsApp (MALIBUBOT) el comprobante de su transferencia: pago <b>parcial o completo</b> de las habitaciones. Va adjunto en este correo.</p>
     <div style="margin:14px 0;padding:10px 14px;background:#e9f0f8;border:1px solid #cddcee;border-radius:10px;color:#2f5b8a;font-size:14px;font-weight:700">COMPROBANTE RECIBIDO — POR VERIFICAR EN EL BANCO (Davivienda o Bancolombia)</div>
+    ${avisoComentarios(reserva)}
     <table style="border-collapse:collapse;background:#faf7f0;border:1px solid #ece6d8;border-radius:10px;width:100%">
       ${fila('Reserva N°', reserva.id)}
       ${fila('Canal', nombreCanal(reserva.fuente, reserva.waId))}
@@ -264,7 +279,7 @@ export async function enviarComprobanteTransferencia(reserva, archivo, extra = {
   const canalTag = nombreCanal(reserva.fuente, reserva.waId);
   return enviarCorreo({
     to: destinos,
-    subject: `Soporte de pago por transferencia — ${reserva.nombre || reserva.celular || ''} · ${reserva.checkIn || ''}${canalTag ? ` [${canalTag}]` : ''}`,
+    subject: `Soporte de pago por transferencia — ${reserva.nombre || reserva.celular || ''} · ${reserva.checkIn || ''}${canalTag ? ` [${canalTag}]` : ''}${etiquetaTorre(reserva)}`,
     html: plantillaComprobante(reserva, archivo, extra),
     reservaId: reserva.id,
     attachments: [{ filename: archivo.nombre, content: archivo.datos.toString('base64') }],
@@ -436,7 +451,7 @@ export async function confirmarReservaPorCorreo(reserva, { soloRecepcion = false
           ? `Nueva reserva ABONO RECIBIDO (saldo en hotel) — ${reserva.nombre || reserva.celular || ''}`
           : pendiente
           ? `Nueva reserva PAGO PENDIENTE (cobro en hotel) — ${reserva.nombre || reserva.celular || ''}`
-          : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`) + sufijoCanal,
+          : `Nueva reserva pagada — ${reserva.nombre || reserva.celular || ''}`) + sufijoCanal + etiquetaTorre(reserva),
         html: plantilla(reserva, true),
         reservaId: reserva.id,
       })

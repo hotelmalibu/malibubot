@@ -441,6 +441,8 @@
   .transf-msg.ok { color: var(--verde); }
   .transf-msg.error { color: var(--alerta); }
   .tag-transf { font-size: 11px; color: var(--azul); margin-top: 3px; font-weight: 600; }
+  /* Comentarios de la reserva (p. ej. «escogió la NUEVA TORRE»): en dorado para que recepción los vea al instante. */
+  .tag-torre { font-size: 11px; color: #85601f; background: #fbf3e2; border: 1px solid #ecd9a8; border-radius: 8px; padding: 2px 7px; margin-top: 4px; font-weight: 600; display: inline-block; max-width: 260px; white-space: normal; }
 </style>
 </head>
 <body>
@@ -776,6 +778,7 @@
       </div>
       <div class="campo"><label>Check-in</label><input type="date" id="rIn" /></div>
       <div class="campo"><label>Check-out</label><input type="date" id="rOut" /></div>
+      <div class="campo full"><label>Comentarios de la reserva (opcional)</label><input type="text" id="rComentarios" maxlength="300" placeholder="Ej. Escogió la nueva torre con habitación inteligente" /></div>
     </div>
     <div class="dlg-nota" id="rNota"></div>
     <div class="dlg-pie">
@@ -1296,14 +1299,16 @@
       pintarReservas(reservas || []);
     } catch (_) {}
   }
+  let reservasCache = []; // la última lista pintada (para leer los comentarios al modificar)
   function pintarReservas(rs) {
+    reservasCache = rs;
     const cuerpo = document.getElementById('cuerpoReservas'), vacio = document.getElementById('vacioReservas');
     if (!rs.length) { cuerpo.innerHTML = ''; vacio.style.display = 'block'; return; }
     vacio.style.display = 'none';
     const etiqueta = { pagado: 'Pagado', pendiente_hotel: 'Pago en hotel', en_proceso: 'En proceso', rechazado: 'Rechazado', cancelado: 'Cancelada' };
     cuerpo.innerHTML = rs.map((r) => `
       <tr>
-        <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}${String(r.fuente || '').startsWith('vikbooking') ? `<div style="font-size:11px;color:var(--gris)">Vik Booking #${esc(String(r.referenciaPago || '').replace('vik:', ''))}</div>` : ''}</td>
+        <td>${esc(r.nombre) || '<span style="color:var(--gris)">—</span>'}${String(r.fuente || '').startsWith('vikbooking') ? `<div style="font-size:11px;color:var(--gris)">Vik Booking #${esc(String(r.referenciaPago || '').replace('vik:', ''))}</div>` : ''}${r.comentarios ? `<div class="tag-torre" title="Comentarios de la reserva (llegan en el correo a recepción)">${/NUEVA TORRE/.test(r.comentarios) ? '🏙️ ' : '📝 '}${esc(r.comentarios)}</div>` : ''}</td>
         <td>${esc(r.celular) || '—'}</td>
         <td>${canalPill(r.canal)}</td>
         <td>${esc(r.habitacion) || '—'}</td>
@@ -1445,7 +1450,7 @@
   let reservaDesdeChat = null; // waId cuando el diálogo se abre desde el chat
   function prepararDlgReserva() {
     document.getElementById('rNota').textContent = '';
-    ['rNombre','rCelular','rEmail','rHab','rPersonas','rIn','rOut'].forEach((id) => document.getElementById(id).value = '');
+    ['rNombre','rCelular','rEmail','rHab','rPersonas','rIn','rOut','rComentarios'].forEach((id) => document.getElementById(id).value = '');
     document.getElementById('rEstado').value = 'pagado';
     document.getElementById('rCantidad').value = 1;
     const sel = document.getElementById('rTipo');
@@ -1462,9 +1467,10 @@
   }
   // Desde el chat: llena nombre y celular del cliente y, al guardar, confirma
   // la reserva (correo a recepción + WhatsApp al cliente) aunque no tenga correo.
-  // Los chats de Messenger / Instagram no tienen telefono: se muestra el canal, no un "+".
-  const esSocialId = (id) => /^(fb|ig):/.test(String(id || ''));
-  const idMostrar = (id) => (/^fb:/.test(id) ? 'Messenger' : /^ig:/.test(id) ? 'Instagram' : '+' + id);
+  // Los chats de Messenger / Instagram no tienen telefono: se muestra el canal, no un "+". Tampoco un WhatsApp con
+  // nombre de usuario (id "bs:..."): WhatsApp/Meta no le manda su numero al hotel.
+  const esSocialId = (id) => /^(fb|ig|bs):/.test(String(id || ''));
+  const idMostrar = (id) => (/^fb:/.test(id) ? 'Messenger' : /^ig:/.test(id) ? 'Instagram' : /^bs:/.test(id) ? 'WhatsApp (sin número)' : '+' + id);
   function abrirConfirmarDesdeChat() {
     const c = convCache; if (!c) return;
     reservaDesdeChat = c.waId;
@@ -1499,6 +1505,7 @@
         checkIn: document.getElementById('rIn').value,
         checkOut: document.getElementById('rOut').value,
         estado: document.getElementById('rEstado').value,
+        comentarios: document.getElementById('rComentarios').value.trim(),
       };
       const url = reservaDesdeChat
         ? `/admin/api/conversaciones/${encodeURIComponent(reservaDesdeChat)}/confirmar-reserva`
@@ -1520,11 +1527,14 @@
     if (c === null) return;
     const p = prompt('Cantidad de personas:', personasActual);
     if (p === null) return;
+    const actual = (reservasCache.find((x) => x.id === id) || {}).comentarios || '';
+    const com = prompt('Comentarios de la reserva (llegan en el correo a recepción; déjalo vacío para quitarlos):', actual);
+    if (com === null) return;
     if (!(parseInt(c, 10) >= 1)) { alert('La cantidad de habitaciones debe ser 1 o más.'); return; }
     try {
       const r = await fetch(`/admin/api/reservas/${id}/modificar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cantidad: parseInt(c, 10), personas: parseInt(p, 10) || undefined }),
+        body: JSON.stringify({ cantidad: parseInt(c, 10), personas: parseInt(p, 10) || undefined, comentarios: com }),
       });
       const d = await r.json();
       if (!d.ok) alert(d.error || 'No se pudo modificar.');
@@ -1810,7 +1820,7 @@
     cont.querySelectorAll('.item').forEach((el) => el.addEventListener('click', () => abrir(el.dataset.wa)));
   }
   function itemHTML(c, alerta) {
-    const nombre = c.nombre || c.waId;
+    const nombre = c.nombre || idMostrar(c.waId);
     const pill = c.modo === 'humano' ? `<span class="pill humano">HUMANO</span>` : `<span class="pill bot">BOT</span>`;
     const sinResp = c.sinRespuestaIA ? `<span class="pill sinresp" title="Valentina no pudo responderle: solo recibió el mensaje de espera">SIN RESPUESTA</span>` : '';
     const badge = c.noLeidos ? `<span class="badge">${c.noLeidos}</span>` : '';
@@ -1830,7 +1840,8 @@
     document.getElementById('chatVacio').style.display = 'none';
     document.getElementById('chatContenido').style.display = 'flex';
     document.getElementById('chatNombre').textContent = c.nombre || 'Sin nombre';
-    document.getElementById('chatNumero').textContent = (esSocialId(c.waId) ? '' : '+' + c.waId) + (c.canal ? (esSocialId(c.waId) ? '' : ' · ') + c.canal : '');
+    const numero = /^bs:/.test(c.waId) ? 'WhatsApp · sin número' : esSocialId(c.waId) ? '' : '+' + c.waId;
+    document.getElementById('chatNumero').textContent = numero + (c.canal ? (numero ? ' · ' : '') + c.canal : '');
     const btn = document.getElementById('btnModo');
     if (c.modo === 'humano') { btn.textContent = 'Devolver al bot'; btn.className = 'btn'; btn.onclick = () => cambiarModo('bot'); }
     else { btn.textContent = 'Tomar control'; btn.className = 'btn peligro'; btn.onclick = () => cambiarModo('humano'); }
@@ -2358,7 +2369,7 @@
   }
   function itemRetomar(p) {
     const [canal, ico] = retCanal(p.waId), v = retVentana(p.ventanaHasta), st = retFila[p.waId] || {};
-    const cab = '<div class="cab"><div><div class="quien">' + ico + ' ' + esc(p.nombre || p.waId) + '</div><div class="meta"><span class="pill canal">' + canal + '</span><span>escribió ' + haceCuanto(p.ultimoDelCliente) + '</span><span class="ret-ventana ' + v.clase + '">' + esc(v.txt) + '</span></div></div>'
+    const cab = '<div class="cab"><div><div class="quien">' + ico + ' ' + esc(p.nombre || idMostrar(p.waId)) + '</div><div class="meta"><span class="pill canal">' + canal + '</span><span>escribió ' + haceCuanto(p.ultimoDelCliente) + '</span><span class="ret-ventana ' + v.clase + '">' + esc(v.txt) + '</span></div></div>'
       + (p.elegible ? '<span class="pill ok">Se puede retomar</span>' : '<span class="pill fuera">No se le escribe</span>') + '</div>';
     const cita = '<div class="cita">«' + (esc(p.ultimoTexto) || 'envió un archivo, un enlace o un audio') + '»</div>';
     const ver = '<button class="btn-mini" onclick="retVerChat(this)">💬 Ver chat</button>';
@@ -2424,7 +2435,7 @@
     retOcupado = false; pintarRetomar();
   }
   async function retEnviarUno(waId) {
-    const nombre = ((retDatos.pendientes || []).find((p) => p.waId === waId) || {}).nombre || waId;
+    const nombre = ((retDatos.pendientes || []).find((p) => p.waId === waId) || {}).nombre || idMostrar(waId);
     const texto = (retBorradores[waId] || '').trim();
     const r = await retLlamar({ waId, accion: 'enviar', texto });
     if (r.ok) { retEnviados.unshift({ nombre, texto: r.texto || texto, ts: Date.now() }); delete retBorradores[waId]; retFila[waId] = { msg: '✅ Enviado', tipo: 'ok' }; }
@@ -2458,7 +2469,7 @@
     const listos = retListos(); if (!listos.length) return;
     retConfirmar('Enviar ' + listos.length + ' mensaje' + (listos.length === 1 ? '' : 's'),
       'Valentina escribirá a <b>' + listos.length + '</b> cliente' + (listos.length === 1 ? '' : 's') + ' con el texto que ves en cada recuadro:<ul style="margin:8px 0 0 18px;padding:0">'
-      + listos.map((p) => '<li>' + esc(p.nombre || p.waId) + '</li>').join('') + '</ul>', '📤 Enviar ahora', retEnviarListos);
+      + listos.map((p) => '<li>' + esc(p.nombre || idMostrar(p.waId)) + '</li>').join('') + '</ul>', '📤 Enviar ahora', retEnviarListos);
   }
   async function retEnviarListos() {
     const listos = retListos(); retOcupado = true; let n = 0;

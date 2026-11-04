@@ -16,10 +16,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
 import { TIPOS_HABITACION, precioCOP, tipoVigente, enNavidad } from '../datos/habitaciones.js';
 import { twinsDisponiblesEn, nocheSinCupoTwins } from '../datos/cupo.js';
+import { COMENTARIO_NUEVA_TORRE, admiteNuevaTorre, limpiarComentarios } from '../datos/torre.js';
 import { diaSemana, calendarioSemanas, diaColombia } from '../util/fechas.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
 import { reservasStore, cantidadValida } from '../almacen/reservas.js';
 import { esSocial, canalSocialDe } from '../whatsapp/social.js';
+import { esBsuid, sinCelularConocido } from '../whatsapp/bsuid.js';
 import { store } from '../almacen/conversaciones.js';
 import { crearCheckout, rapydActivo } from '../pagos/rapyd.js';
 import { confirmarReservaEnHotel } from '../pagos/confirmar.js';
@@ -61,14 +63,16 @@ function limpiarWhatsApp(texto) {
 /**
  * Celular del cliente para la reserva. En WhatsApp es su propio numero (wa_id), salvo que el cliente indique OTRO
  * para que lo contacten (la confirmacion igual le llega a este chat: se manda por wa_id).
- * En Messenger/Instagram no se conoce: hay que pedirselo; devuelve null si falta o es invalido.
+ * En Messenger/Instagram y en WhatsApp con nombre de usuario (Meta no manda el numero) no se conoce: hay que pedirselo;
+ * devuelve null si falta o es invalido.
  */
 function celularDe(waId, dato) {
   let d = String(dato || '').replace(/\D/g, '');
   if (d.length === 10 && d.startsWith('3')) d = '57' + d; // celular colombiano sin indicativo
   const valido = d.length >= 10 && d.length <= 15 ? d : null;
-  return esSocial(waId) ? valido : (valido || waId);
+  return sinCelularConocido(waId) ? valido : (valido || waId);
 }
+const ERROR_SIN_CELULAR = 'Falta el celular del cliente (en este chat no se conoce su número: es de Messenger, de Instagram o de un WhatsApp que oculta el número). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.';
 
 /** Nombre del huesped para la reserva: el que paso la IA o, si vino vacio, el del perfil del cliente ('' si no hay). */
 function nombreDeReserva(waId, entrada) {
@@ -100,6 +104,21 @@ function errorDeTipoYFechas(tipo, entrada) {
   }
   return null;
 }
+
+/**
+ * ¿El cliente escogio la NUEVA TORRE (habitacion Estandar inteligente)? Devuelve el comentario que queda en la reserva
+ * (y llega en el correo a recepcion) o un error si el tipo no la admite. Solo cuenta un `true` explicito de la herramienta.
+ * @returns {{comentarios:string, error?:undefined}|{error:string}}
+ */
+function comentariosDeReserva(tipo, entrada) {
+  if (entrada?.nuevaTorre !== true && entrada?.nuevaTorre !== 'true') return { comentarios: '' };
+  if (!admiteNuevaTorre(tipo)) {
+    return { error: `La nueva torre se ofrece solo con la Habitación Estándar y la Estándar Ubique, no con ${tipo.nombre}. Dile con amabilidad que para ${tipo.nombre} no aplica y, si le interesa la torre nueva, ofrécele la Habitación Estándar.` };
+  }
+  return { comentarios: COMENTARIO_NUEVA_TORRE };
+}
+/** Lo que se le agrega a la instruccion de la herramienta cuando el cliente escogio la nueva torre. */
+const INSTRUCCION_NUEVA_TORRE = ' Además, quedó anotado en los COMENTARIOS de la reserva que escogió la NUEVA TORRE con habitación inteligente y le llega al correo de recepción: díselo en una frase ("Dejé anotado en tu reserva que quieres la nueva torre con habitación inteligente y le llega a recepción 😊"), sin prometerle un número de habitación.';
 
 function buscarTipo(nombre) {
   const n = (nombre || '').toLowerCase();
@@ -189,9 +208,14 @@ function fechaHoy() {
   };
 }
 
-/** Instrucciones de Valentina (se exporta para las pruebas). */
-export function sistema(canalSocial = '') {
+/**
+ * Instrucciones de Valentina (se exporta para las pruebas).
+ * `canalSocial`: 'Messenger' | 'Instagram' | '' (WhatsApp). `sinCelular`: es un WhatsApp CON NOMBRE DE USUARIO (Meta no manda el
+ * numero del cliente, ver whatsapp/bsuid.js): sigue siendo WhatsApp, pero el celular hay que pedirlo como en Messenger/Instagram.
+ */
+export function sistema(canalSocial = '', { sinCelular = false } = {}) {
   const hoy = fechaHoy();
+  const pedirCelular = !!canalSocial || sinCelular;
   return [
     `Eres Valentina, la asesora de reservas del "Hotel y Centro de Eventos Malibú" en Sincelejo (Sucre, Colombia). Atiendes por WhatsApp.`,
     ...(canalSocial
@@ -202,7 +226,13 @@ export function sistema(canalSocial = '') {
           `- Si el cliente prefiere hablar por WhatsApp o llamar, dale el número de llamadas de la regla correspondiente.`,
           ``,
         ]
-      : []),
+      : sinCelular
+        ? [
+            `CANAL: este cliente escribe por WhatsApp pero tiene activado un USUARIO de WhatsApp (@usuario) que oculta su número: el hotel no ve su teléfono. Aquí no tienes el celular del cliente.`,
+            `- Para cerrar cualquier reserva necesitas su CELULAR (con indicativo si no es de Colombia): recepción lo necesita para contactarlo y la herramienta falla sin él. Pídeselo UNA sola vez, en el mismo mensaje donde le preguntas la forma de pago ("¿me confirmas tu celular y si pagas en línea o al llegar al hotel?"), y pásalo en el campo "celular" de la herramienta.`,
+            ``,
+          ]
+        : []),
     `Hablas como una persona REAL, cálida y cercana, en español colombiano natural (tuteo amable). NUNCA suenas a robot ni a formulario. Eres experta en VENTAS hoteleras: tu misión es que el cliente termine reservando, sintiéndose bien atendido.`,
     ``,
     `CÓMO SUENAS (100% humana):`,
@@ -213,7 +243,7 @@ export function sistema(canalSocial = '') {
     ``,
     `MENTALIDAD DE VENTAS (tu meta es CERRAR reservas):`,
     `- Siempre avanza hacia la reserva. En cuanto des un precio o resuelvas una duda, CIERRA DE INMEDIATO preguntando la fecha: "¿Para qué fecha te reservo?" o "¿Para qué fechas la quieres?". NUNCA te quedes solo informando: toda respuesta termina invitando a reservar.`,
-    `- Vende beneficios, no solo precios: descanso, ubicación, atención, que es ideal para negocios/descanso.`,
+    `- Vende beneficios, no solo precios: descanso, ubicación, atención, que es ideal para negocios/descanso y la tecnología de la nueva torre (habitaciones Estándar inteligentes: ver «NUEVA TORRE» en los hechos del hotel).`,
     `- Crea urgencia SUAVE y honesta cuando aplique ("para esas fechas se llena rápido", "te aparto la última a ese precio"). Nunca mientas.`,
     `- Maneja objeciones con empatía y ofrece alternativas (otra fecha, otro tipo de habitación) en vez de decir "no".`,
     `- Si el cliente duda del precio, resalta el valor y la facilidad de reservar ya.`,
@@ -236,7 +266,7 @@ export function sistema(canalSocial = '') {
     ``,
     `QUÉ VENDES (SOLO habitaciones). Tipos (precios "desde" en COP; el valor final se confirma al reservar):`,
     catalogoTexto(),
-    `- Si es para 1 SOLA persona, ofrece DIRECTAMENTE la Habitación Estándar (hotel corporativo, ideal para ejecutivos).`,
+    `- Si es para 1 SOLA persona, ofrece DIRECTAMENTE la Habitación Estándar (hotel corporativo, ideal para ejecutivos) y, en una frase, su sistema inteligente (ver «NUEVA TORRE» en los hechos del hotel).`,
     `- Si es para 2 PERSONAS (o preguntan precio "para dos" / "en pareja" / "habitación doble"), da SIEMPRE el valor de la Habitación Estándar; y si las fechas caen en FIN DE SEMANA (check-in viernes, sábado o domingo), da el de la Habitación Estándar Ubique, que es la tarifa que mejor se acomoda a los clientes. No ofrezcas suites a menos que las pidan. ⚠️ EXCEPCIÓN: si la llegada cae del 15 de diciembre de 2026 al 6 de enero de 2027 NO uses esta regla: aplica la TARIFA DE DICIEMBRE (más abajo).`,
     `- Para 3 o más personas (sin contar niños menores de 12, ver regla de niños abajo), recomienda la más adecuada (Junior Suite Triple para 3).`,
     `- La "Habitación Estándar Ubique" SOLO está disponible de VIERNES a DOMINGO. Si la piden entre semana, avisa con amabilidad y ofrece la Estándar o ajustar a un fin de semana.`,
@@ -264,6 +294,7 @@ export function sistema(canalSocial = '') {
     `- PARQUEADERO: SÍ hay parqueadero y es GRATIS para los huéspedes. Dilo con seguridad.`,
     `- MASCOTAS: NO se permiten mascotas en el hotel; solo se aceptan con certificado médico. Si preguntan, díselo con amabilidad y, si dice tener ese certificado, que lo consulte con recepción (${telefonoBonito()}).`,
     `- WIFI: hay WiFi en TODO el hotel y también en las zonas de co-working.`,
+    `- NUEVA TORRE y HABITACIONES INTELIGENTES: el hotel tiene una NUEVA TORRE. Sus habitaciones ESTÁNDAR incluyen un SISTEMA INTELIGENTE para el huésped: control AUTOMATIZADO del aire acondicionado y de las luces, y COMANDOS DE VOZ para otros servicios, con alta calidad para los huéspedes. Es un gran diferenciador: dilo con orgullo y naturalidad en UNA frase corta cuando ofrezcas o describas la Habitación Estándar, cuando pregunten por las habitaciones, la tecnología, el aire acondicionado o las luces, o por las novedades del hotel (una vez por conversación: no lo repitas en cada mensaje ni alargues la respuesta). Cuenta SOLO lo que está aquí: NO inventes marcas ni asistentes de voz, NO digas qué servicios exactos se piden por voz, ni cuántas habitaciones o pisos tiene la torre, ni fecha de apertura, ni precios distintos, y NO prometas que una reserva concreta queda en la torre nueva. Si piden más detalle (qué comandos, cómo se usa), sé honesta: lo confirmas con recepción (${telefonoBonito()}) y SIGUES la conversación hacia la reserva. Si quieren hospedarse en la torre nueva, sigue la regla «NUEVA TORRE» de CÓMO CIERRAS LA VENTA (queda anotado para recepción).`,
     `- UBICACIÓN: el hotel queda en la Calle 32A #32-04, Sincelejo, Sucre, Colombia.`,
     `- FACTURA ELECTRÓNICA: se solicita por correo a reservas@hotelmalibu.co, indicando el número de la reserva y los datos de facturación. Tú no la generas ni la envías; solo dile a dónde pedirla.`,
     `- POLÍTICA DE CANCELACIÓN: se puede cancelar SIN COBRO hasta 24 horas antes de la llegada; si no se cancela con esa anticipación, se cobra el valor de la reserva (tarifa del hotel). Dila con tacto si preguntan. No precises montos ni si es toda la estadía o una noche, y no prometas devoluciones ni excepciones: eso lo revisa recepción.`,
@@ -285,9 +316,10 @@ export function sistema(canalSocial = '') {
     `CÓMO CIERRAS LA VENTA (DOS FORMAS DE RESERVAR):`,
     `- CANTIDAD DE HABITACIONES: si son varias personas (más de las que caben en una) o el cliente pide más de una, pregúntale con naturalidad cuántas habitaciones necesita y de qué tipo. Siempre pásalo en cantidadHabitaciones (1 si es una sola). El valor total = precio por noche × noches × cantidad de habitaciones, y en la confirmación dile cuántas habitaciones son ("2 habitaciones Estándar").`,
     `- Confirma tipo, cantidad de habitaciones, fechas y valor total (precio por noche × número de noches × habitaciones). Con eso, SOLO confirmas DOS cosas con el cliente, en UN solo mensaje corto: su CELULAR y la FORMA DE PAGO (en línea o al llegar al hotel). Ejemplo: "¿Te la reservo? Solo confírmame tu celular y si pagas en línea o al llegar al hotel 😊". NO pidas el nombre (ya lo tienes de su perfil), ni el nombre completo, ni el correo, ni documento, ni ningún otro dato.`,
-    ...(canalSocial
+    ...(pedirCelular
       ? [`- CELULAR: en este chat NO lo tienes: pídelo junto con la forma de pago (con indicativo si no es de Colombia) y pásalo en el campo "celular" de la herramienta.`]
       : [`- CELULAR: es el número de este mismo WhatsApp (viene en "DATOS DEL CLIENTE"): CONFÍRMALO, no lo pidas ("¿Te contactamos a este mismo número, [número]?"). Solo si el cliente te da OTRO número, pásalo en el campo "celular" de la herramienta; si no, no lo pases.`]),
+    `- 🏙️ NUEVA TORRE (solo con la Habitación Estándar y la Estándar Ubique; es la excepción a «SOLO confirmas DOS cosas»): en ese mismo mensaje de cierre pregúntale también si quiere hospedarse en la NUEVA TORRE, en habitación inteligente (aire y luces automatizados y comandos de voz). Ejemplo: "¿Te la reservo? Solo confírmame tu celular, si quieres hospedarte en nuestra nueva torre (habitación inteligente: aire y luces automatizados y comandos de voz) y si pagas en línea o al llegar al hotel 😊". Si responde que SÍ, llama la herramienta con nuevaTorre: true: queda en los COMENTARIOS de la reserva y le llega al correo del hotel. Dile en una frase que quedó anotado ("Dejé anotado en tu reserva que quieres la nueva torre con habitación inteligente y le llega a recepción 😊"), sin prometerle un número de habitación: la asignación la confirma recepción. Si dice que no, o no responde esa parte, NO insistas ni se lo repitas: reserva sin nuevaTorre. Con los otros tipos (King, Triple, Suite de Lujo, Twins) no se la ofrezcas ni pases nuevaTorre.`,
     `- ⚡ CIERRE INMEDIATO: en cuanto el cliente ya conoce el valor y tienes su forma de pago y su celular confirmado ("sí", "este mismo", "pago al llegar", "en línea", el número que te dio...), LLAMA LA HERRAMIENTA EN ESE MISMO TURNO. No hagas más preguntas ni pidas nada más. Si el cliente ya te dio alguno de esos datos antes, NO se lo vuelvas a preguntar. Si todavía no le has dicho el valor, dáselo primero y pregunta "¿Te la reservo?".`,
     `- El correo NUNCA es un requisito para reservar y NO lo pidas. Si el cliente lo da por su cuenta, pásalo en "email" (ahí le llega también la confirmación); si no, la confirmación le llega por este mismo chat y recepción recibe el aviso igual.`,
     `- Después de reservar, NO digas que "le llegó la confirmación por correo" si el cliente NO dio correo: en ese caso dile que este chat es su confirmación y que lo muestre al llegar.`,
@@ -298,8 +330,8 @@ export function sistema(canalSocial = '') {
           `- La TRANSFERENCIA bancaria NO se atiende por ${canalSocial}: solo por WhatsApp. No la ofrezcas; si el cliente quiere pagar por transferencia, dile con amabilidad que para eso escriba por WhatsApp al +${config.hotel.whatsappChat} (enlace https://wa.me/${config.hotel.whatsappChat}, solo, en una línea aparte) y ahí le envías los datos.`,
         ]
       : [
-          `- OFRÉCELE las dos formas de pago de siempre, en una frase corta y natural: 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante) o 2) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual). La 3.ª forma, PAGAR POR TRANSFERENCIA bancaria a Davivienda o Bancolombia (le envías los certificados de las cuentas y la reserva se confirma cuando recepción verifica su comprobante), NO la ofrezcas tú: úsala solo si el cliente la pide ("transferencia", "consignar", "la cuenta bancaria", "Davivienda", "Bancolombia") o dice que no puede pagar en línea ni al llegar.`,
-          `- Solo existen esas formas de pago. Si piden otra (Nequi, Daviplata, efectivo en otro lugar...), di con amabilidad que por ahora son pago en línea, pago en el hotel o transferencia bancaria, y vuelve a preguntar cuál prefiere. Una "consignación" en el banco cuenta como transferencia.`,
+          `- OFRÉCELE las dos formas de pago de siempre, en una frase corta y natural: 1) PAGAR EN LÍNEA (link seguro, queda confirmada al instante) o 2) RESERVAR y PAGAR EN EL HOTEL al llegar (queda confirmada igual). ⚠️ Al preguntarle cómo paga, nombra SOLO esas dos ("¿pagas en línea o al llegar al hotel?"): NUNCA escribas «transferencia», «consignación» ni «cuenta bancaria» en tu pregunta ni en una lista de opciones, aunque sean varias personas o varias noches. La 3.ª forma, PAGAR POR TRANSFERENCIA bancaria a Davivienda o Bancolombia (le envías los certificados de las cuentas y la reserva se confirma cuando recepción verifica su comprobante), NO la ofrezcas tú: úsala solo si el cliente la pide ("transferencia", "consignar", "la cuenta bancaria", "Davivienda", "Bancolombia") o dice que no puede pagar en línea ni al llegar.`,
+          `- Solo si el cliente pide OTRA forma de pago que no sea esas dos (Nequi, Daviplata, efectivo en otro lugar...), ahí sí dile con amabilidad que por ahora son pago en línea, pago en el hotel o transferencia bancaria, y vuelve a preguntar cuál prefiere. Una "consignación" en el banco cuenta como transferencia.`,
         ]),
     `- Si elige en línea: usa generar_link_pago (envía el enlace en un mensaje aparte; no lo repitas tú).`,
     `- Si elige pagar en el hotel, o dice "pago al llegar / en efectivo allá": usa DIRECTAMENTE reservar_pago_en_hotel. Eso deja la reserva CONFIRMADA y envía solo los correos y el WhatsApp.`,
@@ -345,7 +377,9 @@ export function contextoCliente(conv, waId) {
       : `- Nombre: NO se conoce (su perfil de ${canal} no trae un nombre legible). Pregúntalo UNA sola vez, de forma natural.`,
     esSocial(waId)
       ? `- Celular: NO lo tienes (este chat es de ${canal}). Hay que pedírselo para cerrar la reserva.`
-      : `- Celular: ${telefonoLegible(waId)} (es el número de este mismo WhatsApp). Confírmaselo, no se lo pidas.`,
+      : esBsuid(waId)
+        ? `- Celular: NO lo tienes (este cliente tiene activado un usuario de WhatsApp que oculta su número al hotel). Hay que pedírselo para cerrar la reserva.`
+        : `- Celular: ${telefonoLegible(waId)} (es el número de este mismo WhatsApp). Confírmaselo, no se lo pidas.`,
   ].join('\n');
 }
 
@@ -376,7 +410,8 @@ const HERRAMIENTAS = [
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
         cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
-        celular: { type: 'string', description: 'Celular de contacto del cliente. OBLIGATORIO si el chat es de Messenger o Instagram. En WhatsApp NO lo pases, salvo que el cliente pida usar OTRO número distinto al de este chat.' },
+        nuevaTorre: { type: 'boolean', description: 'true SOLO si el cliente aceptó EXPLÍCITAMENTE hospedarse en la NUEVA TORRE (habitación Estándar inteligente). Queda en los comentarios de la reserva y le llega al correo de recepción. Solo con Habitación Estándar o Estándar Ubique. Si dijo que no o no respondió esa parte, NO lo pases.' },
+        celular: { type: 'string', description: 'Celular de contacto del cliente. OBLIGATORIO si el chat es de Messenger o Instagram, o si en DATOS DEL CLIENTE dice que NO tienes su celular (WhatsApp con nombre de usuario). En un WhatsApp normal NO lo pases, salvo que el cliente pida usar OTRO número distinto al de este chat.' },
         nombre: { type: 'string', description: 'Nombre del huésped: el nombre COMPLETO de su perfil tal cual aparece en DATOS DEL CLIENTE (no lo recortes), o el que el cliente indique. No se lo pidas.' },
         email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: no lo pidas; pásalo solo si el cliente lo dio por su cuenta).' },
       },
@@ -395,7 +430,8 @@ const HERRAMIENTAS = [
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
         cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
-        celular: { type: 'string', description: 'Celular de contacto del cliente. OBLIGATORIO si el chat es de Messenger o Instagram. En WhatsApp NO lo pases, salvo que el cliente pida usar OTRO número distinto al de este chat.' },
+        nuevaTorre: { type: 'boolean', description: 'true SOLO si el cliente aceptó EXPLÍCITAMENTE hospedarse en la NUEVA TORRE (habitación Estándar inteligente). Queda en los comentarios de la reserva y le llega al correo de recepción. Solo con Habitación Estándar o Estándar Ubique. Si dijo que no o no respondió esa parte, NO lo pases.' },
+        celular: { type: 'string', description: 'Celular de contacto del cliente. OBLIGATORIO si el chat es de Messenger o Instagram, o si en DATOS DEL CLIENTE dice que NO tienes su celular (WhatsApp con nombre de usuario). En un WhatsApp normal NO lo pases, salvo que el cliente pida usar OTRO número distinto al de este chat.' },
         nombre: { type: 'string', description: 'Nombre del huésped: el nombre COMPLETO de su perfil tal cual aparece en DATOS DEL CLIENTE (no lo recortes), o el que el cliente indique. No se lo pidas.' },
         email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: no lo pidas; pásalo solo si el cliente lo dio por su cuenta).' },
       },
@@ -414,6 +450,8 @@ const HERRAMIENTAS = [
         checkOut: { type: 'string', description: 'Fecha de salida AAAA-MM-DD.' },
         personas: { type: 'integer', description: 'Número de personas que pagan (adultos y menores de 12 en adelante). NO incluyas aquí a un menor de 12 años que se aloja gratis.' },
         cantidadHabitaciones: { type: 'integer', description: 'Cantidad de habitaciones de ESE tipo que reserva (por defecto 1). El precio total se multiplica por esta cantidad.' },
+        nuevaTorre: { type: 'boolean', description: 'true SOLO si el cliente aceptó EXPLÍCITAMENTE hospedarse en la NUEVA TORRE (habitación Estándar inteligente). Queda en los comentarios de la reserva y le llega al correo de recepción. Solo con Habitación Estándar o Estándar Ubique. Si dijo que no o no respondió esa parte, NO lo pases.' },
+        celular: { type: 'string', description: 'Celular de contacto del cliente. OBLIGATORIO solo si en DATOS DEL CLIENTE dice que NO tienes su celular (WhatsApp con nombre de usuario). Si tienes su número, NO lo pases, salvo que el cliente pida usar OTRO.' },
         nombre: { type: 'string', description: 'Nombre del huésped: el nombre COMPLETO de su perfil tal cual aparece en DATOS DEL CLIENTE (no lo recortes), o el que el cliente indique. No se lo pidas.' },
         email: { type: 'string', description: 'Correo electrónico del huésped (OPCIONAL: no lo pidas; pásalo solo si el cliente lo dio por su cuenta).' },
       },
@@ -485,12 +523,14 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
 
     const errorFechas = errorDeTipoYFechas(tipo, entrada);
     if (errorFechas) return { ok: false, error: errorFechas };
+    const torre = comentariosDeReserva(tipo, entrada);
+    if (torre.error) return { ok: false, error: torre.error };
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
     const celular = celularDe(waId, entrada.celular);
     if (celular === null) {
-      return { ok: false, error: 'Falta el celular del cliente (este chat es de Messenger o Instagram). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.' };
+      return { ok: false, error: ERROR_SIN_CELULAR };
     }
     const monto = tipo.precioDesde * n * cant;
 
@@ -508,6 +548,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
       monto,
       estado: 'en_proceso',
       fuente: 'bot',
+      comentarios: torre.comentarios,
     });
 
     try {
@@ -532,7 +573,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
         monto,
         tipo: tipo.nombre,
         instruccion:
-          'El enlace de pago YA se envió al cliente en un mensaje aparte. NO repitas el enlace en tu respuesta; solo dile que le enviaste el link arriba y que al pagar recibirá la confirmación.',
+          'El enlace de pago YA se envió al cliente en un mensaje aparte. NO repitas el enlace en tu respuesta; solo dile que le enviaste el link arriba y que al pagar recibirá la confirmación.' + (torre.comentarios ? INSTRUCCION_NUEVA_TORRE : ''),
       };
     } catch (err) {
       reservasStore.actualizarEstado(reserva.id, 'rechazado');
@@ -548,12 +589,14 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
 
     const errorFechas = errorDeTipoYFechas(tipo, entrada);
     if (errorFechas) return { ok: false, error: errorFechas };
+    const torre = comentariosDeReserva(tipo, entrada);
+    if (torre.error) return { ok: false, error: torre.error };
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
     const celular = celularDe(waId, entrada.celular);
     if (celular === null) {
-      return { ok: false, error: 'Falta el celular del cliente (este chat es de Messenger o Instagram). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.' };
+      return { ok: false, error: ERROR_SIN_CELULAR };
     }
     const monto = tipo.precioDesde * n * cant;
 
@@ -570,6 +613,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
       monto,
       estado: 'pendiente_hotel',
       fuente: 'bot',
+      comentarios: torre.comentarios,
     });
 
     try {
@@ -581,7 +625,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
         monto,
         tipo: tipo.nombre,
         instruccion:
-          'La reserva quedó CONFIRMADA con PAGO PENDIENTE (se cobra en el hotel). El correo y el WhatsApp de confirmación YA se enviaron. Dile al cliente, breve y cálido, que su reserva está confirmada y que el pago se realiza en el hotel al llegar. NO repitas todos los datos ni inventes enlaces.',
+          'La reserva quedó CONFIRMADA con PAGO PENDIENTE (se cobra en el hotel). El correo y el WhatsApp de confirmación YA se enviaron. Dile al cliente, breve y cálido, que su reserva está confirmada y que el pago se realiza en el hotel al llegar. NO repitas todos los datos ni inventes enlaces.' + (torre.comentarios ? INSTRUCCION_NUEVA_TORRE : ''),
       };
     } catch (err) {
       return { ok: false, error: 'No se pudo confirmar la reserva. Ofrece que recepción lo gestione.' };
@@ -613,10 +657,15 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     if (!huesped) return { ok: false, error: ERROR_SIN_NOMBRE };
     const errorFechas = errorDeTipoYFechas(tipo, entrada);
     if (errorFechas) return { ok: false, error: errorFechas };
+    const torre = comentariosDeReserva(tipo, entrada);
+    if (torre.error) return { ok: false, error: torre.error };
 
     const n = noches(entrada.checkIn, entrada.checkOut);
     const cant = cantidadValida(entrada.cantidadHabitaciones);
     const monto = tipo.precioDesde * n * cant;
+    // El celular es el propio wa_id; solo un WhatsApp con nombre de usuario (Meta no manda su número) debe darlo.
+    const celular = celularDe(waId, entrada.celular);
+    if (celular === null) return { ok: false, error: ERROR_SIN_CELULAR };
 
     // Si el cliente ya tiene esa misma reserva (reservó "pago en el hotel" y ahora prefiere transferir, o
     // pide los datos otra vez) se reutiliza: no se duplica.
@@ -628,7 +677,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     if (!reserva) {
       reserva = reservasStore.crear({
         waId,
-        celular: waId, // transferencia solo por WhatsApp: el celular es el propio wa_id
+        celular,
         nombre: huesped,
         email: entrada.email,
         habitacion: tipo.nombre,
@@ -640,11 +689,19 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
         estado: 'en_proceso',
         fuente: 'bot',
         referenciaPago: REF_ESPERA,
+        comentarios: torre.comentarios,
       });
       nueva = true;
-    } else if (!esTransferencia(reserva)) {
-      reserva.referenciaPago = REF_ESPERA;
-      reservasStore.guardar(reserva);
+    } else {
+      // La reserva ya existia (pago en el hotel que ahora prefiere transferir, o pide los datos otra vez).
+      let cambio = false;
+      if (!esTransferencia(reserva)) { reserva.referenciaPago = REF_ESPERA; cambio = true; }
+      // Si ahora escogio la nueva torre y todavia no estaba anotado, se anota (sin pisar otros comentarios de recepcion).
+      if (torre.comentarios && !String(reserva.comentarios || '').includes(torre.comentarios)) {
+        reserva.comentarios = limpiarComentarios([reserva.comentarios, torre.comentarios].filter(Boolean).join(' · '));
+        cambio = true;
+      }
+      if (cambio) reservasStore.guardar(reserva);
     }
 
     const envio = await enviarCertificados(waId);
@@ -668,7 +725,8 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
         `Los certificados de las cuentas del hotel (${envio.enviados.join(' y ')}, en PDF) YA se enviaron al cliente en mensajes aparte. La reserva quedó PENDIENTE: NO está confirmada ni pagada hasta que recepción verifique el comprobante. ` +
         `Dile, breve y cálido (2 o 3 frases): que le enviaste los certificados, que puede transferir a la cuenta que prefiera, que el valor total es ${precioCOP(monto)} (puede transferir el total o un abono) y que apenas transfiera te mande la FOTO o el PDF del comprobante por este mismo chat: tú se lo pasas a recepción y le confirmas la reserva. ` +
         (envio.fallaron.length ? `OJO: el certificado de ${envio.fallaron.join(' y ')} NO se pudo enviar; díselo y ofrece que recepción se lo comparte. ` : '') +
-        'NO inventes números de cuenta ni datos bancarios (están en los PDF). NO digas que la reserva está confirmada ni pagada.',
+        'NO inventes números de cuenta ni datos bancarios (están en los PDF). NO digas que la reserva está confirmada ni pagada.' +
+        (torre.comentarios ? INSTRUCCION_NUEVA_TORRE : ''),
     };
   }
 
@@ -739,7 +797,7 @@ async function correrAgente(waId, conv, ejecutar, { nota = '', terminarEnCliente
   if (terminarEnCliente) while (mensajes.length && mensajes.at(-1).role === 'assistant') mensajes.pop();
   if (mensajes.length === 0) return { texto: null, motivo: 'sin_mensajes' };
   const bloquesSistema = [
-    { type: 'text', text: sistema(canalSocialDe(waId)), cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: sistema(canalSocialDe(waId), { sinCelular: esBsuid(waId) }), cache_control: { type: 'ephemeral' } },
     { type: 'text', text: contextoCliente(conv, waId) },
     ...(nota ? [{ type: 'text', text: nota }] : []),
   ];
@@ -863,7 +921,8 @@ export async function redactarRetomada(waId) {
 export async function simularIA({ canal = 'whatsapp', nombre = '', mensajes = [] }) {
   if (!cliente) return { ok: false, herramientas: [], error: { tipo: 'sin_clave', mensaje: 'Falta ANTHROPIC_API_KEY en Render.' } };
   const c = String(canal).toLowerCase();
-  const waId = c === 'instagram' ? 'ig:SIMULACION' : c === 'messenger' ? 'fb:SIMULACION' : '573001234567';
+  // 'whatsapp_usuario' = WhatsApp con nombre de usuario (Meta no manda el numero del cliente).
+  const waId = c === 'instagram' ? 'ig:SIMULACION' : c === 'messenger' ? 'fb:SIMULACION' : c === 'whatsapp_usuario' ? 'bs:SIMULACION' : '573001234567';
   const ahora = Date.now();
   const conv = { waId, nombre, mensajes: mensajes.map((m, i) => ({ autor: m.de === 'valentina' ? 'bot' : 'cliente', texto: String(m.texto || ''), ts: ahora + i })) };
   const herramientas = [];
@@ -875,8 +934,8 @@ export async function simularIA({ canal = 'whatsapp', nombre = '', mensajes = []
       return ejecutarHerramienta(id, nombreHerramienta, entrada);
     }
     herramientas.push({ herramienta: nombreHerramienta, entrada });
-    if (nombreHerramienta !== 'reservar_pago_transferencia' && celularDe(id, entrada?.celular) === null) {
-      return { ok: false, error: 'Falta el celular del cliente (este chat es de Messenger o Instagram). Pídeselo con amabilidad y vuelve a llamar la herramienta con el campo celular.' };
+    if (celularDe(id, entrada?.celular) === null) {
+      return { ok: false, error: ERROR_SIN_CELULAR };
     }
     if (!String(entrada?.nombre || '').trim() && !nombrePerfil(nombre)) return { ok: false, error: ERROR_SIN_NOMBRE };
     return { ok: true, simulado: true, instruccion: 'SIMULACIÓN: la acción no se ejecutó de verdad. Responde al cliente como si hubiera quedado lista: confirmación breve y cálida, sin repetir todos los datos.' };

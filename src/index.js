@@ -19,6 +19,8 @@ import { parsearMensajes, parsearLlamadas, parsearEstados } from './whatsapp/rec
 import { enviarTexto, marcarLeido } from './whatsapp/enviar.js';
 import { parsearSocial, nombreSocial, marcarVistoSocial, esSocial } from './whatsapp/social.js';
 import { atenderLlamada, mensajeLlamada } from './whatsapp/llamadas.js';
+import { esBsuid } from './whatsapp/bsuid.js';
+import { registrarSinDestino, registrarFalloEnvioBsuid } from './whatsapp/sindestino.js';
 
 // Mensajes que NO son texto (llamadas que llegan como "unsupported", audios,
 // fotos...): se responde con el numero para llamar, maximo una vez por hora
@@ -153,10 +155,19 @@ app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
 
     const mensajes = [...parsearMensajes(req.body), ...parsearSocial(req.body)];
     for (const m of mensajes) {
+      // Sin numero ni identificador de usuario no hay a quien contestar: no se mete en ningun chat (antes quedaba un chat
+      // fantasma sin id), se anota y se avisa a recepcion.
+      if (!m.from) { await registrarSinDestino(m); continue; }
+      // Cliente de WhatsApp con nombre de usuario (Meta no manda su numero): si ya habia hablado con el hotel con su numero,
+      // es el mismo chat; si no, su chat es «bs:<BSUID>» y se le contesta a su BSUID (ver whatsapp/bsuid.js).
+      if (esBsuid(m.from)) {
+        const conocido = store.waIdDeBsuid(m.bsuid);
+        if (conocido) m.from = conocido;
+      }
       if (esSocial(m.from) && socialRepetido(m.id)) { console.log(`[social] Mensaje repetido ignorado (${m.id.slice(0, 12)}…)`); continue; }
       // Messenger / Instagram: el webhook no trae el nombre; se pide a Meta (con cache).
       if (esSocial(m.from) && !m.nombre) m.nombre = await nombreSocial(m.from);
-      console.log(`[msg] de ${m.nombre || m.from} (${m.tipo}): ${m.texto}`);
+      console.log(`[msg] de ${m.nombre || m.from} (${m.tipo})${esBsuid(m.from) ? ' [WhatsApp con nombre de usuario: sin número]' : ''}: ${m.texto}`);
 
       // Registrar en el panel.
       store.registrarEntrante({
@@ -165,6 +176,7 @@ app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
         tipo: m.tipo,
         texto: textoParaPanel(m),
         canal: m.canal,
+        bsuid: m.bsuid,
       });
 
       // Acuse de lectura (no bloquea si falla).
@@ -212,7 +224,13 @@ app.post(['/webhook/whatsapp', '/webhook/meta'], async (req, res) => {
         respuesta = d.texto;
       }
 
-      await enviarTexto(m.from, respuesta);
+      try {
+        await enviarTexto(m.from, respuesta);
+      } catch (err) {
+        // Escribirle a un cliente con nombre de usuario (por su BSUID) es nuevo: si WhatsApp lo rechaza, que no sea en silencio.
+        if (esBsuid(m.from)) await registrarFalloEnvioBsuid(m, err);
+        throw err;
+      }
       store.registrarSaliente({ waId: m.from, autor: 'bot', texto: respuesta });
     }
   } catch (err) {

@@ -117,9 +117,11 @@ export async function iniciarDB() {
         actualizado BIGINT
       );
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS canal TEXT;
+      ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS bsuid TEXT;
       ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS seguimiento_enviado BIGINT;
       ALTER TABLE reservas ADD COLUMN IF NOT EXISTS recordatorio_enviado BIGINT;
       ALTER TABLE reservas ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1;
+      ALTER TABLE reservas ADD COLUMN IF NOT EXISTS comentarios TEXT;
     `);
     console.log('[db] Conectada a PostgreSQL y tablas listas. ✅');
     return true;
@@ -136,8 +138,8 @@ export async function iniciarDB() {
 export async function dbGuardarConversacion(conv) {
   if (!pool) return;
   await pool.query(
-    `INSERT INTO conversaciones (wa_id, nombre, modo, escalado, canal, seguimiento_enviado, creado, ultima_actividad)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `INSERT INTO conversaciones (wa_id, nombre, modo, escalado, canal, seguimiento_enviado, creado, ultima_actividad, bsuid)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      ON CONFLICT (wa_id) DO UPDATE SET
        nombre = EXCLUDED.nombre,
        modo = EXCLUDED.modo,
@@ -146,8 +148,10 @@ export async function dbGuardarConversacion(conv) {
        -- Nunca "baja": si dos guardados casi simultaneos llegan en desorden,
        -- gana el que ya tiene el seguimiento marcado (evita re-envios).
        seguimiento_enviado = GREATEST(COALESCE(conversaciones.seguimiento_enviado, 0), COALESCE(EXCLUDED.seguimiento_enviado, 0)),
-       ultima_actividad = EXCLUDED.ultima_actividad`,
-    [conv.waId, conv.nombre || '', conv.modo || 'bot', !!conv.escalado, conv.canal || '', conv.seguimientoEnviado || 0, conv.creado, conv.ultimaActividad]
+       ultima_actividad = EXCLUDED.ultima_actividad,
+       -- El BSUID (identificador de WhatsApp del cliente) nunca se borra: solo se completa o se actualiza.
+       bsuid = COALESCE(NULLIF(EXCLUDED.bsuid, ''), conversaciones.bsuid)`,
+    [conv.waId, conv.nombre || '', conv.modo || 'bot', !!conv.escalado, conv.canal || '', conv.seguimientoEnviado || 0, conv.creado, conv.ultimaActividad, conv.bsuid || '']
   );
 }
 
@@ -173,8 +177,8 @@ export async function dbGuardarReserva(r) {
   await pool.query(
     `INSERT INTO reservas
        (id, wa_id, celular, nombre, email, habitacion, personas, check_in, check_out,
-        monto, estado, fuente, referencia_pago, checkout_id, creado, recordatorio_enviado, cantidad)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        monto, estado, fuente, referencia_pago, checkout_id, creado, recordatorio_enviado, cantidad, comentarios)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      ON CONFLICT (id) DO UPDATE SET
        -- Nunca "baja": el recordatorio pre-llegada se envia UNA vez por reserva.
        recordatorio_enviado = GREATEST(COALESCE(reservas.recordatorio_enviado, 0), COALESCE(EXCLUDED.recordatorio_enviado, 0)),
@@ -191,12 +195,13 @@ export async function dbGuardarReserva(r) {
        estado = EXCLUDED.estado,
        fuente = EXCLUDED.fuente,
        referencia_pago = EXCLUDED.referencia_pago,
-       checkout_id = EXCLUDED.checkout_id`,
+       checkout_id = EXCLUDED.checkout_id,
+       comentarios = EXCLUDED.comentarios`,
     [
       r.id, r.waId || '', r.celular || '', r.nombre || '', r.email || '', r.habitacion || '',
       r.personas ?? null, r.checkIn || '', r.checkOut || '', r.monto ?? null, r.estado,
       r.fuente || 'manual', r.referenciaPago || '', r.checkoutId || '', r.creado,
-      r.recordatorioEnviado || 0, r.cantidad || 1,
+      r.recordatorioEnviado || 0, r.cantidad || 1, r.comentarios || '',
     ]
   );
 }

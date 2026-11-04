@@ -25,6 +25,8 @@ function persistir(conv, mensaje) {
 
 /** @type {Map<string, object>} */
 const conversaciones = new Map();
+/** Mensajes viejos guardados sin id de chat (ver hidratarConversaciones): no son de ningun chat. */
+const sinDuenio = [];
 
 function ahora() {
   return Date.now();
@@ -34,6 +36,7 @@ function crearConversacion(waId, nombre) {
   const conv = {
     waId,
     nombre: nombre || '',
+    bsuid: '',            // identificador interno de WhatsApp del cliente (ver whatsapp/bsuid.js), si Meta lo mando
     modo: 'bot',          // 'bot' | 'humano'
     escalado: false,      // true si el bot pidio ayuda humana
     canal: '',            // de que "puerta" llego (Maps, Instagram, QR...)
@@ -104,6 +107,9 @@ function ultimoEntrante(conv) {
 }
 
 function obtenerOCrear(waId, nombre) {
+  // Nunca un chat sin id: se guardaria con la llave «null» y todos esos mensajes (de clientes distintos, sin forma de
+  // contestarles) acabarian revueltos en un solo chat fantasma. Quien llama debe descartar o resolver el id antes.
+  if (!waId || typeof waId !== 'string') throw new Error('Falta el id del chat (waId).');
   const conv = conversaciones.get(waId);
   if (conv) {
     if (nombre && !conv.nombre) conv.nombre = nombre;
@@ -123,9 +129,14 @@ function agregarMensaje(conv, mensaje) {
 // ---------- API publica ----------
 
 export const store = {
-  /** Registra un mensaje entrante del cliente. */
-  registrarEntrante({ waId, nombre, tipo, texto, canal }) {
+  /**
+   * Registra un mensaje entrante del cliente.
+   * `bsuid`: identificador interno de WhatsApp del cliente (si Meta lo mando): permite reconocerlo cuando mas adelante
+   * escriba con su nombre de usuario y Meta no mande su numero (ver waIdDeBsuid).
+   */
+  registrarEntrante({ waId, nombre, tipo, texto, canal, bsuid }) {
     const conv = obtenerOCrear(waId, nombre);
+    if (bsuid && conv.bsuid !== bsuid) { conv.bsuid = bsuid; persistir(conv); }
     // Messenger / Instagram: el canal ya se sabe. Si no, la primera vez que lo detectamos en el texto, lo fijamos.
     if (!conv.canal && canal) conv.canal = canal;
     if (!conv.canal) {
@@ -230,6 +241,18 @@ export const store = {
   /** Conversacion completa (para el transcript). */
   obtener(waId) {
     return conversaciones.get(waId) || null;
+  },
+
+  /**
+   * Chat con NUMERO de un cliente de WhatsApp al que ya se le conoce el BSUID (null si no hay). Sirve cuando el cliente
+   * escribe con su nombre de usuario y Meta no manda el numero: si ya habia hablado con el hotel con su numero, es el mismo chat.
+   */
+  waIdDeBsuid(bsuid) {
+    if (!bsuid) return null;
+    for (const c of conversaciones.values()) {
+      if (c.bsuid === bsuid && !c.waId.startsWith('bs:')) return c.waId;
+    }
+    return null;
   },
 
   /**
@@ -410,9 +433,11 @@ export const store = {
  */
 export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
   for (const c of convRows) {
+    if (!c.wa_id) continue;
     conversaciones.set(c.wa_id, {
       waId: c.wa_id,
       nombre: c.nombre || '',
+      bsuid: c.bsuid || '',
       modo: c.modo === 'humano' ? 'humano' : 'bot',
       escalado: !!c.escalado,
       canal: c.canal || '',
@@ -423,7 +448,11 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
       mensajes: [],
     });
   }
+  // Mensajes guardados SIN id de chat (antes de reconocer a los clientes de WhatsApp con nombre de usuario, Meta no mandaba
+  // su numero y el mensaje se guardaba sin dueño): no se pueden atribuir a nadie, y juntarlos formaria un chat fantasma.
+  sinDuenio.length = 0;
   for (const m of msgRows) {
+    if (!m.wa_id) { sinDuenio.push({ ts: Number(m.ts), autor: m.autor, tipo: m.tipo || 'text', texto: m.texto || '' }); continue; }
     let conv = conversaciones.get(m.wa_id);
     if (!conv) {
       // Mensaje sin metadatos de conversacion (raro): crea una minima.
@@ -451,7 +480,13 @@ export function hidratarConversaciones({ convRows = [], msgRows = [] } = {}) {
       if (s) conv.seguimientoEnviado = s.ts;
     }
   }
+  if (sinDuenio.length) console.warn(`[db] ${sinDuenio.length} mensajes antiguos sin id de chat (clientes de WhatsApp a los que Meta no les mando el numero): no se pueden contestar ni atribuir.`);
   return conversaciones.size;
+}
+
+/** Mensajes viejos que se guardaron sin id de chat (los de antes de reconocer a los clientes con nombre de usuario). */
+export function mensajesSinDuenio() {
+  return sinDuenio.map((m) => ({ ...m }));
 }
 
 /**

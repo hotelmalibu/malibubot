@@ -4,6 +4,7 @@
 // ============================================================
 import { config } from '../config.js';
 import { esSocial, enviarSocial } from './social.js';
+import { destinatario } from './bsuid.js';
 
 function urlMensajes() {
   return `${config.whatsapp.graphBase}/${config.whatsapp.graphVersion}/${config.whatsapp.phoneNumberId}/messages`;
@@ -32,7 +33,7 @@ async function llamarGraph(payload) {
 /**
  * Envia un mensaje de texto libre.
  * (Solo funciona dentro de la ventana de 24 h que abre el cliente al escribir.)
- * @param {string} destino  Numero del cliente (wa_id).
+ * @param {string} destino  Numero del cliente (wa_id) o, si tiene nombre de usuario de WhatsApp, «bs:<BSUID>».
  * @param {string} texto
  */
 export async function enviarTexto(destino, texto) {
@@ -40,7 +41,7 @@ export async function enviarTexto(destino, texto) {
   if (esSocial(destino)) return enviarSocial(destino, texto);
   return llamarGraph({
     messaging_product: 'whatsapp',
-    to: destino,
+    ...destinatario(destino),
     type: 'text',
     text: { body: texto },
   });
@@ -61,7 +62,7 @@ export async function enviarPlantilla(destino, nombre, idioma = 'es', parametros
     : [];
   return llamarGraph({
     messaging_product: 'whatsapp',
-    to: destino,
+    ...destinatario(destino),
     type: 'template',
     template: { name: nombre, language: { code: idioma }, components },
   });
@@ -106,7 +107,7 @@ export async function enviarDocumento(destino, { datos, mime = 'application/pdf'
   const id = await subirMedia({ datos, mime, nombre });
   return llamarGraph({
     messaging_product: 'whatsapp',
-    to: destino,
+    ...destinatario(destino),
     type: 'document',
     document: { id, filename: nombre, ...(leyenda ? { caption: leyenda } : {}) },
   });

@@ -28,8 +28,9 @@ export function primerNombre(nombre) {
   return n && n.length <= 20 ? n : '';
 }
 
-/** Numero de WhatsApp legible: «+57 300 1234567» (Colombia) o «+<digitos>». */
+/** Numero de WhatsApp legible: «+57 300 1234567» (Colombia) o «+<digitos>». Un chat sin numero (fb:, ig:, bs:) da ''. */
 export function telefonoLegible(waId) {
+  if (/^[a-z]{2}:/i.test(String(waId ?? ''))) return '';
   const d = String(waId ?? '').replace(/\D/g, '');
   if (d.length === 12 && d.startsWith('57')) return `+57 ${d.slice(2, 5)} ${d.slice(5)}`;
   return d ? `+${d}` : '';
