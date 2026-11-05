@@ -24,6 +24,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { store, mensajesSinDuenio } from '../almacen/conversaciones.js';
 import { esBsuid } from '../whatsapp/bsuid.js';
+import { listarCierres, agregarCierre, quitarCierre } from '../datos/cierres.js';
 import { sinDestinoRecientes, enviosFallidosRecientes } from '../whatsapp/sindestino.js';
 import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
@@ -664,6 +665,17 @@ adminRouter.post('/api/ia/simular', async (req, res) => {
     && lista.every((m) => ['cliente', 'valentina'].includes(m?.de) && typeof m?.texto === 'string' && m.texto.length <= 1000);
   if (!valida) return res.status(400).json({ ok: false, error: 'Manda "mensajes": [{ "de": "cliente"|"valentina", "texto": "..." }] (máx. 30; el último del cliente).' });
   res.json(await simularIA({ canal, nombre: String(nombre || '').slice(0, 80), mensajes: lista }));
+});
+
+// -------- Fechas cerradas: Valentina no vende esas noches (ver datos/cierres.js) --------
+adminRouter.get('/api/cierres', (_req, res) => res.json({ ok: true, cierres: listarCierres() }));
+adminRouter.post('/api/cierres', (req, res) => {
+  const r = agregarCierre({ desde: String(req.body?.desde || ''), hasta: String(req.body?.hasta || req.body?.desde || ''), motivo: req.body?.motivo });
+  res.status(r.ok ? 200 : 400).json(r.ok ? { ...r, cierres: listarCierres() } : r);
+});
+adminRouter.post('/api/cierres/:id/quitar', (req, res) => {
+  const ok = quitarCierre(req.params.id);
+  res.status(ok ? 200 : 404).json({ ok, cierres: listarCierres() });
 });
 
 // -------- Diagnostico de canales (primer mensaje -> canal detectado) --------

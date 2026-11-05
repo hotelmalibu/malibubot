@@ -16,6 +16,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
 import { TIPOS_HABITACION, precioCOP, tipoVigente, enNavidad } from '../datos/habitaciones.js';
 import { twinsDisponiblesEn, nocheSinCupoTwins } from '../datos/cupo.js';
+import { nocheCerrada, primeraNocheCerrada } from '../datos/cierres.js';
 import { COMENTARIO_NUEVA_TORRE, admiteNuevaTorre, limpiarComentarios } from '../datos/torre.js';
 import { diaSemana, calendarioSemanas, diaColombia } from '../util/fechas.js';
 import { ocupacionDelLibro } from '../datos/ocupacion.js';
@@ -85,6 +86,8 @@ const ERROR_SIN_NOMBRE = 'Falta el nombre del cliente (su perfil no trae uno). P
  * Estándar Ubique solo de viernes a domingo. Devuelve el texto del error o null si todo está bien.
  */
 function errorDeTipoYFechas(tipo, entrada) {
+  const cerrada = primeraNocheCerrada(entrada.checkIn, entrada.checkOut);
+  if (cerrada) return `Para la noche del ${cerrada} el hotel NO tiene habitaciones disponibles en este momento (fecha cerrada). NO reserves. Dile con amabilidad que en este momento no tenemos habitaciones disponibles para esas fechas (sin dar más explicaciones) y ofrécele otras fechas.`;
   if (!tipoVigente(tipo, entrada.checkIn)) {
     return `${tipo.nombre} es una promoción válida solo para llegadas del ${tipo.vigencia.desde} al ${tipo.vigencia.hasta}. Ofrece otro tipo de habitación o ajusta las fechas.`;
   }
@@ -295,6 +298,7 @@ export function sistema(canalSocial = '', { sinCelular = false } = {}) {
     `- MASCOTAS: NO se permiten mascotas en el hotel; solo se aceptan con certificado médico. Si preguntan, díselo con amabilidad y, si dice tener ese certificado, que lo consulte con recepción (${telefonoBonito()}).`,
     `- WIFI: hay WiFi en TODO el hotel y también en las zonas de co-working.`,
     `- NUEVA TORRE y HABITACIONES INTELIGENTES: el hotel tiene una NUEVA TORRE. Sus habitaciones ESTÁNDAR incluyen un SISTEMA INTELIGENTE para el huésped: control AUTOMATIZADO del aire acondicionado y de las luces, y COMANDOS DE VOZ para otros servicios, con alta calidad para los huéspedes. Es un gran diferenciador: dilo con orgullo y naturalidad en UNA frase corta cuando ofrezcas o describas la Habitación Estándar, cuando pregunten por las habitaciones, la tecnología, el aire acondicionado o las luces, o por las novedades del hotel (una vez por conversación: no lo repitas en cada mensaje ni alargues la respuesta). Cuenta SOLO lo que está aquí: NO inventes marcas ni asistentes de voz, NO digas qué servicios exactos se piden por voz, ni cuántas habitaciones o pisos tiene la torre, ni fecha de apertura, ni precios distintos, y NO prometas que una reserva concreta queda en la torre nueva. Si piden más detalle (qué comandos, cómo se usa), sé honesta: lo confirmas con recepción (${telefonoBonito()}) y SIGUES la conversación hacia la reserva. Si quieren hospedarse en la torre nueva, sigue la regla «NUEVA TORRE» de CÓMO CIERRAS LA VENTA (queda anotado para recepción).`,
+    `- FECHAS CERRADAS: si la herramienta dice que una fecha está cerrada (cerrado: true) o rechaza la reserva por fecha cerrada, di que en este momento no tenemos habitaciones disponibles para esas fechas, sin explicar el motivo, y ofrece otras fechas. Nunca prometas ni reserves esas noches.`,
     `- UBICACIÓN: el hotel queda en la Calle 32A #32-04, Sincelejo, Sucre, Colombia.`,
     `- FACTURA ELECTRÓNICA: se solicita por correo a reservas@hotelmalibu.co, indicando el número de la reserva y los datos de facturación. Tú no la generas ni la envías; solo dile a dónde pedirla.`,
     `- POLÍTICA DE CANCELACIÓN: se puede cancelar SIN COBRO hasta 24 horas antes de la llegada; si no se cancela con esa anticipación, se cobra el valor de la reserva (tarifa del hotel). Dila con tacto si preguntan. No precises montos ni si es toda la estadía o una noche, y no prometas devoluciones ni excepciones: eso lo revisa recepción.`,
@@ -490,6 +494,7 @@ export async function ejecutarHerramienta(waId, nombre, entrada) {
     const tipos = TIPOS_HABITACION.map((t) => ({ nombre: t.nombre, precioDesde: t.precioDesde, capacidad: t.capacidad, ...(t.vigencia ? { soloLlegadasDel: t.vigencia.desde, al: t.vigencia.hasta } : {}) }));
     // El dia de la semana lo calcula el codigo (la IA se equivocaba) y, en la temporada de Navidad, cuantas Twins quedan esa noche.
     const dia = /^\d{4}-\d{2}-\d{2}$/.test(fecha || '') ? fecha : diaColombia();
+    if (nocheCerrada(dia)) return { fecha: dia, cerrado: true, disponibles: 0, instruccion: 'Esa fecha está CERRADA: en este momento NO tenemos habitaciones disponibles. Díselo con amabilidad, sin dar más explicaciones, y ofrécele otras fechas. NO reserves.' };
     const extra = { diaSemana: diaSemana(dia), ...(enNavidad(dia) ? { twinsDisponibles: twinsDisponiblesEn(dia), nota_twins: 'Cupo limitado de la promoción de Navidad (Junior Suite Twins). Si twinsDisponibles es 0, ofrece la Habitación Estándar al mismo precio.' } : {}) };
     if (libro) {
       return {
