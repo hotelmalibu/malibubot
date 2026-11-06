@@ -25,17 +25,35 @@ export function agregarCierre({ desde, hasta, motivo = '' }) {
   if (hasta < desde) return { ok: false, error: 'La fecha «hasta» no puede ser anterior a «desde».' };
   const lista = listarCierres();
   if (lista.length >= MAX) return { ok: false, error: `Máximo ${MAX} cierres: quita los que ya pasaron.` };
-  const cierre = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), desde, hasta, motivo: String(motivo || '').replace(/\s+/g, ' ').trim().slice(0, 120), creado: Date.now() };
+  const cierre = { vik: 'pendiente', id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), desde, hasta, motivo: String(motivo || '').replace(/\s+/g, ' ').trim().slice(0, 120), creado: Date.now() };
   ajustesStore.poner(CLAVE, JSON.stringify([...lista, cierre]));
   return { ok: true, cierre };
 }
 
 export function quitarCierre(id) {
   const lista = listarCierres();
-  const resto = lista.filter((c) => c.id !== id);
-  if (resto.length === lista.length) return false;
-  ajustesStore.poner(CLAVE, JSON.stringify(resto));
+  const quitado = lista.find((c) => c.id === id);
+  if (!quitado) return false;
+  ajustesStore.poner(CLAVE, JSON.stringify(lista.filter((c) => c.id !== id)));
+  // Si ya estaba cerrada en Vik Booking, hay que REABRIRLA allá: queda en cola hasta que Vik lo confirme.
+  if (quitado.vik === 'cerrada') ajustesStore.poner(CLAVE_ABRIR, JSON.stringify([...pendientesAbrir(), { id: quitado.id, desde: quitado.desde, hasta: quitado.hasta }]));
   return true;
+}
+
+const CLAVE_ABRIR = 'fechas_abrir_en_vik';
+export function pendientesAbrir() {
+  try { const v = JSON.parse(ajustesStore.obtener(CLAVE_ABRIR, '[]')); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+export function resolverApertura(id) {
+  ajustesStore.poner(CLAVE_ABRIR, JSON.stringify(pendientesAbrir().filter((c) => c.id !== id)));
+}
+/** Anota como quedo el cierre en Vik Booking: 'pendiente' | 'cerrada' | 'error'. */
+export function marcarVik(id, estado, error = '') {
+  const lista = listarCierres();
+  const c = lista.find((x) => x.id === id);
+  if (!c) return;
+  c.vik = estado; c.vikError = String(error || '').slice(0, 200); c.vikIntento = Date.now();
+  ajustesStore.poner(CLAVE, JSON.stringify(lista));
 }
 
 /** ¿Está cerrada la noche `fecha` (AAAA-MM-DD)? */

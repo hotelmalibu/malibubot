@@ -1,0 +1,24 @@
+// probar-cierre-vik.js — El bot cierra/abre en Vik Booking las fechas del panel (web FALSA). node scripts/probar-cierre-vik.js
+import http from 'http';
+const recibidas = []; let modo = 'ok';
+const web = await new Promise((r) => { const s = http.createServer((req, res) => { const p = []; req.on('data', (c) => p.push(c)); req.on('end', () => { res.setHeader('Content-Type', 'application/json'); if (req.headers['x-malibubot-key'] !== 'clave-prueba') { res.statusCode = 403; return res.end('{"ok":false,"error":"clave"}'); } if (modo === 'falla') { res.statusCode = 500; return res.end('{"ok":false,"error":"Vik no respondió"}'); } recibidas.push(JSON.parse(Buffer.concat(p).toString())); res.end('{"ok":true}'); }); }); s.listen(0, () => r(s)); });
+process.env.VIK_CIERRE_URL = `http://127.0.0.1:${web.address().port}/c.php`; process.env.VIK_CIERRE_KEY = 'clave-prueba'; delete process.env.DATABASE_URL;
+const { agregarCierre, quitarCierre, listarCierres, pendientesAbrir } = await import('../src/datos/cierres.js');
+const { sincronizarCierresVik, cierreVikActivo } = await import('../src/vikbooking/cerrar.js');
+let fallos = 0; const ok = (n, c, x = '') => { console.log((c ? '✅ ' : '❌ ') + n + (c ? '' : '  → ' + x)); if (!c) fallos++; };
+ok('conectado cuando hay URL y clave', cierreVikActivo());
+const a = agregarCierre({ desde: '2026-11-14', hasta: '2026-11-14', motivo: 'x' }).cierre;
+ok('un cierre nuevo queda «pendiente» en Vik', listarCierres()[0].vik === 'pendiente');
+modo = 'falla'; await sincronizarCierresVik();
+ok('si la web falla: queda en error con el motivo, sin perderse', listarCierres()[0].vik === 'error' && /no respondió/.test(listarCierres()[0].vikError) && recibidas.length === 0);
+modo = 'ok'; await sincronizarCierresVik();
+ok('al reintentar se cierra UNA vez, con las fechas y la clave', listarCierres()[0].vik === 'cerrada' && recibidas.length === 1 && recibidas[0].accion === 'cerrar' && recibidas[0].desde === '2026-11-14' && recibidas[0].hasta === '2026-11-14');
+await sincronizarCierresVik();
+ok('ya cerrada: no se manda otra vez', recibidas.length === 1);
+quitarCierre(a.id);
+ok('al volver a abrir queda la reapertura pendiente', pendientesAbrir().length === 1 && listarCierres().length === 0);
+await sincronizarCierresVik();
+ok('se reabre en Vik y la cola queda vacía', recibidas.length === 2 && recibidas[1].accion === 'abrir' && pendientesAbrir().length === 0);
+const b = agregarCierre({ desde: '2026-12-01', hasta: '2026-12-02' }).cierre; quitarCierre(b.id);
+ok('un cierre que nunca llegó a Vik no manda ninguna reapertura', pendientesAbrir().length === 0);
+web.close(); console.log(fallos ? `\n❌ ${fallos}` : '\n✅ Todo bien'); process.exit(fallos ? 1 : 0);

@@ -840,8 +840,8 @@
       const d = await (await fetch('/admin/api/cierres')).json();
       const f = (iso) => iso.split('-').reverse().join('/');
       document.getElementById('cLista').innerHTML = (d.cierres || []).length
-        ? '<table class="tabla"><thead><tr><th>Noches cerradas</th><th>Motivo</th><th></th></tr></thead><tbody>' + d.cierres.map((c) =>
-          '<tr><td><b>' + f(c.desde) + (c.hasta !== c.desde ? ' al ' + f(c.hasta) : '') + '</b></td><td>' + esc(c.motivo || '—') + '</td><td style="text-align:right"><button class="btn-mini" onclick="quitarCierre(\'' + esc(c.id) + '\')">Volver a abrir</button></td></tr>').join('') + '</tbody></table>'
+        ? '<table class="tabla"><thead><tr><th>Noches cerradas</th><th>Motivo</th><th>En Vik Booking</th><th></th></tr></thead><tbody>' + d.cierres.map((c) =>
+          '<tr><td><b>' + f(c.desde) + (c.hasta !== c.desde ? ' al ' + f(c.hasta) : '') + '</b></td><td>' + esc(c.motivo || '—') + '</td><td>' + (!d.vikConectado ? '<span style="color:var(--gris)">no conectado</span>' : c.vik === 'cerrada' ? '✅ cerrada (y en Booking/Expedia)' : c.vik === 'error' ? '⚠️ ' + esc(c.vikError || 'error') : '⏳ pendiente') + '</td><td style="text-align:right"><button class="btn-mini" onclick="quitarCierre(\'' + esc(c.id) + '\')">Volver a abrir</button></td></tr>').join('') + '</tbody></table>'
         : '<div class="vacio-tabla">No hay fechas cerradas: Valentina vende todas las noches.</div>';
     } catch (_) {}
   }

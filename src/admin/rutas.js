@@ -25,6 +25,7 @@ import { dirname, join } from 'path';
 import { store, mensajesSinDuenio } from '../almacen/conversaciones.js';
 import { esBsuid } from '../whatsapp/bsuid.js';
 import { listarCierres, agregarCierre, quitarCierre } from '../datos/cierres.js';
+import { cierreVikActivo, sincronizarCierresVik } from '../vikbooking/cerrar.js';
 import { sinDestinoRecientes, enviosFallidosRecientes } from '../whatsapp/sindestino.js';
 import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
@@ -668,13 +669,15 @@ adminRouter.post('/api/ia/simular', async (req, res) => {
 });
 
 // -------- Fechas cerradas: Valentina no vende esas noches (ver datos/cierres.js) --------
-adminRouter.get('/api/cierres', (_req, res) => res.json({ ok: true, cierres: listarCierres() }));
+adminRouter.get('/api/cierres', (_req, res) => res.json({ ok: true, vikConectado: cierreVikActivo(), cierres: listarCierres() }));
 adminRouter.post('/api/cierres', (req, res) => {
   const r = agregarCierre({ desde: String(req.body?.desde || ''), hasta: String(req.body?.hasta || req.body?.desde || ''), motivo: req.body?.motivo });
+  if (r.ok) sincronizarCierresVik().catch(() => {});
   res.status(r.ok ? 200 : 400).json(r.ok ? { ...r, cierres: listarCierres() } : r);
 });
 adminRouter.post('/api/cierres/:id/quitar', (req, res) => {
   const ok = quitarCierre(req.params.id);
+  if (ok) sincronizarCierresVik().catch(() => {});
   res.status(ok ? 200 : 404).json({ ok, cierres: listarCierres() });
 });
 
