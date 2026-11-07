@@ -42,6 +42,7 @@ import { hidratarVikAvisos, procesarConfirmacion, claveValida, registrarEstadoWh
 import { programarSync } from './vikbooking/sincronizar.js';
 import { programarDespertador } from './vikbooking/despertar.js';
 import { programarCierresVik } from './vikbooking/cerrar.js';
+import { programarCrontab } from './vikbooking/crontab.js';
 import { hidratarAjustes } from './almacen/ajustes.js';
 import { hidratarMetricas } from './ia/metricas.js';
 import { enviarSeguimientos } from './ia/seguimiento.js';
@@ -376,6 +377,7 @@ async function arrancar() {
   // «Despierta» cada 5 min a la IA de Vik (contestador de mensajes de Booking), que en Joomla 3 no se activa sola.
   programarDespertador();
   programarCierresVik();
+  programarCrontab();
   iniciarRetomadas(); // si hay una retomada de chats sin respuesta programada, la corre a su hora
 
   const recordar = () => enviarRecordatorios().catch((e) => console.error('[recordatorio]', e.message));

@@ -26,6 +26,7 @@ import { store, mensajesSinDuenio } from '../almacen/conversaciones.js';
 import { esBsuid } from '../whatsapp/bsuid.js';
 import { listarCierres, agregarCierre, quitarCierre } from '../datos/cierres.js';
 import { cierreVikActivo, sincronizarCierresVik } from '../vikbooking/cerrar.js';
+import { estadoCrontab } from '../vikbooking/crontab.js';
 import { sinDestinoRecientes, enviosFallidosRecientes } from '../whatsapp/sindestino.js';
 import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
@@ -704,7 +705,7 @@ adminRouter.get('/api/whatsapp/sin-numero', (_req, res) => {
 
 // -------- Aviso "Reserva confirmada" de la pagina web (Vik Booking) --------
 adminRouter.get('/api/vik/estado', (_req, res) => {
-  res.json({ ok: true, ...estadoVik(), sincronizacion: estadoSync() });
+  res.json({ ok: true, ...estadoVik(), sincronizacion: estadoSync(), crontab: estadoCrontab() });
 });
 // Lee AHORA las reservas directamente de Vik Booking (Booking, Expedia, web) y las deja en el panel.
 adminRouter.get('/api/vik/sync-estado', (_req, res) => {
