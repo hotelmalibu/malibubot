@@ -733,7 +733,7 @@ adminRouter.post('/api/vik/cierre-diagnostico', async (req, res) => {
   // Solo lectura y ENSAYO: aquí `real` siempre va en falso, así que NUNCA cierra ni abre nada de verdad.
   // Única excepción: «avisar» solo le pide a Vik que reenvíe la disponibilidad a los canales (no cambia reservas ni cierres).
   const extra = { real: accion === 'avisar' };
-  for (const k of ['patron', 'archivo', 'desde_linea', 'lineas', 'id', 'desde', 'hasta']) if (req.body?.[k] !== undefined) extra[k] = String(req.body[k]).slice(0, 300);
+  for (const k of ['patron', 'archivo', 'desde_linea', 'lineas', 'id', 'desde', 'hasta', 'huesped', 'llegadas']) if (req.body?.[k] !== undefined) extra[k] = String(req.body[k]).slice(0, 300);
   try {
     res.json(await llamarCierre({ accion, ...extra }));
   } catch (err) {
