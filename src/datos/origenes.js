@@ -50,6 +50,7 @@ export function resumenOrigenes({ desde, hasta, anio = new Date().getUTCFullYear
   const todas = reservasStore.listar();
   const porOrigen = Object.fromEntries(ORIGENES.map((o) => [o.id, vacio()]));
   const meses = Array.from({ length: 12 }, () => Object.fromEntries(ORIGENES.map((o) => [o.id, 0])));
+  const mesesNoches = Array.from({ length: 12 }, () => Object.fromEntries(ORIGENES.map((o) => [o.id, 0]))); // noches de habitación por mes y canal
   let sinIdentificar = 0;
   const porAnio = new Map(); // año en que se hizo la reserva -> conteo por origen (todos los tiempos)
 
@@ -69,7 +70,11 @@ export function resumenOrigenes({ desde, hasta, anio = new Date().getUTCFullYear
     if (!eu.ultima || r.creado > eu.ultima) eu.ultima = r.creado;
 
     // Barras por mes del año elegido (solo confirmadas).
-    if (confirmada(r) && dia.startsWith(`${anio}-`)) meses[Number(dia.slice(5, 7)) - 1][o]++;
+    if (confirmada(r) && dia.startsWith(`${anio}-`)) {
+      const mi = Number(dia.slice(5, 7)) - 1;
+      meses[mi][o]++;
+      mesesNoches[mi][o] += noches(r);
+    }
 
     // Tarjetas: rango elegido.
     if (desde && dia < desde) continue;
@@ -100,6 +105,7 @@ export function resumenOrigenes({ desde, hasta, anio = new Date().getUTCFullYear
     totalMonto,
     origenes: lista,
     meses: meses.map((m, i) => ({ mes: i + 1, ...m })),
+    mesesNoches: mesesNoches.map((m, i) => ({ mes: i + 1, ...m })),
     anios: [...porAnio.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([anio, c]) => ({ anio: Number(anio), ...c, total: Object.values(c).reduce((s, n) => s + n, 0) })),
     totalHistorico: [...porAnio.values()].reduce((s, c) => s + Object.values(c).reduce((x, n) => x + n, 0), 0),
     sinIdentificar, // reservas de canal externo que Vik no dijo cuál es

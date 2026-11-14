@@ -171,6 +171,19 @@ async function pedirPagina(desdeId, ctx) {
 }
 
 /**
+ * ¿Es una «Habitación cerrada» de Vik (bloqueo de recepción) y no una reserva?
+ * Con el archivo malibubot-sync.php nuevo llega `closure: 1`. Con el viejo se reconoce por su forma:
+ * confirmada, sin huésped (ni nombre, ni correo, ni celular), sin valor, sin canal y sin número de OTA.
+ */
+export function esCierreVik(o = {}) {
+  if (Number(o.closure) === 1) return true;
+  if (o.closure !== undefined && o.closure !== null && o.closure !== '') return false; // el archivo nuevo ya dijo que NO lo es
+  const vacio = (v) => !String(v ?? '').trim();
+  return String(o.status || 'confirmed').toLowerCase() === 'confirmed'
+    && vacio(o.name) && vacio(o.email) && vacio(o.phone) && !(Number(o.total) > 0) && vacio(o.ota) && vacio(o.channel);
+}
+
+/**
  * Trae las reservas de Vik Booking y las registra en el panel.
  * @returns {Promise<typeof ultimo>}
  */
@@ -181,7 +194,8 @@ export async function sincronizarConVik() {
 
   ultimo.corriendo = true;
   const inicio = Date.now();
-  const cuenta = { leidas: 0, omitidas: 0, quitadas: 0, nuevas: 0, actualizadas: 0, canceladas: 0, invalidas: 0, porCanal: {} };
+  const cuenta = { leidas: 0, omitidas: 0, quitadas: 0, cierres: 0, nuevas: 0, actualizadas: 0, canceladas: 0, invalidas: 0, porCanal: {} };
+  const cierresIds = [];
   const ctx = { cadenaPropia: false };
   try {
     let desdeId = 0;
@@ -189,6 +203,8 @@ export async function sincronizarConVik() {
       const d = await pedirPagina(desdeId, ctx);
       for (const o of d.ordenes || []) {
         cuenta.leidas++;
+        // «Habitación cerrada» (bloqueo que hace recepción en Vik): no es una reserva, no debe contarse.
+        if (esCierreVik(o)) { cuenta.cierres++; cierresIds.push(parseInt(o.id, 10)); continue; }
         if (String(o.checkin || '') && String(o.checkin) < config.vik.syncDesde) { cuenta.omitidas = (cuenta.omitidas || 0) + 1; continue; }
         const r = registrarDesdeSync(o);
         if (!r.ok) { cuenta.invalidas++; continue; }
@@ -201,7 +217,7 @@ export async function sincronizarConVik() {
       if (!d.ordenes || d.ordenes.length < 200 || d.siguiente <= desdeId) break;
       desdeId = d.siguiente;
     }
-    cuenta.quitadas = reservasStore.purgarVikAnterioresA(config.vik.syncDesde);
+    cuenta.quitadas = reservasStore.purgarVikAnterioresA(config.vik.syncDesde) + reservasStore.quitarVikPorIds(cierresIds);
     Object.assign(ultimo, cuenta, { error: '', cadenaPropia: ctx.cadenaPropia });
     if (cuenta.nuevas || cuenta.actualizadas) {
       console.log(`[vik-sync] ${cuenta.leidas} leídas · ${cuenta.nuevas} nuevas · ${cuenta.actualizadas} con cambio de estado`);

@@ -13,6 +13,7 @@
  *    - amarillo / verde / naranja -> reservadas (ocupadas)
  *    - morado (magenta)  -> mantenimiento (no vendible)
  *    - rojo              -> ya salió (queda libre)
+ *    - gris              -> No Show (no llegó; no cuenta como reserva)
  *  Vendibles = 85 - (reservadas + mantenimiento).
  *  ============================================================ */
 
@@ -103,7 +104,7 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
   var diasArr = [];
   for (var k in colPorDia) diasArr.push({ dia: Number(k), col: colPorDia[k] });
 
-  var reservadas = 0, mantenimiento = 0, salidas = 0, libre = 0, habitaciones = 0;
+  var reservadas = 0, mantenimiento = 0, salidas = 0, noShow = 0, libre = 0, habitaciones = 0;
   var nochesReservadasMes = 0;   // habitaciones-noche reservadas en TODO el mes
   var nochesReservadasRango = 0; // idem, pero solo en el rango desde/hasta
   var histo = {};              // diagnostico: colores en la columna del dia
@@ -120,6 +121,7 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
     if (cat === 'reserva') reservadas++;
     else if (cat === 'mantenimiento') mantenimiento++;
     else if (cat === 'salida') salidas++;
+    else if (cat === 'noshow') noShow++;
     else libre++;
 
     // --- Del mes completo (noches reservadas) ---
@@ -139,10 +141,14 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
   }
 
   // Reglas del hotel:
-  //   ocupadas (reservas del dia) = reservadas (amarillo/verde/naranja).
+  //   ocupadas (reservas del dia) = reservadas (amarillo/verde/naranja) + rojas.
+  //     Una roja es una habitacion que ingreso y ya salio ese dia: SI es una reserva del dia,
+  //     y ademas se muestra aparte en "Salidas". No se cuenta doble: la reserva es una sola,
+  //     solo cambia de color al salir.
   //   mantenimiento = morado (no vendible).
-  //   disponibles = total - ocupadas - mantenimiento (rojas/blancas SI venden).
-  var ocupadas = reservadas;
+  //   disponibles = total - reservadas - mantenimiento (las rojas ya quedaron libres y SI venden;
+  //     por eso NO se restan otra vez). Los grises (No Show) tampoco se restan.
+  var ocupadas = reservadas + salidas;
   var disponibles = Math.max(TOTAL_HABITACIONES - reservadas - mantenimiento, 0);
   return {
     ok: true,
@@ -153,6 +159,7 @@ function contarOcupacion(fecha, desdeStr, hastaStr) {
     reservadas: reservadas,
     mantenimiento: mantenimiento,
     salidas: salidas,
+    noShow: noShow,
     libre: libre,
     ocupadas: ocupadas,
     disponibles: disponibles,
@@ -186,6 +193,8 @@ function clasificar(hex) {
   if (r < 40 && g < 40 && b < 40) return 'libre';            // negro (borde)
   if (b > 140 && r > 120 && g < 130) return 'mantenimiento'; // morado / magenta
   if (r > 150 && g < 95 && b < 95) return 'salida';          // rojo -> ya salio
+  // Gris (los tres canales casi iguales y ni blanco ni negro) -> No Show: no llego, no cuenta como reserva ni como noche.
+  if (Math.abs(r - g) <= 14 && Math.abs(g - b) <= 14 && Math.abs(r - b) <= 14) return 'noshow';
   return 'reserva';                                          // cualquier otro color
 }
 

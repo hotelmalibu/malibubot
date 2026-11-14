@@ -138,6 +138,21 @@ export const reservasStore = {
   },
 
   /**
+   * Quita las reservas importadas de Vik Booking cuyo número de orden está en `idsVik`
+   * (p. ej. las «Habitación cerrada», que no son reservas). Solo toca referencia "vik:<id>".
+   * @returns {number} cuantas quitó
+   */
+  quitarVikPorIds(idsVik) {
+    const refs = new Set([...idsVik].map((n) => `vik:${n}`));
+    const quitar = reservas.filter((r) => refs.has(String(r.referenciaPago || '')) && String(r.fuente || '').startsWith('vikbooking'));
+    if (!quitar.length) return 0;
+    const ids = new Set(quitar.map((r) => r.id));
+    for (let i = reservas.length - 1; i >= 0; i--) if (ids.has(reservas[i].id)) reservas.splice(i, 1);
+    if (dbActivo()) dbEliminarReservas([...ids]).catch((e) => console.error('[db] quitar cierres:', e.message));
+    return quitar.length;
+  },
+
+  /**
    * Cambia la cantidad de habitaciones y/o de personas de una reserva. Si la reserva
    * tiene valor, lo reescala por la nueva cantidad de habitaciones.
    */

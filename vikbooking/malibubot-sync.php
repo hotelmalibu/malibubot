@@ -89,7 +89,7 @@ if (!$r) {
 while ($f = $r->fetch_assoc()) {
 	$existen[$f['Field']] = true;
 }
-$quiero = array('id', 'sid', 'ts', 'status', 'checkin', 'checkout', 'custdata', 'custmail', 'phone', 'total', 'idorderota', 'channel');
+$quiero = array('id', 'sid', 'ts', 'status', 'checkin', 'checkout', 'custdata', 'custmail', 'phone', 'total', 'idorderota', 'channel', 'closure');
 $cols = array();
 foreach ($quiero as $q) {
 	if (isset($existen[$q])) {
@@ -163,6 +163,7 @@ while ($o = $res->fetch_assoc()) {
 		'checkout_ts' => $checkout,
 		'ota'         => isset($o['idorderota']) ? (string) $o['idorderota'] : '',
 		'channel'     => isset($o['channel']) ? (string) $o['channel'] : '',
+		'closure'     => isset($o['closure']) ? (int) $o['closure'] : 0, // 1 = "Habitacion cerrada" (no es una reserva)
 		'status'      => isset($o['status']) ? (string) $o['status'] : 'confirmed',
 		'email'       => isset($o['custmail']) ? (string) $o['custmail'] : '',
 		'total'       => isset($o['total']) ? (float) $o['total'] : 0,

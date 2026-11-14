@@ -30,6 +30,7 @@ import { estadoCrontab } from '../vikbooking/crontab.js';
 import { sinDestinoRecientes, enviosFallidosRecientes } from '../whatsapp/sindestino.js';
 import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
 import { TIPOS_HABITACION } from '../datos/habitaciones.js';
+import { diaColombia } from '../util/fechas.js';
 import { ocupacionDelLibro, ocupacionEnCache } from '../datos/ocupacion.js';
 import { probarCorreo, ultimosEnviosCorreo } from '../correo/enviar.js';
 import { resumenMetricas } from '../ia/metricas.js';
@@ -197,6 +198,7 @@ adminRouter.get('/api/estadisticas', async (req, res) => {
     habitaciones.reservadasLibro = libro.reservadas;
     habitaciones.mantenimiento = libro.mantenimiento;
     habitaciones.salidas = libro.salidas;
+    habitaciones.noShow = typeof libro.noShow === 'number' ? libro.noShow : null; // gris en el Libro (null si el Apps Script aún es el viejo)
     habitaciones.nochesReservadasMes = libro.nochesReservadasMes;
     habitaciones.nochesReservadasRango = libro.nochesReservadasRango;
     habitaciones.diaConsultado = libro.fecha;
@@ -221,10 +223,27 @@ adminRouter.get('/api/estadisticas', async (req, res) => {
 });
 
 // -------- Reservas de habitaciones --------
-adminRouter.get('/api/reservas', (_req, res) => {
+adminRouter.get('/api/reservas', (req, res) => {
+  // Filtro opcional por el DÍA EN QUE SE HIZO la reserva (día Colombia): ?desde=AAAA-MM-DD&hasta=AAAA-MM-DD.
+  // Sin filtro devuelve todas (así el panel no se vuelve pesado: por defecto pide solo el mes).
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const desde = ISO.test(String(req.query.desde || '')) ? String(req.query.desde) : null;
+  const hasta = ISO.test(String(req.query.hasta || '')) ? String(req.query.hasta) : null;
+  // ?campo=creado (por defecto: día en que se hizo) | checkin (llegada) | checkout (salida)
+  const campo = ['checkin', 'checkout'].includes(req.query.campo) ? req.query.campo : 'creado';
+  // ?origen=whatsapp|web|booking|expedia|otros (el mismo reparto de «Reservas por canal de venta»)
+  const origen = ['whatsapp', 'web', 'booking', 'expedia', 'otros'].includes(req.query.origen) ? req.query.origen : null;
+  const diaDe = (r) => campo === 'checkin' ? String(r.checkIn || '') : campo === 'checkout' ? String(r.checkOut || '') : diaColombia(r.creado);
+  const base = reservasStore.listar().filter((r) => {
+    if (origen && origenDe(r) !== origen) return false;
+    if (!desde && !hasta) return true;
+    const dia = diaDe(r);
+    if (!ISO.test(dia)) return false; // sin esa fecha no puede cumplir el filtro
+    return (!desde || dia >= desde) && (!hasta || dia <= hasta);
+  });
   // Cada reserva sale con el canal de la conversacion que la origino
   // (Google Ads, Anuncio Facebook, Instagram...); las manuales, "Manual".
-  const reservas = reservasStore.listar().map((r) => ({
+  const reservas = base.map((r) => ({
     ...r,
     canal: r.fuente === 'vikbooking' ? 'Página web'
       : r.fuente === 'vikbooking-booking' ? 'Booking.com'
