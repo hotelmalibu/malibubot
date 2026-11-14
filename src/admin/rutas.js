@@ -25,7 +25,7 @@ import { dirname, join } from 'path';
 import { store, mensajesSinDuenio } from '../almacen/conversaciones.js';
 import { esBsuid } from '../whatsapp/bsuid.js';
 import { listarCierres, agregarCierre, quitarCierre } from '../datos/cierres.js';
-import { cierreVikActivo, sincronizarCierresVik } from '../vikbooking/cerrar.js';
+import { cierreVikActivo, sincronizarCierresVik, llamarCierre } from '../vikbooking/cerrar.js';
 import { estadoCrontab } from '../vikbooking/crontab.js';
 import { sinDestinoRecientes, enviosFallidosRecientes } from '../whatsapp/sindestino.js';
 import { reservasStore, ESTADOS, ESTADOS_ANULADOS, esReservaBot, cantidadValida } from '../almacen/reservas.js';
@@ -725,6 +725,16 @@ adminRouter.get('/api/whatsapp/sin-numero', (_req, res) => {
 // -------- Aviso "Reserva confirmada" de la pagina web (Vik Booking) --------
 adminRouter.get('/api/vik/estado', (_req, res) => {
   res.json({ ok: true, ...estadoVik(), sincronizacion: estadoSync(), crontab: estadoCrontab() });
+});
+// Diagnóstico del cierre automático: pide al archivo malibubot-cierre.php de la web que INSPECCIONE (solo lectura) la base de Vik.
+// No cierra ni abre nada. Requiere sesión del panel y VIK_CIERRE_URL.
+adminRouter.post('/api/vik/cierre-diagnostico', async (req, res) => {
+  const accion = ['inspeccionar', 'explorar'].includes(req.body?.accion) ? req.body.accion : 'inspeccionar';
+  try {
+    res.json(await llamarCierre({ accion }));
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 // Lee AHORA las reservas directamente de Vik Booking (Booking, Expedia, web) y las deja en el panel.
 adminRouter.get('/api/vik/sync-estado', (_req, res) => {

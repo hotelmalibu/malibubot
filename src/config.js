@@ -148,7 +148,8 @@ export const config = {
     // Clave propia de la sincronizacion (VIK_SYNC_KEY); si no existe, usa VIK_WEBHOOK_KEY.
     // Cierre automatico de fechas en Vik Booking (archivo malibubot-cierre.php instalado en la web). Vacio = apagado.
     cierreUrl: (process.env.VIK_CIERRE_URL || '').trim(),
-    cierreKey: (process.env.VIK_CIERRE_KEY || process.env.VIK_WEBHOOK_KEY || '').trim(),
+    // Si no hay clave propia del cierre, usa la de la lectura (VIK_SYNC_KEY): así basta escribir la MISMA clave en el archivo de la web.
+    cierreKey: (process.env.VIK_CIERRE_KEY || process.env.VIK_SYNC_KEY || process.env.VIK_WEBHOOK_KEY || '').trim(),
     syncKey: (process.env.VIK_SYNC_KEY || process.env.VIK_WEBHOOK_KEY || '').trim(),
     // Solo se cargan reservas con llegada desde esta fecha (YYYY-MM-DD); por defecto, 2026.
     syncDesde: /^\d{4}-\d{2}-\d{2}$/.test((process.env.VIK_SYNC_DESDE || '').trim()) ? process.env.VIK_SYNC_DESDE.trim() : '2026-01-01',

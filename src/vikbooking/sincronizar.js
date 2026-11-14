@@ -93,16 +93,16 @@ export function describirErrorDeRed(err, { variable = 'VIK_SYNC_URL', timeoutMs 
   return codigo && !mensaje.includes(codigo) ? `${mensaje} (${codigo})` : mensaje;
 }
 
-async function pedirNormal(url, headers, timeoutMs) {
-  const resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+async function pedirNormal(url, headers, timeoutMs, metodo = 'GET', cuerpo = undefined) {
+  const resp = await fetch(url, { method: metodo, headers, body: cuerpo, signal: AbortSignal.timeout(timeoutMs) });
   return { status: resp.status, ok: resp.ok, texto: await resp.text(), redirige: '' };
 }
 
-function pedirConIntermedios(url, headers, timeoutMs) {
+function pedirConIntermedios(url, headers, timeoutMs, metodo = 'GET', cuerpo = undefined) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
-      method: 'GET',
-      headers,
+      method: metodo,
+      headers: cuerpo === undefined ? headers : { ...headers, 'Content-Length': Buffer.byteLength(cuerpo) },
       ca: [...rootCertificates, ...intermediosConocidos()],
       signal: AbortSignal.timeout(timeoutMs),
     }, (res) => {
@@ -122,7 +122,7 @@ function pedirConIntermedios(url, headers, timeoutMs) {
       res.on('error', reject);
     });
     req.on('error', reject);
-    req.end();
+    req.end(cuerpo);
   });
 }
 
@@ -132,18 +132,18 @@ function pedirConIntermedios(url, headers, timeoutMs) {
  * (las siguientes peticiones van directo al plan B). Lanza un Error con un mensaje en español si no hay respuesta.
  * @returns {Promise<{status:number, ok:boolean, texto:string, redirige:string}>}
  */
-export async function pedirWeb(url, headers, ctx = {}, { timeoutMs = config.vik.syncTimeoutMs, variable = 'VIK_SYNC_URL' } = {}) {
+export async function pedirWeb(url, headers, ctx = {}, { timeoutMs = config.vik.syncTimeoutMs, variable = 'VIK_SYNC_URL', metodo = 'GET', cuerpo = undefined } = {}) {
   let resp = null;
   if (!ctx.cadenaPropia) {
     try {
-      resp = await pedirNormal(url, headers, timeoutMs);
+      resp = await pedirNormal(url, headers, timeoutMs, metodo, cuerpo);
     } catch (err) {
       if (!ERRORES_DE_CADENA.has(codigoDe(err)) || url.protocol !== 'https:') throw new Error(describirErrorDeRed(err, { variable, timeoutMs }));
     }
   }
   if (!resp) { // cadena incompleta (o ya se vio en esta lectura): se usan los intermedios guardados
     try {
-      resp = await pedirConIntermedios(url, headers, timeoutMs);
+      resp = await pedirConIntermedios(url, headers, timeoutMs, metodo, cuerpo);
       ctx.cadenaPropia = true;
     } catch (err) {
       const cadena = ERRORES_DE_CADENA.has(codigoDe(err));

@@ -1,7 +1,7 @@
 // probar-cierre-vik.js — El bot cierra/abre en Vik Booking las fechas del panel (web FALSA). node scripts/probar-cierre-vik.js
 import http from 'http';
 const recibidas = []; let modo = 'ok';
-const web = await new Promise((r) => { const s = http.createServer((req, res) => { const p = []; req.on('data', (c) => p.push(c)); req.on('end', () => { res.setHeader('Content-Type', 'application/json'); if (req.headers['x-malibubot-key'] !== 'clave-prueba') { res.statusCode = 403; return res.end('{"ok":false,"error":"clave"}'); } if (modo === 'falla') { res.statusCode = 500; return res.end('{"ok":false,"error":"Vik no respondió"}'); } recibidas.push(JSON.parse(Buffer.concat(p).toString())); res.end('{"ok":true}'); }); }); s.listen(0, () => r(s)); });
+const web = await new Promise((r) => { const s = http.createServer((req, res) => { const p = []; req.on('data', (c) => p.push(c)); req.on('end', () => { res.setHeader('Content-Type', 'application/json'); if (req.headers['x-malibubot-key'] !== 'clave-prueba') { res.statusCode = 403; return res.end('{"ok":false,"error":"clave"}'); } if (modo === 'falla') { res.statusCode = 500; return res.end('{"ok":false,"error":"Vik no respondió"}'); } if (req.method !== 'POST' || !/MALIBUBOT/.test(req.headers['user-agent'] || '')) { res.statusCode = 465; return res.end('Access Denied'); } if (modo === 'ensayo') return res.end('{"ok":true,"ensayo":true}'); recibidas.push(JSON.parse(Buffer.concat(p).toString())); res.end('{"ok":true}'); }); }); s.listen(0, () => r(s)); });
 process.env.VIK_CIERRE_URL = `http://127.0.0.1:${web.address().port}/c.php`; process.env.VIK_CIERRE_KEY = 'clave-prueba'; delete process.env.DATABASE_URL;
 const { agregarCierre, quitarCierre, listarCierres, pendientesAbrir } = await import('../src/datos/cierres.js');
 const { sincronizarCierresVik, cierreVikActivo } = await import('../src/vikbooking/cerrar.js');
@@ -21,4 +21,11 @@ await sincronizarCierresVik();
 ok('se reabre en Vik y la cola queda vacía', recibidas.length === 2 && recibidas[1].accion === 'abrir' && pendientesAbrir().length === 0);
 const b = agregarCierre({ desde: '2026-12-01', hasta: '2026-12-02' }).cierre; quitarCierre(b.id);
 ok('un cierre que nunca llegó a Vik no manda ninguna reapertura', pendientesAbrir().length === 0);
+// Modo ENSAYO del archivo de la web: valida pero no cierra; el bot NO debe darlo por cerrado.
+modo = 'ensayo';
+const c = agregarCierre({ desde: '2027-03-01', hasta: '2027-03-01' }).cierre;
+await sincronizarCierresVik();
+ok('en ENSAYO no se marca como cerrada (sigue pendiente, con aviso)', listarCierres().find((x) => x.id === c.id).vik === 'pendiente' && /ensayo/.test(listarCierres().find((x) => x.id === c.id).vikError));
+modo = 'ok'; await sincronizarCierresVik();
+ok('al salir del ensayo se cierra de verdad', listarCierres().find((x) => x.id === c.id).vik === 'cerrada');
 web.close(); console.log(fallos ? `\n❌ ${fallos}` : '\n✅ Todo bien'); process.exit(fallos ? 1 : 0);
