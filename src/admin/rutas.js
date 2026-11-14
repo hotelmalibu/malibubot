@@ -729,10 +729,10 @@ adminRouter.get('/api/vik/estado', (_req, res) => {
 // Diagnóstico del cierre automático: pide al archivo malibubot-cierre.php de la web que INSPECCIONE (solo lectura) la base de Vik.
 // No cierra ni abre nada. Requiere sesión del panel y VIK_CIERRE_URL.
 adminRouter.post('/api/vik/cierre-diagnostico', async (req, res) => {
-  const accion = ['inspeccionar', 'explorar', 'buscar', 'leer'].includes(req.body?.accion) ? req.body.accion : 'inspeccionar';
-  // Solo lectura: nunca pasa fechas ni ids, así que no puede cerrar ni abrir nada.
-  const extra = {};
-  for (const k of ['patron', 'archivo', 'desde_linea', 'lineas']) if (req.body?.[k] !== undefined) extra[k] = String(req.body[k]).slice(0, 300);
+  const accion = ['inspeccionar', 'explorar', 'buscar', 'leer', 'cerrar', 'abrir'].includes(req.body?.accion) ? req.body.accion : 'inspeccionar';
+  // Solo lectura y ENSAYO: aquí `real` siempre va en falso, así que NUNCA cierra ni abre nada de verdad.
+  const extra = { real: false };
+  for (const k of ['patron', 'archivo', 'desde_linea', 'lineas', 'id', 'desde', 'hasta']) if (req.body?.[k] !== undefined) extra[k] = String(req.body[k]).slice(0, 300);
   try {
     res.json(await llamarCierre({ accion, ...extra }));
   } catch (err) {

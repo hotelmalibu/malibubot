@@ -30,7 +30,7 @@ export async function llamarCierre(datos) {
 }
 
 async function llamar(accion, c) {
-  return llamarCierre({ accion, id: c.id, desde: c.desde, hasta: c.hasta });
+  return llamarCierre({ accion, id: c.id, desde: c.desde, hasta: c.hasta, real: config.vik.cierreReal });
 }
 
 let corriendo = false;
@@ -52,7 +52,8 @@ export async function sincronizarCierresVik() {
         const d = await llamar('cerrar', c);
         // En ENSAYO la web solo valida: NO se marca como cerrada (seguiría abierta en Booking, Expedia y la web).
         if (d.ensayo) { marcarVik(c.id, 'pendiente', 'El archivo de la web está en modo ensayo: aún no cierra de verdad.'); continue; }
-        marcarVik(c.id, 'cerrada'); n++;
+        // Cerrada en Vik; si Vik no pudo avisar a Booking/Expedia, se anota (la ventana automática de Vik los alcanza después).
+        marcarVik(c.id, 'cerrada', d.canales && d.canales.ok === false ? 'Cerrada en Vik, pero el aviso a los canales falló: ' + (d.canales.error || '') : ''); n++;
       } catch (e) { marcarVik(c.id, 'error', e.message); console.warn('[cierre-vik] No se pudo cerrar', c.desde, e.message); }
     }
   } finally { corriendo = false; }
