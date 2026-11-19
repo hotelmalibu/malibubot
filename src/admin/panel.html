@@ -123,7 +123,59 @@
   .kpis.fila .kpi .lbl { font-size: 11px; line-height: 1.2; }
   .kpis.fila .kpi .num { font-size: 28px; }
   .kpis.fila .kpi .pie { font-size: 11px; line-height: 1.25; }
-  @media (max-width: 1000px) { .kpis.fila { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); } }
+  /* Segunda fila en pantallas anchas: las tarjetas de canales y las de totales se juntan en UNA sola línea de 5 (período · Booking · Expedia · Web · bot). */
+  .kpis-fila2 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+  .kpis-fila2 > .kpis { display: contents; }
+  .fila-tit { display: none; }
+  @media (max-width: 1000px) {
+    .kpis.fila, .kpis-fila2 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  }
+  /* ---- Celular (hasta 700 px): resumen en TRES filas; cada fila se desliza de lado, con tarjetas de ancho fijo ---- */
+  @media (max-width: 700px) {
+    header { padding: 8px 12px; gap: 8px 10px; }
+    .marca { gap: 8px; min-width: 0; }
+    .marca .logo { height: 28px; }
+    .marca .divisor { height: 22px; }
+    .bot-mark { width: 30px; height: 30px; }
+    .titulos .nombre { font-size: 16px; }
+    .titulos .sub { display: none; }
+    .acciones-top { gap: 8px; flex-wrap: nowrap; }
+    .estado { font-size: 0; gap: 0; }            /* solo el punto verde, sin el texto «En vivo» */
+    .salir { padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
+    nav.tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 3px; margin: 0 -4px; width: calc(100% + 8px); }
+    nav.tabs::-webkit-scrollbar { display: none; }
+    nav.tabs button { white-space: nowrap; flex: none; padding: 8px 12px; font-size: 13px; }
+    .pagina .dash { padding: 14px 12px 40px; }
+    .seccion-cab { flex-direction: column; align-items: flex-start; gap: 4px; margin: 20px 0 10px; }
+    .seccion-cab .nota { text-align: left; flex: none; }
+    .seccion-cab h2 { font-size: 19px; }
+    /* Filtro de fechas: dos fechas lado a lado, Buscar a todo el ancho y atajos en cuatro columnas */
+    .filtro-fechas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
+    .filtro-fechas .campo input { width: 100%; min-width: 0; }
+    .filtro-fechas > .btn { grid-column: 1 / -1; width: 100%; padding: 10px; }
+    .presets { grid-column: 1 / -1; margin-left: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .presets button { padding: 8px 4px; }
+    /* Tres filas que se deslizan */
+    .fila-tit { display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--oro-profundo); margin: 14px 2px 6px; }
+    .kpis-fila2 { display: block; margin-top: 0; }
+    .kpis-fila2 > .kpis { display: flex; }
+    .kpis.fila { display: flex; flex-wrap: nowrap; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding: 0 12px; -webkit-overflow-scrolling: touch;
+      margin: 0 -12px !important; padding: 2px 12px 8px; scrollbar-width: none; }
+    .kpis.fila::-webkit-scrollbar { display: none; }
+    .kpis.fila .kpi { flex: 0 0 148px; width: 148px; scroll-snap-align: start; grid-template-columns: 1fr; gap: 6px; padding: 11px 12px; align-content: start; }
+    .kpis.fila .kpi .ico { width: 32px; height: 32px; font-size: 16px; border-radius: 10px; }
+    .kpis.fila .kpi .lbl { font-size: 10.5px; }
+    .kpis.fila .kpi .num { font-size: 27px; margin-top: 0; }
+    .kpis.fila .kpi .pie { font-size: 10.5px; }
+    .kpis.fila .kpi:hover { transform: none; }
+    /* Tablas y filtros de reservas */
+    .res-filtro { gap: 10px; }
+    .res-filtro .campo-sel, .res-filtro .campo-sel select { width: 100%; max-width: none; }
+    .res-filtro .campo-sel { flex: 1 1 100%; }
+    .res-filtro .res-cuenta { margin-left: 0; flex: 1 1 100%; }
+    .res-filtro .rango.visible { width: 100%; flex-wrap: wrap; }
+    .res-filtro .rango .campo { flex: 1 1 40%; }
+  }
 
   /* Canales */
   .canales { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
@@ -524,8 +576,14 @@
             <button onclick="preset('todo')">Todo</button>
           </div>
         </div>
+        <div class="fila-tit">Habitaciones</div>
         <div class="kpis fila" id="kpisHab" style="margin-top:14px;"></div>
-        <div class="kpis fila" id="kpisCanalesTop" style="margin-top:12px;"></div>
+        <div class="kpis-fila2">
+          <div class="fila-tit">Canales de venta</div>
+          <div class="kpis fila" id="kpisCanalesTop"></div>
+          <div class="fila-tit">Reservas</div>
+          <div class="kpis fila" id="kpisTotales"></div>
+        </div>
 
         <div class="seccion-cab">
           <div><div class="eyebrow">Seguimiento anual</div><h2><span id="tituloGrafico">Reservas mensuales</span> <span id="anioGrafico">2026</span></h2></div>
@@ -1196,7 +1254,7 @@
   // Resumen de arriba: reservas hechas por Booking, Expedia y Web directa en el mismo periodo del filtro (sin filtro: este mes).
   let canalesTopSeq = 0;
   async function cargarCanalesTop() {
-    const cont = document.getElementById('kpisCanalesTop'); if (!cont) return;
+    if (!document.getElementById('kpisCanalesTop')) return;
     const mio = ++canalesTopSeq; // si llega una respuesta vieja después de una más nueva, se descarta
     try {
       const rg = rangoDe('fDesde', 'fHasta');
@@ -1220,8 +1278,12 @@
   // Segunda fila del resumen: las tarjetas llegan de dos consultas distintas; aquí se juntan en este orden.
   const filaReservas = { periodo: '', canales: '', bot: '' };
   function pintarFilaReservas() {
-    const cont = document.getElementById('kpisCanalesTop'); if (!cont) return;
-    cont.innerHTML = filaReservas.periodo + filaReservas.canales + filaReservas.bot;
+    // En pantallas anchas las dos cajas se funden en una sola línea (display: contents) y `order` pone el período primero y el bot al final;
+    // en celular son dos filas que se deslizan: «Canales de venta» y «Reservas».
+    const conOrden = (html, n) => html.replace(/^<div class="kpi/, `<div style="order:${n}" class="kpi`);
+    const canales = document.getElementById('kpisCanalesTop'), totales = document.getElementById('kpisTotales');
+    if (canales) canales.innerHTML = filaReservas.canales.replace(/<div class="kpi/g, '<div style="order:1" class="kpi');
+    if (totales) totales.innerHTML = (filaReservas.periodo ? conOrden(filaReservas.periodo, 0) : '') + (filaReservas.bot ? conOrden(filaReservas.bot, 2) : '');
   }
   function pintarHabitaciones(d) {
     if (d.hotel && Array.isArray(d.hotel.tipos)) catalogoTipos = d.hotel.tipos;
